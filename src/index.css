@@ -1,0 +1,339 @@
+/* Tour Connect - Custom Styles */
+/* Note: Tailwind CSS is loaded via CDN in index.html */
+
+:root {
+  scroll-behavior: smooth;
+  --hero-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+}
+
+body {
+  background-color: #f9fafb;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Animations */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up-modal {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up-modal {
+  animation: slide-up-modal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s infinite;
+}
+
+@keyframes hero-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) rotateX(4deg) rotateY(-4deg);
+  }
+}
+
+@keyframes hero-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(18px, -16px, 0) scale(1.08);
+  }
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, transparent, black 18%, black 82%, transparent);
+}
+
+.hero-3d-stage {
+  transform-style: preserve-3d;
+}
+
+.hero-card {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.82));
+  backdrop-filter: blur(20px);
+  box-shadow: var(--hero-shadow);
+  border-radius: 28px;
+}
+
+.hero-card-main {
+  inset: 78px 28px auto 28px;
+  padding: 1.5rem;
+  transform: rotateY(-12deg) rotateX(8deg) translateZ(80px);
+  animation: hero-float 7s ease-in-out infinite;
+}
+
+.hero-card-seller {
+  top: 24px;
+  right: 8px;
+  width: 250px;
+  padding: 1.25rem;
+  transform: rotateY(-24deg) rotateX(8deg) translateZ(42px);
+  animation: hero-float 8.6s ease-in-out infinite;
+}
+
+.hero-card-customer {
+  left: 0;
+  bottom: 48px;
+  width: 240px;
+  padding: 1.25rem;
+  transform: rotateY(18deg) rotateX(6deg) translateZ(30px);
+  animation: hero-float 9.5s ease-in-out infinite reverse;
+}
+
+.hero-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(6px);
+  animation: hero-drift 10s ease-in-out infinite;
+}
+
+.hero-orb-one {
+  top: 30px;
+  left: 50px;
+  height: 140px;
+  width: 140px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.9), rgba(34, 211, 238, 0.05));
+}
+
+.hero-orb-two {
+  right: 50px;
+  bottom: 25px;
+  height: 180px;
+  width: 180px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.85), rgba(16, 185, 129, 0.04));
+  animation-delay: -2s;
+}
+
+.hero-flow-line {
+  height: 58px;
+  width: 2px;
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.8), rgba(16, 185, 129, 0.15));
+}
+
+@media (max-width: 1023px) {
+  .hero-card-main {
+    inset: 70px 18px auto 18px;
+  }
+
+  .hero-card-seller {
+    right: 4px;
+    width: 220px;
+  }
+
+  .hero-card-customer {
+    width: 210px;
+  }
+}
+
+@media (max-width: 767px) {
+  .hero-card-main {
+    inset: 52px 8px auto 8px;
+    transform: none;
+  }
+
+  .hero-card-seller,
+  .hero-card-customer {
+    position: relative;
+    top: auto;
+    right: auto;
+    left: auto;
+    bottom: auto;
+    width: auto;
+    margin-top: 1rem;
+    transform: none;
+  }
+
+  .hero-orb {
+    opacity: 0.75;
+  }
+}
+
+/* Safe area insets for notched devices */
+.h-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Custom color variants */
+.text-primary-dark {
+  color: #047857;
+}
+
+.bg-primary-dark {
+  background-color: #047857;
+}
+
+.hover\:bg-primary-dark:hover {
+  background-color: #047857;
+}
+
+.border-primary {
+  border-color: #059669;
+}
+
+.border-primary-dark {
+  border-color: #047857;
+}
+
+.text-secondary-dark {
+  color: #0369a1;
+}
+
+.bg-secondary-dark {
+  background-color: #0369a1;
+}
+
+/* Text truncation utilities */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* Dark mode styles */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #111827;
+  color: #f9fafb;
+}
+
+.dark .bg-white {
+  background-color: #1f2937;
+}
+
+.dark .bg-gray-50 {
+  background-color: #111827;
+}
+
+.dark .bg-gray-100 {
+  background-color: #374151;
+}
+
+.dark .bg-gray-200 {
+  background-color: #4b5563;
+}
+
+.dark .text-gray-900 {
+  color: #f9fafb;
+}
+
+.dark .text-gray-700 {
+  color: #d1d5db;
+}
+
+.dark .text-gray-600 {
+  color: #9ca3af;
+}
+
+.dark .border-gray-300 {
+  border-color: #4b5563;
+}
+
+.dark .border-gray-100 {
+  border-color: #374151;
+}
+
+.dark .hover\:bg-gray-100:hover {
+  background-color: #374151;
+}
+
+.dark .hover\:bg-gray-200:hover {
+  background-color: #4b5563;
+}
+
+.dark .shadow-md {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #1f2937;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+.dark input::placeholder,
+.dark select::placeholder,
+.dark textarea::placeholder {
+  color: #9ca3af;
+}
