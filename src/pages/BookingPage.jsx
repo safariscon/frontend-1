@@ -4,37 +4,40 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import BookingForm from '../components/BookingForm';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function BookingPage() {
-  const { hotelId } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const [step] = useState(1);
+   const { hotelId } = useParams();
+   const navigate = useNavigate();
+   const { user } = useAuth();
+   const [step] = useState(1);
+   const { language } = useLanguage();
 
-  const handleBookingSuccess = () => {
-    alert('Your request has been submitted successfully. Please wait for admin response.');
-    navigate('/dashboard');
-  };
+   const handleBookingSuccess = () => {
+     alert(t('bookingSuccess', language));
+     navigate('/dashboard');
+   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center p-8">
-            <h2 className="text-2xl font-bold mb-4">Please log in to book</h2>
-            <button
-              onClick={() => navigate('/login')}
-              className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark"
-            >
-              Go to Login
-            </button>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
+   if (!user) {
+     return (
+       <div className="min-h-screen flex flex-col">
+         <Navbar />
+         <main className="flex-1 flex items-center justify-center">
+           <div className="text-center p-8">
+             <h2 className="text-2xl font-bold mb-4">{t('pleaseLoginToBook', language)}</h2>
+             <button
+               onClick={() => navigate('/login')}
+               className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark"
+             >
+               {t('goLogin', language)}
+             </button>
+           </div>
+         </main>
+         <Footer />
+       </div>
+     );
+   }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -66,14 +69,14 @@ export default function BookingPage() {
             ))}
           </div>
 
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Complete Your Booking</h1>
-            <p className="text-gray-600">
-              {step === 1 && 'Select your room and dates'}
-              {step === 2 && 'Review your booking details'}
-              {step === 3 && 'Payment (Coming soon)'}
-            </p>
-          </div>
+<div className="text-center mb-8">
+           <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('completeBooking', language)}</h1>
+           <p className="text-gray-600">
+             {step === 1 && t('selectRoomAndDates', language)}
+             {step === 2 && t('reviewDetails', language)}
+             {step === 3 && t('paymentComingSoon', language)}
+           </p>
+         </div>
 
           <BookingForm
             hotelId={hotelId}

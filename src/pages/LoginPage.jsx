@@ -4,6 +4,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute } from '../lib/dashboard';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function LoginPage() {
   const location = useLocation();
@@ -15,6 +17,7 @@ export default function LoginPage() {
   const { login, user } = useAuth();
   const navigate = useNavigate();
   const [message, setMessage] = useState(location.state?.message || '');
+  const { language } = useLanguage();
 
   useEffect(() => {
     if (user) {
@@ -43,8 +46,8 @@ export default function LoginPage() {
         <div className="max-w-md w-full">
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-              <p className="text-gray-600">Sign in to your account</p>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('welcomeBack', language)}</h1>
+              <p className="text-gray-600">{t('signInAccount', language)}</p>
             </div>
 
             <form onSubmit={handleSubmit}>
@@ -60,7 +63,7 @@ export default function LoginPage() {
               )}
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('email', language)}</label>
                 <input
                   type="email"
                   value={email}
@@ -72,7 +75,7 @@ export default function LoginPage() {
               </div>
 
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('password', language)}</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -101,29 +104,29 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <button
+<button
                 type="submit"
                 disabled={loading}
                 className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50"
               >
-                {loading ? 'Signing in...' : 'Sign In'}
-              </button>
-            </form>
+                {loading ? t('signIn', language) + '...' : t('signIn', language)}
+            </button>
+             </form>
 
-            <div className="mt-6 text-center">
-              <p className="text-gray-600">
-                Don&apos;t have an account?{' '}
-                <Link to="/register" className="text-primary hover:underline font-medium">
-                  Sign up
-                </Link>
-              </p>
-              <p className="text-gray-600 mt-2 text-sm">
-                Hotel owner with admin-created email?{' '}
-                <Link to="/hotel-register" className="text-primary hover:underline font-medium">
-                  Complete hotel registration
-                </Link>
-              </p>
-            </div>
+             <div className="mt-6 text-center">
+               <p className="text-gray-600">
+                 {t('noAccount', language)}{' '}
+                 <Link to="/register" className="text-primary hover:underline font-medium">
+                   {t('signUp', language)}
+                 </Link>
+               </p>
+               <p className="text-gray-600 mt-2 text-sm">
+                 {t('hotelRegistration', language)}{' '}
+                 <Link to="/hotel-register" className="text-primary hover:underline font-medium">
+                   {t('completeRegistration', language)}
+                 </Link>
+               </p>
+             </div>
           </div>
         </div>
       </main>

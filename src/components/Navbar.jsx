@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useInstall } from '../context/InstallContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 import InstallButton from './InstallButton';
 
 export default function Navbar() {
@@ -11,6 +13,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { isMobile, isInstalled } = useInstall();
   const { darkMode, toggleDarkMode } = useTheme();
+  const { language, toggleLanguage } = useLanguage();
 
   const handleLogout = () => {
     logout();
@@ -27,49 +30,59 @@ export default function Navbar() {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">U</span>
             </div>
-            <span className="text-2xl font-bold text-gray-900">safariservconn</span>
+            <span className="text-2xl font-bold text-gray-900">safarisconn</span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
             <Link to="/" className="text-gray-700 hover:text-primary transition font-medium">
-              Home
+              {t('home', language)}
             </Link>
             <Link to="/services" className="text-gray-700 hover:text-primary transition font-medium">
-              Services
+              {t('services', language)}
             </Link>
-            <button
-              type="button"
-              onClick={toggleDarkMode}
-              className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition font-medium"
-              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              title={darkMode ? 'Light mode' : 'Dark mode'}
-            >
-              {darkMode ? <SunIcon /> : <MoonIcon />}
-              <span>{darkMode ? 'Light' : 'Dark'}</span>
-            </button>
+<button
+               type="button"
+               onClick={toggleDarkMode}
+               className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition font-medium"
+               aria-label={darkMode ? t('lightMode', language) : t('darkMode', language)}
+               title={darkMode ? t('lightMode', language) : t('darkMode', language)}
+             >
+               {darkMode ? <SunIcon /> : <MoonIcon />}
+               <span>{darkMode ? t('lightMode', language) : t('darkMode', language)}</span>
+             </button>
+             <button
+               type="button"
+               onClick={toggleLanguage}
+               className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition font-medium"
+               aria-label="Switch language"
+               title="Switch language"
+             >
+               <span className="text-lg">{language === 'en' ? '🇬🇧' : '🇷🇼'}</span>
+               <span className="uppercase">{language === 'en' ? 'EN' : 'RW'}</span>
+             </button>
             {isAuthenticated ? (
               <>
                 {isAdmin && (
                   <Link to="/admin-dashboard" className="text-gray-700 hover:text-primary transition font-medium">
-                    Admin Dashboard
+                    {t('adminDashboard', language)}
                   </Link>
                 )}
                 {isCustomer && (
                   <Link to="/dashboard" className="text-gray-700 hover:text-primary transition font-medium">
-                    My Bookings
+                    {t('myBookings', language)}
                   </Link>
                 )}
                 {isSeller && (
                   <Link to={dashboardRoute} className="text-gray-700 hover:text-primary transition font-medium">
-                    Seller Dashboard
+                    {t('sellerDashboard', language)}
                   </Link>
                 )}
                 <button
                   onClick={handleLogout}
                   className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium"
                 >
-                  Logout
+                  {t('logout', language)}
                 </button>
               </>
             ) : (
@@ -78,13 +91,13 @@ export default function Navbar() {
                   to="/login"
                   className="text-gray-700 hover:text-primary transition font-medium"
                 >
-                  Login
+                  {t('login', language)}
                 </Link>
                 <Link
                   to="/register"
                   className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg transition font-medium"
                 >
-                  Register
+                  {t('register', language)}
                 </Link>
               </>
             )}
@@ -120,86 +133,94 @@ export default function Navbar() {
           </div>
         </div>
 
-          {/* Mobile Navigation */}
-        {isOpen && (
-          <div className="md:hidden py-4 border-t border-gray-100">
-            <div className="flex flex-col space-y-3">
-              <Link
-                to="/"
-                onClick={() => setIsOpen(false)}
-                className="text-gray-700 hover:text-primary transition font-medium"
-              >
-                Home
-              </Link>
-              <Link
-                to="/services"
-                onClick={() => setIsOpen(false)}
-                className="text-gray-700 hover:text-primary transition font-medium"
-              >
-                Services
-              </Link>
-              <button
-                type="button"
-                onClick={toggleDarkMode}
-                className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium flex items-center gap-2"
-              >
-                {darkMode ? <SunIcon /> : <MoonIcon />}
-                {darkMode ? 'Light Mode' : 'Dark Mode'}
-              </button>
-              {isAuthenticated ? (
-                <>
-                  {isAdmin && (
-                    <Link
-                      to="/admin-dashboard"
-                      onClick={() => setIsOpen(false)}
-                      className="text-gray-700 hover:text-primary transition font-medium"
-                    >
-                      Admin Dashboard
-                    </Link>
-                  )}
-                  {isCustomer && (
-                    <Link
-                      to="/dashboard"
-                      onClick={() => setIsOpen(false)}
-                      className="text-gray-700 hover:text-primary transition font-medium"
-                    >
-                      My Bookings
-                    </Link>
-                  )}
-                  {isSeller && (
-                    <Link
-                      to={dashboardRoute}
-                      onClick={() => setIsOpen(false)}
-                      className="text-gray-700 hover:text-primary transition font-medium"
-                    >
-                      Seller Dashboard
-                    </Link>
-                  )}
-                  <button
-                    onClick={handleLogout}
-                    className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium"
-                  >
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    to="/login"
-                    onClick={() => setIsOpen(false)}
-                    className="text-gray-700 hover:text-primary transition font-medium"
-                  >
-                    Login
-                  </Link>
-                  <Link
-                    to="/register"
-                    onClick={() => setIsOpen(false)}
-                    className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg transition font-medium text-center"
-                  >
-                    Register
-                  </Link>
-                </>
-              )}
+{/* Mobile Navigation */}
+         {isOpen && (
+           <div className="md:hidden py-4 border-t border-gray-100">
+             <div className="flex flex-col space-y-3">
+               <Link
+                 to="/"
+                 onClick={() => setIsOpen(false)}
+                 className="text-gray-700 hover:text-primary transition font-medium"
+               >
+                 {t('home', language)}
+               </Link>
+               <Link
+                 to="/services"
+                 onClick={() => setIsOpen(false)}
+                 className="text-gray-700 hover:text-primary transition font-medium"
+               >
+                 {t('services', language)}
+               </Link>
+<button
+                  type="button"
+                  onClick={toggleDarkMode}
+                  className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium flex items-center gap-2"
+                >
+                  {darkMode ? <SunIcon /> : <MoonIcon />}
+                  {darkMode ? t('lightMode', language) : t('darkMode', language)}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleLanguage}
+                  className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium flex items-center gap-2"
+                >
+                  <span className="text-lg">{language === 'en' ? '🇬🇧' : '🇷🇼'}</span>
+                  <span className="uppercase">{language === 'en' ? 'EN' : 'RW'}</span>
+                </button>
+               {isAuthenticated ? (
+                 <>
+                   {isAdmin && (
+                     <Link
+                       to="/admin-dashboard"
+                       onClick={() => setIsOpen(false)}
+                       className="text-gray-700 hover:text-primary transition font-medium"
+                     >
+                       {t('adminDashboard', language)}
+                     </Link>
+                   )}
+                   {isCustomer && (
+                     <Link
+                       to="/dashboard"
+                       onClick={() => setIsOpen(false)}
+                       className="text-gray-700 hover:text-primary transition font-medium"
+                     >
+                       {t('myBookings', language)}
+                     </Link>
+                   )}
+                   {isSeller && (
+                     <Link
+                       to={dashboardRoute}
+                       onClick={() => setIsOpen(false)}
+                       className="text-gray-700 hover:text-primary transition font-medium"
+                     >
+                       {t('sellerDashboard', language)}
+                     </Link>
+                   )}
+                   <button
+                     onClick={handleLogout}
+                     className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium"
+                   >
+                     {t('logout', language)}
+                   </button>
+                 </>
+               ) : (
+                 <>
+                   <Link
+                     to="/login"
+                     onClick={() => setIsOpen(false)}
+                     className="text-gray-700 hover:text-primary transition font-medium"
+                   >
+                     {t('login', language)}
+                   </Link>
+                   <Link
+                     to="/register"
+                     onClick={() => setIsOpen(false)}
+                     className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg transition font-medium text-center"
+                   >
+                     {t('register', language)}
+                   </Link>
+                 </>
+               )}
               
               {/* Mobile install button in menu */}
               {isMobile && !isInstalled && (

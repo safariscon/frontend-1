@@ -3,31 +3,44 @@ import { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import SearchBar from '../components/SearchBar';
-import myImage from '../assets/myimage.jfif';
 
 import HotelCard from '../components/HotelCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { publicApi } from '../lib/api';
 import { formatRwf } from '../lib/currency';
 import { normalizeHotels } from '../lib/hotelMapper';
+import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function HomePage() {
-  const [hotels, setHotels] = useState([]);
-  const [loadingHotels, setLoadingHotels] = useState(true);
+   const [hotels, setHotels] = useState([]);
+   const [loadingHotels, setLoadingHotels] = useState(true);
+   const { language } = useLanguage();
+
+  const loadHotels = async ({ silent = false } = {}) => {
+    if (!silent) setLoadingHotels(true);
+    try {
+      const response = await publicApi.getHotels();
+      setHotels(normalizeHotels(response.hotels || []));
+    } catch {
+      setHotels([]);
+    } finally {
+      if (!silent) setLoadingHotels(false);
+    }
+  };
 
   useEffect(() => {
-    const loadHotels = async () => {
-      try {
-        const response = await publicApi.getHotels();
-        setHotels(normalizeHotels(response.hotels || []));
-      } catch {
-        setHotels([]);
-      } finally {
-        setLoadingHotels(false);
-      }
-    };
-
-    loadHotels();
+    Promise.resolve().then(() => loadHotels());
+    return subscribeToRealtime(
+      [
+        REALTIME_EVENTS.CATALOG_CHANGED,
+        REALTIME_EVENTS.HOTEL_CHANGED,
+        REALTIME_EVENTS.SERVICE_CHANGED,
+        REALTIME_EVENTS.ROOM_CHANGED,
+      ],
+      () => loadHotels({ silent: true })
+    );
   }, []);
 
   const featuredHotels = hotels.filter((hotel) => hotel.isFeatured);
@@ -46,22 +59,22 @@ export default function HomePage() {
           />
                             </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 py-20 md:py-28">
-          <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="text-white">
-              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 backdrop-blur">
-                safariservconn
-                <span className="h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
-              </p>
-              <h1 className="mt-6 max-w-4xl text-3xl font-black leading-tight md:text-4xl">
-               A seamless way to discover travel and tour services, book instantly across all Rwanda destinations, and pay in real time" or " connecting travelers to a seamless way of booking instantly across all Rwanda destinations, and paying in real time
-              </h1>
+<div className="relative z-10 max-w-7xl mx-auto px-4 py-20 md:py-28">
+           <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
+             <div className="text-white">
+               <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 backdrop-blur">
+                 safarisconn
+                 <span className="h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+               </p>
+               <h1 className="mt-6 max-w-4xl text-3xl font-black leading-tight md:text-4xl">
+                {t('heroTitle', language)}
+               </h1>
 
-              <div className="mt-8 grid gap-4 sm:grid-cols-3">
-                <HeroMetric label="Registered service provider" value="250+" />
-               
-                <HeroMetric label="Live support" value="24/7" />
-              </div>
+               <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                 <HeroMetric label={t('registeredProviders', language)} value="250+" />
+                
+                 <HeroMetric label={t('liveSupport', language)} value="24/7" />
+               </div>
 
               <div className="mt-10">
                 <SearchBar variant="hero" />
@@ -125,101 +138,101 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-            Why Choose <span className="text-primary">safariservconn?</span>
-          </h2>
+<section className="py-16 bg-white">
+         <div className="max-w-7xl mx-auto px-4">
+           <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
+             {t('whyChoose', language)} <span className="text-primary">safarisconn?</span>
+           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-primary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold mb-2">Real-Time Service Discovery</h3>
-              <p className="text-gray-600">
-                We help customers discover the right sellers instantly through verified photos and real-time availability, from boutique stays to transport and curated experiences.
-              </p>
-            </div>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+             <div className="text-center p-6">
+               <div className="w-16 h-16 bg-primary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
+                 <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                 </svg>
+               </div>
+               <h3 className="text-xl font-bold mb-2">{t('realTimeDiscovery', language)}</h3>
+               <p className="text-gray-600">
+                 {t('realTimeDiscoveryDesc', language) || 'We help customers discover the right sellers instantly through verified photos and real-time availability, from boutique stays to transport and curated experiences.'}
+               </p>
+             </div>
 
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-secondary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold mb-2">Multi-Currency Support</h3>
-              <p className="text-gray-600">
-                Accept both USD and RWF payments with transparent pricing. Choose your preferred currency for seamless transactions with local sellers.
-              </p>
-            </div>
+             <div className="text-center p-6">
+               <div className="w-16 h-16 bg-secondary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
+                 <svg className="w-8 h-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                 </svg>
+               </div>
+               <h3 className="text-xl font-bold mb-2">{t('multiCurrency', language)}</h3>
+               <p className="text-gray-600">
+                 {t('multiCurrencyDesc', language) || 'Accept both USD and RWF payments with transparent pricing. Choose your preferred currency for seamless transactions with local sellers.'}
+               </p>
+             </div>
 
-            <div className="text-center p-6">
-              <div className="w-16 h-16 bg-primary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold mb-2">Fast Real-Time Booking</h3>
-              <p className="text-gray-600">
-                From inquiry to confirmed booking in real-time. Our platform ensures instant communication and immediate service confirmation for all your travel needs.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+             <div className="text-center p-6">
+               <div className="w-16 h-16 bg-primary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
+                 <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+                 </svg>
+               </div>
+               <h3 className="text-xl font-bold mb-2">{t('fastBooking', language)}</h3>
+               <p className="text-gray-600">
+                 {t('fastBookingDesc', language) || 'From inquiry to confirmed booking in real-time. Our platform ensures instant communication and immediate service confirmation for all your travel needs.'}
+               </p>
+             </div>
+           </div>
+         </div>
+       </section>
 
-      <section className="py-16 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl md:text-4xl font-bold">
-              Featured <span className="text-primary">Services</span>
-            </h2>
-            <Link
-              to="/services"
-              className="text-primary hover:text-primary-dark font-semibold flex items-center gap-1"
-            >
-              View all services {'->'}
-            </Link>
-          </div>
+<section className="py-16 bg-gray-50">
+         <div className="max-w-7xl mx-auto px-4">
+           <div className="flex justify-between items-center mb-8">
+             <h2 className="text-3xl md:text-4xl font-bold">
+               {t('featuredServices', language)} <span className="text-primary">safarisconn?</span>
+             </h2>
+             <Link
+               to="/services"
+               className="text-primary hover:text-primary-dark font-semibold flex items-center gap-1"
+             >
+               {t('viewAllServices', language)} {'->'}
+             </Link>
+           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {loadingHotels && <LoadingSpinner />}
-            {!loadingHotels &&
-              homepageHotels.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} />)}
-            {!loadingHotels && homepageHotels.length === 0 && (
-              <p className="text-gray-500">No services available right now.</p>
-            )}
-          </div>
-        </div>
-      </section>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             {loadingHotels && <LoadingSpinner />}
+             {!loadingHotels &&
+               homepageHotels.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} />)}
+             {!loadingHotels && homepageHotels.length === 0 && (
+               <p className="text-gray-500">{t('noServicesFound', language) || 'No services available right now.'}</p>
+             )}
+           </div>
+         </div>
+       </section>
 
-      <section className="py-16 bg-gradient-to-r from-primary to-secondary">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Ready to Explore Rwanda?
-          </h2>
-          <p className="text-white text-opacity-90 mb-8 max-w-2xl mx-auto">
-            Plan your trip with safariservconn and connect with trusted sellers for hotels, transport, tours, and guest services from one platform.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              to="/register"
-              className="px-8 py-3 bg-white text-primary font-bold rounded-xl hover:bg-gray-100 transition"
-            >
-              Get Started Free
-            </Link>
-            <Link
-              to="/services"
-              className="px-8 py-3 border-2 border-white text-white font-bold rounded-xl hover:bg-white hover:text-primary transition"
-            >
-              Browse Services
-            </Link>
-          </div>
-        </div>
-      </section>
+<section className="py-16 bg-gradient-to-r from-primary to-secondary">
+         <div className="max-w-7xl mx-auto px-4 text-center">
+           <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+             {t('readyExplore', language)}
+           </h2>
+           <p className="text-white text-opacity-90 mb-8 max-w-2xl mx-auto">
+             {t('planTrip', language)}
+           </p>
+           <div className="flex flex-col sm:flex-row gap-4 justify-center">
+             <Link
+               to="/register"
+               className="px-8 py-3 bg-white text-primary font-bold rounded-xl hover:bg-gray-100 transition"
+             >
+               {t('getStarted', language)}
+             </Link>
+             <Link
+               to="/services"
+               className="px-8 py-3 border-2 border-white text-white font-bold rounded-xl hover:bg-white hover:text-primary transition"
+             >
+               {t('browseServices', language)}
+             </Link>
+           </div>
+         </div>
+       </section>
 
       <Footer />
     </div>

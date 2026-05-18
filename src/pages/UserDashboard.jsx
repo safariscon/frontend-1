@@ -5,6 +5,7 @@ import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { bookingApi, getAuthData } from '../lib/api';
 import { formatRwf } from '../lib/currency';
+import { REALTIME_EVENTS, joinRealtimeRoom, subscribeToRealtime } from '../lib/realtime';
 
 const statusStyle = {
   confirmed: 'bg-green-100 text-green-800',
@@ -20,18 +21,18 @@ export default function UserDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return undefined;
+    }
+
+    const authData = getAuthData();
+    if (!authData?.token) {
+      Promise.resolve().then(() => setLoading(false));
+      return undefined;
+    }
+
     const loadData = async () => {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-
-      const authData = getAuthData();
-      if (!authData?.token) {
-        setLoading(false);
-        return;
-      }
-
       try {
         const response = await bookingApi.getMyBookings(authData.token);
         setBookings(response.bookings || []);
@@ -40,7 +41,9 @@ export default function UserDashboard() {
       }
     };
 
-    loadData();
+    Promise.resolve().then(() => loadData());
+    joinRealtimeRoom('user', authData.user?.id || authData.user?._id || user.id || user._id);
+    return subscribeToRealtime(REALTIME_EVENTS.BOOKING_CHANGED, loadData);
   }, [user, navigate]);
 
   const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length;
@@ -53,11 +56,16 @@ export default function UserDashboard() {
 
       <main className="flex-1 py-8">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              Live customer dashboard
+            </span>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
               Welcome back, {user?.name?.split(' ')[0]}!
             </h1>
-            <p className="text-gray-600">Track your booking requests and confirmations.</p>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
+              Track every request across hotels, transport, tours, restaurants, venues, wellness services, and other registered providers. Status updates arrive automatically.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -86,7 +94,7 @@ export default function UserDashboard() {
                       <div className="flex flex-col md:flex-row justify-between gap-4">
                         <div>
                           <h3 className="text-lg font-bold text-gray-900">
-                            {hotelToShow?.name || 'Hotel pending assignment'}
+                            {hotelToShow?.name || 'Service provider pending assignment'}
                           </h3>
                           <p className="text-sm text-gray-700 mt-1">
                             Destination: {booking.destinationPlace} ({booking.destinationLocation})
@@ -115,7 +123,7 @@ export default function UserDashboard() {
                           )}
                           {assignedHotel && (
                             <p className="text-sm text-gray-700 mt-2">
-                              Assigned Hotel: {assignedHotel.name} - {assignedHotel.location}
+                              Assigned provider: {assignedHotel.name} - {assignedHotel.location}
                             </p>
                           )}
                           {booking.tourHelpers?.length > 0 && (
@@ -145,9 +153,9 @@ export default function UserDashboard() {
             ) : (
               <div className="p-12 text-center">
                 <h3 className="text-xl font-semibold text-gray-700 mb-2">No bookings yet</h3>
-                <p className="text-gray-500 mb-4">Start exploring Rwanda&apos;s best hotels</p>
-                <Link to="/hotels" className="inline-block px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition">
-                  Browse Hotels
+                <p className="text-gray-500 mb-4">Start exploring Rwanda&apos;s trusted services</p>
+                <Link to="/services" className="inline-block px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition">
+                  Browse Services
                 </Link>
               </div>
             )}
@@ -162,9 +170,9 @@ export default function UserDashboard() {
 
 function StatCard({ label, value }) {
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm">
-      <p className="text-gray-500 text-sm">{label}</p>
-      <p className="text-3xl font-bold text-primary">{value}</p>
+    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-2 text-3xl font-black text-slate-950">{value}</p>
     </div>
   );
 }

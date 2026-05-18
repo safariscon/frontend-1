@@ -1,6 +1,6 @@
 {
-  "name": "safariservconn",
-  "short_name": "safariservconn",
+  "name": "safarisconn",
+  "short_name": "safarisconn",
   "description": "Get what you need in eazy way",
   "start_url": "/",
   "display": "standalone",

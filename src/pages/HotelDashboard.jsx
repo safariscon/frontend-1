@@ -6,6 +6,8 @@ import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
 import { getAuthData, hotelApi } from '../lib/api';
+import { formatRwf } from '../lib/currency';
+import { REALTIME_EVENTS, joinRealtimeRoom, subscribeToRealtime } from '../lib/realtime';
 
 const AUTO_REFRESH_MS = 15000;
 
@@ -278,6 +280,23 @@ export default function HotelDashboard() {
   }, [user, token, sellerConfig.supportsRooms]);
 
   useEffect(() => {
+    if (!user || !isSellerRole(user.role) || !token) return undefined;
+    joinRealtimeRoom('hotel', user.businessId || user.hotelId);
+    joinRealtimeRoom('user', user.id || user._id);
+
+    return subscribeToRealtime(
+      [
+        REALTIME_EVENTS.BOOKING_CHANGED,
+        REALTIME_EVENTS.ROOM_CHANGED,
+        REALTIME_EVENTS.SERVICE_CHANGED,
+        REALTIME_EVENTS.HOTEL_CHANGED,
+      ],
+      () => loadData({ silent: true })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, token, sellerConfig.supportsRooms]);
+
+  useEffect(() => {
     if (activeTab === 'rooms' && !sellerConfig.supportsRooms) {
       setActiveTab('listings');
     }
@@ -307,6 +326,11 @@ export default function HotelDashboard() {
     () => services.filter((service) => service.isActive !== false),
     [services]
   );
+  const registeredServices = useMemo(
+    () => overview?.hotel?.services || [],
+    [overview]
+  );
+  const businessImage = overview?.hotel?.images?.[0] || null;
 
   const summaryMetrics = useMemo(() => {
     const items = [
@@ -545,20 +569,78 @@ export default function HotelDashboard() {
 
       <main className="flex-1 py-8">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Seller Dashboard</h1>
-              <p className="text-gray-600">
-                Manage {overview?.hotel?.name || 'your business'} as a {sellerConfig.typeLabel.toLowerCase()} seller.
-              </p>
+          <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="p-6 md:p-8">
+                <div className="mb-5 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Live business dashboard
+                  </span>
+                  <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                    {sellerConfig.typeLabel}
+                  </span>
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
+                  {overview?.hotel?.name || user?.businessName || 'Business Dashboard'}
+                </h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
+                  Manage customer requests, availability, pricing, and listings for this {sellerConfig.typeLabel.toLowerCase()} business. Updates sync in real time across admin, customer, and seller screens.
+                </p>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                  <InfoPill label="Location" value={overview?.hotel?.location || '-'} />
+                  <InfoPill label="Base price" value={formatRwf(overview?.hotel?.basePrice || 0)} />
+                  <InfoPill label="Contact" value={overview?.hotel?.contactInfo || overview?.hotel?.ownerEmail || '-'} />
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {registeredServices.length > 0 ? (
+                    registeredServices.slice(0, 8).map((service) => (
+                      <span
+                        key={service}
+                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+                      >
+                        {service}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                      Add services from Listings Management
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative min-h-[240px] bg-slate-900">
+                {businessImage ? (
+                  <img
+                    src={businessImage}
+                    alt={overview?.hotel?.name || 'Business'}
+                    className="absolute inset-0 h-full w-full object-cover opacity-80"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-700 via-slate-900 to-sky-800" />
+                )}
+                <div className="absolute inset-0 bg-slate-950/30" />
+                <div className="relative flex h-full flex-col justify-end p-6 text-white">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">Realtime status</p>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <HeroStat label={sellerConfig.bookingLabel} value={overview?.stats?.bookings ?? bookings.length} />
+                    <HeroStat
+                      label={sellerConfig.supportsRooms ? 'Available rooms' : 'Active listings'}
+                      value={sellerConfig.supportsRooms ? overview?.stats?.availableRooms ?? 0 : activeServices.length}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => loadData()}
+                    className="mt-5 rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"
+                  >
+                    Refresh Now
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => loadData()}
-              className="px-4 py-2 border border-gray-300 rounded-xl text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Refresh Now
-            </button>
           </div>
 
           {(error || info) && (
@@ -571,7 +653,7 @@ export default function HotelDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <Metric label="Business Type" value={sellerConfig.typeLabel} />
             <Metric label={sellerConfig.bookingLabel} value={overview?.stats?.bookings ?? bookings.length} />
-            <Metric label="Revenue" value={`$${revenue}`} />
+            <Metric label="Revenue" value={formatRwf(revenue)} />
             <Metric
               label={sellerConfig.supportsRooms ? 'Available Rooms' : sellerConfig.metricLabel}
               value={sellerConfig.supportsRooms ? overview?.stats?.availableRooms ?? 0 : activeServices.length}
@@ -642,19 +724,39 @@ export default function HotelDashboard() {
                 <>
                   {activeTab === 'overview' && (
                     <div className="space-y-6">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{overview?.hotel?.name}</h3>
-                        <p className="text-gray-700">Business type: {sellerConfig.typeLabel}</p>
-                        <p className="text-gray-700">Location: {overview?.hotel?.location}</p>
-                        <p className="text-gray-700">Description: {overview?.hotel?.description || '-'}</p>
-                        <p className="text-gray-700">Base Price: ${overview?.hotel?.basePrice || 0}</p>
-                        <p className="text-gray-700">Contact: {overview?.hotel?.contactInfo || '-'}</p>
-                        <p className="text-gray-700">
-                          Services: {(overview?.hotel?.services || []).join(', ') || '-'}
-                        </p>
+                      <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Business profile</p>
+                          <h3 className="mt-2 text-2xl font-black text-slate-950">{overview?.hotel?.name}</h3>
+                          <p className="mt-3 text-sm leading-6 text-slate-600">{overview?.hotel?.description || 'No description added yet.'}</p>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <InfoPill label="Type" value={sellerConfig.typeLabel} />
+                            <InfoPill label="Location" value={overview?.hotel?.location || '-'} />
+                            <InfoPill label="Starting price" value={formatRwf(overview?.hotel?.basePrice || 0)} />
+                            <InfoPill label="Contact" value={overview?.hotel?.contactInfo || '-'} />
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registered customer services</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {registeredServices.length > 0 ? (
+                              registeredServices.map((service) => (
+                                <span
+                                  key={service}
+                                  className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800"
+                                >
+                                  {service}
+                                </span>
+                              ))
+                            ) : (
+                              <p className="text-sm text-slate-600">No services were registered for this business yet.</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="rounded-2xl bg-blue-50 border border-blue-100 p-5">
+                      <div className="rounded-xl bg-blue-50 border border-blue-100 p-5">
                         <h4 className="font-bold text-blue-900 mb-2">Business-ready tools</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
                           <FeatureCard title="Listings Management" description={`Create, update, and remove ${sellerConfig.inventoryItemLabel}s.`} />
@@ -674,7 +776,7 @@ export default function HotelDashboard() {
                                   key={room._id}
                                   className="px-3 py-1 rounded-full bg-white border border-green-200 text-green-900 text-sm"
                                 >
-                                  Room {room.roomNumber} - ${room.price}
+                                  Room {room.roomNumber} - {formatRwf(room.price)}
                                 </span>
                               ))}
                             </div>
@@ -752,7 +854,7 @@ export default function HotelDashboard() {
                               <tr key={room._id} className="border-b border-gray-100">
                                 <td className="py-3 px-2">{room.roomNumber}</td>
                                 <td className="py-3 px-2">{room.type}</td>
-                                <td className="py-3 px-2">${room.price}</td>
+                                <td className="py-3 px-2">{formatRwf(room.price)}</td>
                                 <td className="py-3 px-2">
                                   <select
                                     value={room.status}
@@ -867,7 +969,7 @@ export default function HotelDashboard() {
                                 </td>
                                 <td className="py-3 px-2">{service.category || '-'}</td>
                                 <td className="py-3 px-2">
-                                  ${service.priceModel?.amount || 0} / {service.priceModel?.unit || sellerConfig.pricingUnit}
+                                  {formatRwf(service.priceModel?.amount || 0)} / {service.priceModel?.unit || sellerConfig.pricingUnit}
                                 </td>
                                 <td className="py-3 px-2">
                                   {service.availabilitySchedule?.inventory ?? 1} units
@@ -927,7 +1029,7 @@ export default function HotelDashboard() {
                                 {formatDate(booking.checkIn)} - {formatDate(booking.checkOut)}
                               </td>
                               <td className="py-3 px-2">{booking.status}</td>
-                              <td className="py-3 px-2 text-right">${booking.totalPrice || 0}</td>
+                              <td className="py-3 px-2 text-right">{formatRwf(booking.totalPrice || 0)}</td>
                               <td className="py-3 px-2 text-right">
                                 <div className="flex items-center justify-end gap-3">
                                   <button
@@ -1003,7 +1105,7 @@ function SellerMetricDrilldown({ metricView, items, supportsRooms, inventoryItem
           <div key={room._id} className="rounded-xl border border-gray-200 p-4 min-w-[200px]">
             <p className="font-semibold text-gray-900">Room {room.roomNumber}</p>
             <p className="text-sm text-gray-600">{room.type}</p>
-            <p className="text-sm text-gray-700 mt-1">${room.price}</p>
+            <p className="text-sm text-gray-700 mt-1">{formatRwf(room.price)}</p>
             <p className="text-xs text-gray-500 mt-2">Status: {room.status}</p>
           </div>
         ))}
@@ -1018,7 +1120,7 @@ function SellerMetricDrilldown({ metricView, items, supportsRooms, inventoryItem
           <p className="font-semibold text-gray-900">{service.name || capitalize(inventoryItemLabel)}</p>
           <p className="text-sm text-gray-600">{service.category || '-'}</p>
           <p className="text-sm text-gray-700 mt-1">
-            ${service.priceModel?.amount || 0} / {service.priceModel?.unit || 'use'}
+            {formatRwf(service.priceModel?.amount || 0)} / {service.priceModel?.unit || 'use'}
           </p>
           <p className="text-xs text-gray-500 mt-2">
             Inventory: {service.availabilitySchedule?.inventory ?? 1}
@@ -1031,9 +1133,9 @@ function SellerMetricDrilldown({ metricView, items, supportsRooms, inventoryItem
 
 function Metric({ label, value }) {
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm">
-      <p className="text-gray-500 text-sm">{label}</p>
-      <p className="text-2xl font-bold text-primary">{value}</p>
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
     </div>
   );
 }
@@ -1043,6 +1145,24 @@ function FeatureCard({ title, description }) {
     <div className="rounded-xl bg-white border border-blue-100 p-4">
       <p className="font-semibold text-gray-900">{title}</p>
       <p className="text-gray-600 mt-1">{description}</p>
+    </div>
+  );
+}
+
+function InfoPill({ label, value }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-bold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function HeroStat({ label, value }) {
+  return (
+    <div className="rounded-xl border border-white/20 bg-white/10 p-3 backdrop-blur">
+      <p className="text-xs text-white/75">{label}</p>
+      <p className="mt-1 text-2xl font-black text-white">{value}</p>
     </div>
   );
 }

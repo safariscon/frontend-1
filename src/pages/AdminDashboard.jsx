@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { adminApi, getAuthData } from '../lib/api';
 import { locations } from '../data/mockData';
 import { normalizeHotels } from '../lib/hotelMapper';
+import { formatRwf } from '../lib/currency';
+import { REALTIME_EVENTS, getRealtimeSocket, subscribeToRealtime } from '../lib/realtime';
 
 const AUTO_REFRESH_MS = 15000;
 const BUSINESS_TYPE_OPTIONS = [
@@ -157,6 +159,28 @@ export default function AdminDashboard() {
     }, AUTO_REFRESH_MS);
 
     return () => window.clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, token, statusHotelId]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'admin' || !token) return undefined;
+    getRealtimeSocket().emit('admin:join');
+
+    return subscribeToRealtime(
+      [
+        REALTIME_EVENTS.CATALOG_CHANGED,
+        REALTIME_EVENTS.HOTEL_CHANGED,
+        REALTIME_EVENTS.BOOKING_CHANGED,
+        REALTIME_EVENTS.ROOM_CHANGED,
+        REALTIME_EVENTS.SERVICE_CHANGED,
+      ],
+      () => {
+        loadAdminData({ silent: true });
+        if (statusHotelId) {
+          loadHotelStatus(statusHotelId, { silent: true });
+        }
+      }
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, token, statusHotelId]);
 
@@ -487,17 +511,29 @@ export default function AdminDashboard() {
 
       <main className="flex-1 py-8">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-              <p className="text-gray-600">Track business status, live availability, bookings and visitor assignment.</p>
-            </div>
+          <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Realtime operations
+                  </span>
+                  <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                    Multi-service marketplace
+                  </span>
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">Admin Dashboard</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
+                  Register hotels, restaurants, transport, tours, venues, shops, wellness services, and other businesses. Each owner receives their dashboard through the registered email, while availability and bookings sync live.
+                </p>
+              </div>
             <button
               onClick={() => setShowRegisterModal(true)}
               className="px-6 py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition"
             >
               Register New Business
             </button>
+            </div>
           </div>
 
           {(error || info) && (
@@ -534,9 +570,9 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
             <Metric label="Businesses" value={stats?.totalBusinesses ?? stats?.totalHotels ?? 0} />
             <Metric label="Rooms" value={stats?.totalRooms ?? 0} />
-            <Metric label="Available Services" value={stats?.availableInventory ?? 0} />
+            <Metric label="Available Inventory" value={stats?.availableInventory ?? 0} />
             <Metric label="Bookings" value={stats?.totalBookings ?? 0} />
-            <Metric label="Revenue" value={`$${stats?.revenue ?? 0}`} />
+            <Metric label="Revenue" value={formatRwf(stats?.revenue ?? 0)} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -936,7 +972,7 @@ export default function AdminDashboard() {
                                   <div className="grid grid-cols-2 gap-2 mt-3 text-sm text-gray-700">
                                     <div>Available: {hotel.availableInventory ?? 0}</div>
                                     <div>Total: {hotel.totalInventory ?? 0}</div>
-                                    <div>Base price: ${hotel.basePrice}</div>
+                                    <div>Base price: {formatRwf(hotel.basePrice)}</div>
                                     <div>Type: {formatBusinessType(hotel.type)}</div>
                                   </div>
                                 </button>
@@ -1531,9 +1567,9 @@ function UserTable({ title, rows, onDelete }) {
 
 function Metric({ label, value }) {
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm">
-      <p className="text-gray-500 text-sm">{label}</p>
-      <p className="text-2xl font-bold text-primary">{value}</p>
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
     </div>
   );
 }

@@ -50,7 +50,14 @@ export default function SearchBar({ variant = 'compact' }) {
       <label className="sr-only" htmlFor="budget-input">
         Budget
       </label>
-    
+      <input
+        id="budget-input"
+        value={budget}
+        onChange={(event) => setBudget(event.target.value)}
+        placeholder="Max budget"
+        inputMode="numeric"
+        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+      />
 
       <button
         type="submit"

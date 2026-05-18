@@ -126,7 +126,7 @@ export default function HotelDetailsPage() {
                 </button>
 
                 <p className="text-xs text-gray-500 text-center mt-3">
-                  safariservconn helps connect customers with trusted sellers for a smoother booking experience.
+                  safarisconn helps connect customers with trusted sellers for a smoother booking experience.
                 </p>
               </div>
             </div>

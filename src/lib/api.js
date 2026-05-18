@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE_URL = import.meta.env.PROD
-  ? "https://safariservconnback.onrender.com"
+  ? "https://safarisconnback.onrender.com"
   : "http://localhost:5000";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 const AUTH_STORAGE_KEY = "tourconnect_auth";
