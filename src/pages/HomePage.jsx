@@ -63,7 +63,7 @@ export default function HomePage() {
            <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr]">
              <div className="text-white">
                <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 backdrop-blur">
-                 safarisconn
+                 safariscon
                  <span className="h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
                </p>
                <h1 className="mt-6 max-w-4xl text-3xl font-black leading-tight md:text-4xl">
@@ -89,47 +89,47 @@ export default function HomePage() {
                 <div className="hero-card hero-card-main">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-600">Platform Match</p>
-                      <h3 className="mt-2 text-2xl font-black text-slate-900">Customer request</h3>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-600">{t('platformMatch', language)}</p>
+                      <h3 className="mt-2 text-2xl font-black text-slate-900">{t('customerRequest', language)}</h3>
                     </div>
                     <div className="rounded-2xl bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700">
-                      Live
+                      {t('live', language)}
                     </div>
                   </div>
                   <div className="space-y-4">
                     <JourneyRow
-                      title="Traveler"
-                      subtitle="Looking for a Kigali stay + airport transfer"
+                      title={t('travelerLabel', language)}
+                      subtitle={t('travelerSubtitle', language)}
                       tone="cyan"
                     />
                     <div className="flex items-center justify-center">
                       <div className="hero-flow-line" />
                     </div>
                     <JourneyRow
-                      title="Seller"
-                      subtitle="Hotel + transport partner responds instantly"
+                      title={t('sellerLabel', language)}
+                      subtitle={t('sellerSubtitle', language)}
                       tone="emerald"
                     />
                   </div>
                 </div>
 
                 <div className="hero-card hero-card-seller">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Service provider profile</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{t('serviceProviderProfile', language)}</p>
                   <h4 className="mt-2 text-xl font-black text-slate-900">Virunga View Lodge</h4>
-                  <p className="mt-3 text-sm text-slate-600">Boutique host with pickup, breakfast, and local experience bundles.</p>
+                  <p className="mt-3 text-sm text-slate-600">{t('sampleProviderDescription', language)}</p>
                   <div className="mt-4 flex items-center justify-between">
-                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Verified</span>
+                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{t('verified', language)}</span>
                     <span className="text-sm font-bold text-emerald-700">{formatRwf(85000)}</span>
                   </div>
                 </div>
 
                 <div className="hero-card hero-card-customer">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Customer benefit</p>
-                  <h4 className="mt-2 text-xl font-black text-slate-900">One simple booking path</h4>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{t('customerBenefit', language)}</p>
+                  <h4 className="mt-2 text-xl font-black text-slate-900">{t('oneSimpleBookingPath', language)}</h4>
                   <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                    <li>Compare trusted sellers quickly</li>
-                    <li>See local prices in RWF</li>
-                    <li>Book with less friction</li>
+                    <li>{t('compareTrustedSellers', language)}</li>
+                    <li>{t('seeLocalPrices', language)}</li>
+                    <li>{t('bookLessFriction', language)}</li>
                   </ul>
                 </div>
               </div>
@@ -141,7 +141,7 @@ export default function HomePage() {
 <section className="py-16 bg-white">
          <div className="max-w-7xl mx-auto px-4">
            <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
-             {t('whyChoose', language)} <span className="text-primary">safarisconn?</span>
+             {t('whyChoose', language)} <span className="text-primary">safariscon?</span>
            </h2>
 
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -188,7 +188,7 @@ export default function HomePage() {
          <div className="max-w-7xl mx-auto px-4">
            <div className="flex justify-between items-center mb-8">
              <h2 className="text-3xl md:text-4xl font-bold">
-               {t('featuredServices', language)} <span className="text-primary">safarisconn?</span>
+               {t('featuredServices', language)} <span className="text-primary">safariscon?</span>
              </h2>
              <Link
                to="/services"
@@ -203,7 +203,7 @@ export default function HomePage() {
              {!loadingHotels &&
                homepageHotels.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} />)}
              {!loadingHotels && homepageHotels.length === 0 && (
-               <p className="text-gray-500">{t('noServicesFound', language) || 'No services available right now.'}</p>
+               <p className="text-gray-500">{t('noServicesAvailable', language)}</p>
              )}
            </div>
          </div>

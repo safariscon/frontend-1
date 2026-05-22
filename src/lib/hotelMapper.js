@@ -1,3 +1,5 @@
+import { decorateBusiness } from './marketplaceTypes';
+
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=800&fit=crop";
 
@@ -10,7 +12,7 @@ export const normalizeHotel = (hotel) => {
   const rating = Number(hotel.rating ?? 4.5);
   const reviewCount = Number(hotel.reviewCount ?? 0);
 
-  return {
+  return decorateBusiness({
     ...hotel,
     id,
     type: hotel.type || 'hotel',
@@ -25,7 +27,7 @@ export const normalizeHotel = (hotel) => {
     amenities: Array.isArray(hotel.amenities) ? hotel.amenities : [],
     rooms: Array.isArray(hotel.rooms) ? hotel.rooms : [],
     isFeatured: Boolean(hotel.isFeatured),
-  };
+  });
 };
 
 export const normalizeHotels = (hotels = []) => hotels.map(normalizeHotel);

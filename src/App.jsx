@@ -48,6 +48,7 @@ function AppContent() {
             <Route path="/services" element={<HotelsPage />} />
             <Route path="/hotels" element={<HotelsPage />} />
             <Route path="/hotel/:id" element={<HotelDetailsPage />} />
+            <Route path="/business/:id" element={<HotelDetailsPage />} />
             <Route path="/booking/:hotelId" element={<BookingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />

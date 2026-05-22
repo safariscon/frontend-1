@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useInstall } from '../context/InstallContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import { t } from '../lib/translations';
+import { supportedLanguages, t } from '../lib/translations';
 import InstallButton from './InstallButton';
 
 export default function Navbar() {
@@ -13,7 +13,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { isMobile, isInstalled } = useInstall();
   const { darkMode, toggleDarkMode } = useTheme();
-  const { language, toggleLanguage } = useLanguage();
+  const { language, setLanguage } = useLanguage();
 
   const handleLogout = () => {
     logout();
@@ -21,19 +21,19 @@ export default function Navbar() {
     setIsOpen(false);
   };
 
+  const closeMenu = () => setIsOpen(false);
+
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-lg">U</span>
             </div>
-            <span className="text-2xl font-bold text-gray-900">safarisconn</span>
+            <span className="text-2xl font-bold text-gray-900">safariscon</span>
           </Link>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
             <Link to="/" className="text-gray-700 hover:text-primary transition font-medium">
               {t('home', language)}
@@ -41,26 +41,9 @@ export default function Navbar() {
             <Link to="/services" className="text-gray-700 hover:text-primary transition font-medium">
               {t('services', language)}
             </Link>
-<button
-               type="button"
-               onClick={toggleDarkMode}
-               className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition font-medium"
-               aria-label={darkMode ? t('lightMode', language) : t('darkMode', language)}
-               title={darkMode ? t('lightMode', language) : t('darkMode', language)}
-             >
-               {darkMode ? <SunIcon /> : <MoonIcon />}
-               <span>{darkMode ? t('lightMode', language) : t('darkMode', language)}</span>
-             </button>
-             <button
-               type="button"
-               onClick={toggleLanguage}
-               className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition font-medium"
-               aria-label="Switch language"
-               title="Switch language"
-             >
-               <span className="text-lg">{language === 'en' ? '🇬🇧' : '🇷🇼'}</span>
-               <span className="uppercase">{language === 'en' ? 'EN' : 'RW'}</span>
-             </button>
+            <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel />
+            <LanguageSelect language={language} onChange={setLanguage} id="desktop-language-select" />
+
             {isAuthenticated ? (
               <>
                 {isAdmin && (
@@ -87,10 +70,7 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <Link
-                  to="/login"
-                  className="text-gray-700 hover:text-primary transition font-medium"
-                >
+                <Link to="/login" className="text-gray-700 hover:text-primary transition font-medium">
                   {t('login', language)}
                 </Link>
                 <Link
@@ -101,25 +81,17 @@ export default function Navbar() {
                 </Link>
               </>
             )}
-            
-            {/* Install button - desktop (only if not installed) */}
+
             {!isMobile && !isInstalled && <InstallButton variant="desktop" />}
           </div>
 
-          {/* Mobile menu button */}
           <div className="md:hidden">
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleDarkMode}
-                className="text-gray-700 hover:text-primary focus:outline-none p-2 rounded-lg bg-gray-100 hover:bg-gray-200"
-                aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {darkMode ? <SunIcon /> : <MoonIcon />}
-              </button>
+              <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} />
               <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="text-gray-700 hover:text-primary focus:outline-none p-2"
+                aria-label={t('openNavigation', language)}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   {isOpen ? (
@@ -133,96 +105,73 @@ export default function Navbar() {
           </div>
         </div>
 
-{/* Mobile Navigation */}
-         {isOpen && (
-           <div className="md:hidden py-4 border-t border-gray-100">
-             <div className="flex flex-col space-y-3">
-               <Link
-                 to="/"
-                 onClick={() => setIsOpen(false)}
-                 className="text-gray-700 hover:text-primary transition font-medium"
-               >
-                 {t('home', language)}
-               </Link>
-               <Link
-                 to="/services"
-                 onClick={() => setIsOpen(false)}
-                 className="text-gray-700 hover:text-primary transition font-medium"
-               >
-                 {t('services', language)}
-               </Link>
-<button
-                  type="button"
-                  onClick={toggleDarkMode}
-                  className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium flex items-center gap-2"
-                >
-                  {darkMode ? <SunIcon /> : <MoonIcon />}
-                  {darkMode ? t('lightMode', language) : t('darkMode', language)}
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleLanguage}
-                  className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium flex items-center gap-2"
-                >
-                  <span className="text-lg">{language === 'en' ? '🇬🇧' : '🇷🇼'}</span>
-                  <span className="uppercase">{language === 'en' ? 'EN' : 'RW'}</span>
-                </button>
-               {isAuthenticated ? (
-                 <>
-                   {isAdmin && (
-                     <Link
-                       to="/admin-dashboard"
-                       onClick={() => setIsOpen(false)}
-                       className="text-gray-700 hover:text-primary transition font-medium"
-                     >
-                       {t('adminDashboard', language)}
-                     </Link>
-                   )}
-                   {isCustomer && (
-                     <Link
-                       to="/dashboard"
-                       onClick={() => setIsOpen(false)}
-                       className="text-gray-700 hover:text-primary transition font-medium"
-                     >
-                       {t('myBookings', language)}
-                     </Link>
-                   )}
-                   {isSeller && (
-                     <Link
-                       to={dashboardRoute}
-                       onClick={() => setIsOpen(false)}
-                       className="text-gray-700 hover:text-primary transition font-medium"
-                     >
-                       {t('sellerDashboard', language)}
-                     </Link>
-                   )}
-                   <button
-                     onClick={handleLogout}
-                     className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium"
-                   >
-                     {t('logout', language)}
-                   </button>
-                 </>
-               ) : (
-                 <>
-                   <Link
-                     to="/login"
-                     onClick={() => setIsOpen(false)}
-                     className="text-gray-700 hover:text-primary transition font-medium"
-                   >
-                     {t('login', language)}
-                   </Link>
-                   <Link
-                     to="/register"
-                     onClick={() => setIsOpen(false)}
-                     className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg transition font-medium text-center"
-                   >
-                     {t('register', language)}
-                   </Link>
-                 </>
-               )}
-              
-              {/* Mobile install button in menu */}
+        {isOpen && (
+          <div className="md:hidden py-4 border-t border-gray-100">
+            <div className="flex flex-col space-y-3">
+              <Link to="/" onClick={closeMenu} className="text-gray-700 hover:text-primary transition font-medium">
+                {t('home', language)}
+              </Link>
+              <Link
+                to="/services"
+                onClick={closeMenu}
+                className="text-gray-700 hover:text-primary transition font-medium"
+              >
+                {t('services', language)}
+              </Link>
+              <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel fullWidth />
+              <LanguageSelect language={language} onChange={setLanguage} id="mobile-language-select" fullWidth />
+
+              {isAuthenticated ? (
+                <>
+                  {isAdmin && (
+                    <Link
+                      to="/admin-dashboard"
+                      onClick={closeMenu}
+                      className="text-gray-700 hover:text-primary transition font-medium"
+                    >
+                      {t('adminDashboard', language)}
+                    </Link>
+                  )}
+                  {isCustomer && (
+                    <Link
+                      to="/dashboard"
+                      onClick={closeMenu}
+                      className="text-gray-700 hover:text-primary transition font-medium"
+                    >
+                      {t('myBookings', language)}
+                    </Link>
+                  )}
+                  {isSeller && (
+                    <Link
+                      to={dashboardRoute}
+                      onClick={closeMenu}
+                      className="text-gray-700 hover:text-primary transition font-medium"
+                    >
+                      {t('sellerDashboard', language)}
+                    </Link>
+                  )}
+                  <button
+                    onClick={handleLogout}
+                    className="text-left bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition font-medium"
+                  >
+                    {t('logout', language)}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" onClick={closeMenu} className="text-gray-700 hover:text-primary transition font-medium">
+                    {t('login', language)}
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={closeMenu}
+                    className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg transition font-medium text-center"
+                  >
+                    {t('register', language)}
+                  </Link>
+                </>
+              )}
+
               {isMobile && !isInstalled && (
                 <div className="pt-2 border-t border-gray-100 mt-2">
                   <InstallButton variant="compact" />
@@ -233,6 +182,51 @@ export default function Navbar() {
         )}
       </div>
     </nav>
+  );
+}
+
+function LanguageSelect({ language, onChange, id, fullWidth = false }) {
+  return (
+    <>
+      <label className="sr-only" htmlFor={id}>
+        {t('chooseLanguage', language)}
+      </label>
+      <select
+        id={id}
+        value={language}
+        onChange={(event) => onChange(event.target.value)}
+        className={`bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition font-medium ${
+          fullWidth ? 'w-full' : ''
+        }`}
+        aria-label={t('chooseLanguage', language)}
+        title={t('chooseLanguage', language)}
+      >
+        {supportedLanguages.map((supportedLanguage) => (
+          <option key={supportedLanguage.code} value={supportedLanguage.code}>
+            {supportedLanguage.shortLabel} - {supportedLanguage.label}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+}
+
+function ThemeButton({ darkMode, language, onClick, showLabel = false, fullWidth = false }) {
+  const label = darkMode ? t('lightMode', language) : t('darkMode', language);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition font-medium ${
+        fullWidth ? 'w-full justify-start' : ''
+      }`}
+      aria-label={label}
+      title={label}
+    >
+      {darkMode ? <SunIcon /> : <MoonIcon />}
+      {showLabel && <span>{label}</span>}
+    </button>
   );
 }
 

@@ -1,12 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect } from 'react';
+import { defaultLanguage, isSupportedLanguage } from '../lib/translations';
 
 const LanguageContext = createContext();
 
 export function LanguageProvider({ children }) {
   const [language, setLanguage] = useState(() => {
     const saved = localStorage.getItem('preferredLanguage');
-    return saved || 'en'; // Default to English
+    return isSupportedLanguage(saved) ? saved : defaultLanguage;
   });
 
   useEffect(() => {
@@ -15,8 +16,11 @@ export function LanguageProvider({ children }) {
 
   const value = {
     language,
-    setLanguage,
-    toggleLanguage: () => setLanguage(prev => prev === 'en' ? 'rw' : 'en'),
+    setLanguage: (nextLanguage) => {
+      if (isSupportedLanguage(nextLanguage)) {
+        setLanguage(nextLanguage);
+      }
+    },
   };
 
   return (

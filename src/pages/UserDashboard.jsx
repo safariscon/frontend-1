@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { bookingApi, getAuthData } from '../lib/api';
 import { formatRwf } from '../lib/currency';
 import { REALTIME_EVENTS, joinRealtimeRoom, subscribeToRealtime } from '../lib/realtime';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 const statusStyle = {
   confirmed: 'bg-green-100 text-green-800',
@@ -19,6 +21,7 @@ export default function UserDashboard() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { language } = useLanguage();
 
   useEffect(() => {
     if (!user) {
@@ -58,29 +61,29 @@ export default function UserDashboard() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-              Live customer dashboard
+              {t('liveCustomerDashboard', language)}
             </span>
             <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
-              Welcome back, {user?.name?.split(' ')[0]}!
+              {t('welcomeBackUser', language, { name: user?.name?.split(' ')[0] || '' })}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-              Track every request across hotels, transport, tours, restaurants, venues, wellness services, and other registered providers. Status updates arrive automatically.
+              {t('trackBookings', language)}
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <StatCard label="Confirmed" value={confirmedCount} />
-            <StatCard label="Pending" value={pendingCount} />
-            <StatCard label="Completed" value={completedCount} />
+            <StatCard label={t('confirmed', language)} value={confirmedCount} />
+            <StatCard label={t('pending', language)} value={pendingCount} />
+            <StatCard label={t('completed', language)} value={completedCount} />
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">My Bookings</h2>
+              <h2 className="text-xl font-bold text-gray-900">{t('myBookingsTitle', language)}</h2>
             </div>
 
             {loading ? (
-              <div className="p-8 text-gray-600">Loading bookings...</div>
+              <div className="p-8 text-gray-600">{t('loadingBookings', language)}</div>
             ) : bookings.length > 0 ? (
               <div className="divide-y divide-gray-200">
                 {bookings.map((booking) => {
@@ -94,26 +97,26 @@ export default function UserDashboard() {
                       <div className="flex flex-col md:flex-row justify-between gap-4">
                         <div>
                           <h3 className="text-lg font-bold text-gray-900">
-                            {hotelToShow?.name || 'Service provider pending assignment'}
+                            {hotelToShow?.name || t('serviceProviderPendingAssignment', language)}
                           </h3>
                           <p className="text-sm text-gray-700 mt-1">
-                            Destination: {booking.destinationPlace} ({booking.destinationLocation})
+                            {t('destination', language)} {booking.destinationPlace} ({booking.destinationLocation})
                           </p>
                           <p className="text-sm text-gray-600 mt-1">
-                            {booking.checkIn
-                              ? `${new Date(booking.checkIn).toLocaleDateString()} - ${new Date(booking.checkOut).toLocaleDateString()}`
-                              : 'Dates not provided'}
+                            {formatBookingSchedule(booking, language)}
                           </p>
-                          <p className="text-sm text-gray-600">Guests: {booking.guests || 1}</p>
-                          <p className="text-sm text-gray-500 mt-1">Booking ID: {booking._id}</p>
+                          <p className="text-sm text-gray-600">
+                            {getBookingQuantityLabel(booking, language)} {booking.bookingDetails?.quantity || booking.guests || booking.quantity || 1}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">{t('bookingId', language)} {booking._id}</p>
                           {waiting && (
                             <p className="text-sm text-yellow-700 mt-2">
-                              Please wait for admin response.
+                              {t('pleaseWaitForAdmin', language)}
                             </p>
                           )}
                           {booking.isAcknowledgedByAdmin && booking.status === 'pending' && (
                             <p className="text-sm text-blue-700 mt-2">
-                              Admin has confirmed receipt of your request.
+                              {t('adminConfirmedReceipt', language)}
                             </p>
                           )}
                           {booking.adminResponseMessage && (
@@ -123,12 +126,12 @@ export default function UserDashboard() {
                           )}
                           {assignedHotel && (
                             <p className="text-sm text-gray-700 mt-2">
-                              Assigned provider: {assignedHotel.name} - {assignedHotel.location}
+                              {t('assignedProvider', language)} {assignedHotel.name} - {assignedHotel.location}
                             </p>
                           )}
                           {booking.tourHelpers?.length > 0 && (
                             <div className="mt-3">
-                              <p className="text-sm font-semibold text-gray-900">Tour Helpers</p>
+                              <p className="text-sm font-semibold text-gray-900">{t('tourHelpers', language)}</p>
                               <div className="space-y-1 mt-1">
                                 {booking.tourHelpers.map((helper) => (
                                   <p key={helper._id} className="text-sm text-gray-700">
@@ -141,7 +144,7 @@ export default function UserDashboard() {
                         </div>
                         <div className="text-right">
                           <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>
-                            {booking.status}
+                            {t(`${booking.status}Status`, language)}
                           </span>
                           <p className="text-xl font-bold text-primary mt-2">{formatRwf(booking.totalPrice || 0)}</p>
                         </div>
@@ -152,10 +155,10 @@ export default function UserDashboard() {
               </div>
             ) : (
               <div className="p-12 text-center">
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">No bookings yet</h3>
-                <p className="text-gray-500 mb-4">Start exploring Rwanda&apos;s trusted services</p>
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">{t('noBookingsYet', language)}</h3>
+                <p className="text-gray-500 mb-4">{t('startExploringServices', language)}</p>
                 <Link to="/services" className="inline-block px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition">
-                  Browse Services
+                  {t('browseServices', language)}
                 </Link>
               </div>
             )}
@@ -175,4 +178,24 @@ function StatCard({ label, value }) {
       <p className="mt-2 text-3xl font-black text-slate-950">{value}</p>
     </div>
   );
+}
+
+function formatBookingSchedule(booking, language) {
+  if (booking.checkIn) {
+    return `${new Date(booking.checkIn).toLocaleDateString()} - ${new Date(booking.checkOut).toLocaleDateString()}`;
+  }
+  if (booking.reservationDate) {
+    const date = new Date(booking.reservationDate).toLocaleDateString();
+    return booking.reservationTime ? `${date} at ${booking.reservationTime}` : date;
+  }
+  return t('datesNotProvided', language);
+}
+
+function getBookingQuantityLabel(booking, language) {
+  if (booking.bookingModel === 'restaurant') return `${t('tableSize', language)}:`;
+  if (booking.bookingModel === 'transport') return `${t('passengers', language)}:`;
+  if (booking.bookingModel === 'event') return `${t('attendeeCount', language)}:`;
+  if (booking.bookingModel === 'activity') return `${t('participantCount', language)}:`;
+  if (booking.bookingModel === 'childcare') return `${t('childCount', language)}:`;
+  return `${t('guestsCount', language)}`;
 }

@@ -7,6 +7,8 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { publicApi } from '../lib/api';
 import { formatRwf } from '../lib/currency';
 import { normalizeHotels } from '../lib/hotelMapper';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function HotelDetailsPage() {
   const { id } = useParams();
@@ -14,6 +16,7 @@ export default function HotelDetailsPage() {
   const [hotel, setHotel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const { language } = useLanguage();
 
   useEffect(() => {
     const loadHotel = async () => {
@@ -42,9 +45,9 @@ export default function HotelDetailsPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Hotel not found</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('hotelNotFound', language)}</h2>
           <button onClick={() => navigate('/hotels')} className="text-primary hover:underline">
-            Back to hotels
+            {t('backToServices', language)}
           </button>
         </div>
       </div>
@@ -89,12 +92,12 @@ export default function HotelDetailsPage() {
               </div>
 
               <div className="mb-8">
-                <h2 className="text-xl font-bold mb-3">About This Hotel</h2>
+                <h2 className="text-xl font-bold mb-3">{t('aboutThisService', language)}</h2>
                 <p className="text-gray-600 leading-relaxed">{hotel.description}</p>
               </div>
 
               <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">Amenities</h2>
+                <h2 className="text-xl font-bold mb-4">{t('amenities', language)}</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {hotel.amenities.map((amenity) => (
                     <div key={amenity} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
@@ -112,21 +115,23 @@ export default function HotelDetailsPage() {
               <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-24">
                 <div className="border-t border-gray-200 pt-4 mb-4">
                   <div className="flex justify-between mb-2">
-                    <span className="text-gray-600">Starting from</span>
+                    <span className="text-gray-600">{t('startingFrom', language)}</span>
                     <span className="text-2xl font-bold text-primary">{formatRwf(hotel.basePrice)}</span>
                   </div>
-                  <p className="text-xs text-gray-500">per night</p>
+                  <p className="text-xs text-gray-500">
+                    {t('pricePerUnit', language, { unit: t(hotel.pricingUnit || 'service', language) })}
+                  </p>
                 </div>
 
                 <button
                   onClick={() => navigate(`/booking/${hotel.id}`)}
                   className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition"
                 >
-                  Request Booking
+                  {t('requestBooking', language)}
                 </button>
 
                 <p className="text-xs text-gray-500 text-center mt-3">
-                  safarisconn helps connect customers with trusted sellers for a smoother booking experience.
+                  {t('bookingConnectNote', language)}
                 </p>
               </div>
             </div>

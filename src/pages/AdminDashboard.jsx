@@ -9,6 +9,8 @@ import { locations } from '../data/mockData';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { formatRwf } from '../lib/currency';
 import { REALTIME_EVENTS, getRealtimeSocket, subscribeToRealtime } from '../lib/realtime';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 const AUTO_REFRESH_MS = 15000;
 const BUSINESS_TYPE_OPTIONS = [
@@ -37,6 +39,7 @@ const BUSINESS_TYPE_OPTIONS = [
 export default function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState('hotels');
   const [hotels, setHotels] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -74,15 +77,15 @@ export default function AdminDashboard() {
 
   const token = getAuthData()?.token;
   const adminSections = [
-    { id: 'hotels', label: 'Business Status', hint: 'View businesses and open full business status' },
-    { id: 'trips', label: 'Trips Management', hint: 'View trip details and helper assignments' },
-    { id: 'connect', label: 'Connect Visitor', hint: 'Analyze accommodation availability before assignment' },
-    { id: 'users', label: 'Users', hint: 'Manage business owners, helpers and visitors' },
+    { id: 'hotels', label: t('businessStatusTitle', language), hint: t('viewBusinessStatus', language) },
+    { id: 'trips', label: t('tripsManagement', language), hint: t('viewTripDetails', language) },
+    { id: 'connect', label: t('connectVisitor', language), hint: t('analyzeAvailability', language) },
+    { id: 'users', label: t('usersTitle', language), hint: t('manageUsers', language) },
   ];
 
   const loadAdminData = async ({ silent = false } = {}) => {
     if (!token) {
-      setError('Session expired. Please login again.');
+      setError(t('sessionExpired', language));
       setLoading(false);
       return;
     }
@@ -115,7 +118,7 @@ export default function AdminDashboard() {
       );
 
       if (failedResponses.length > 0) {
-        setError('Some dashboard data could not be loaded right now. Please refresh and try again.');
+        setError(t('someDataCouldNotLoad', language));
       }
     } catch (requestError) {
       setError(requestError.message);
@@ -186,6 +189,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (selectedHotelId) {
+      setSelectedRoomId('');
       loadHotelStatus(selectedHotelId);
     } else {
       setHotelStatus(null);
@@ -256,6 +260,12 @@ export default function AdminDashboard() {
     () => bookings.find((booking) => booking._id === selectedBookingId) || null,
     [bookings, selectedBookingId]
   );
+  const selectedBusiness = useMemo(
+    () => hotels.find((hotel) => String(hotel.id) === String(selectedHotelId)) || null,
+    [hotels, selectedHotelId]
+  );
+  const selectedBusinessRequiresRoom = selectedBusiness?.supportsRooms !== false;
+  const selectedBusinessRequiresGuide = selectedBusiness?.assignmentType === 'guide';
 
   const rankedHotels = useMemo(() => {
     if (!selectedBooking) {
@@ -276,24 +286,24 @@ export default function AdminDashboard() {
     () => [
       {
         id: 'total-hotels',
-        label: 'Total Businesses',
+        label: t('totalBusinesses', language),
         value: stats?.totalBusinesses ?? stats?.totalHotels ?? hotels.length,
         hint: 'Click to show all businesses',
       },
       {
         id: 'available-rooms',
-        label: 'Available Services',
+        label: t('availability', language),
         value: stats?.availableInventory ?? availableInventoryList.length,
         hint: 'Click to show active availability across marketplace businesses',
       },
       {
         id: 'total-bookings',
-        label: 'Total Bookings',
+        label: t('totalBookings', language),
         value: stats?.totalBookings ?? bookings.length,
         hint: 'Click to show all bookings',
       },
     ],
-    [availableInventoryList.length, bookings.length, hotels.length, stats]
+    [availableInventoryList.length, bookings.length, hotels.length, language, stats]
   );
 
   const metricItems = useMemo(() => {
@@ -338,7 +348,7 @@ export default function AdminDashboard() {
     }
 
     if (missingFields.length > 0) {
-      setError(`Please fill: ${missingFields.join(', ')}.`);
+      setError(t('fillRequired', language, { fields: missingFields.join(', ') }));
       return;
     }
 
@@ -348,7 +358,7 @@ export default function AdminDashboard() {
       payload.images = [uploadResponse.url];
       const response = await adminApi.registerBusiness(token, payload);
       const createdBusiness = response.business || response.hotel;
-      setInfo(`Business "${createdBusiness?.name || payload.businessName}" was added successfully.`);
+      setInfo(t('businessAdded', language, { name: createdBusiness?.name || payload.businessName }));
       setRegistrationDetails({
         businessName: createdBusiness?.name || payload.businessName,
         businessType: createdBusiness?.type || payload.businessType,
@@ -385,12 +395,12 @@ export default function AdminDashboard() {
 
   const handleConnectTour = async () => {
     if (!token) return;
-    if (!selectedBookingId || !selectedHotelId || !selectedRoomId) {
-      setError('Please select trip, business, and room after reviewing business status.');
+    if (!selectedBookingId || !selectedHotelId || (selectedBusinessRequiresRoom && !selectedRoomId)) {
+      setError(t('selectTripBusinessRoom', language));
       return;
     }
-    if (selectedHelperIds.length === 0) {
-      setError('Please select at least one tour helper for this trip.');
+    if (selectedBusinessRequiresGuide && selectedHelperIds.length === 0) {
+      setError(t('selectAtLeastOneHelper', language));
       return;
     }
 
@@ -400,7 +410,7 @@ export default function AdminDashboard() {
       const response = await adminApi.connectTour(token, {
         bookingId: selectedBookingId,
         hotelId: selectedHotelId,
-        roomId: selectedRoomId,
+        roomId: selectedBusinessRequiresRoom ? selectedRoomId : null,
         helperIds: selectedHelperIds,
       });
       setInfo(response.message);
@@ -418,7 +428,7 @@ export default function AdminDashboard() {
 
   const handleDeleteHotel = async (hotelId) => {
     if (!token) return;
-    if (!window.confirm('Delete this business? This removes linked owner access, rooms, and related assignments.')) {
+    if (!window.confirm(t('deleteBusinessConfirm', language))) {
       return;
     }
 
@@ -439,7 +449,7 @@ export default function AdminDashboard() {
 
   const handleDeleteUser = async (userId) => {
     if (!token) return;
-    if (!window.confirm('Delete this user from the system?')) {
+    if (!window.confirm(t('deleteUserConfirm', language))) {
       return;
     }
 
@@ -464,7 +474,7 @@ export default function AdminDashboard() {
         bookingId,
         message: customAckMessage.trim(),
       });
-      setInfo('Request confirmation sent to user.');
+      setInfo(t('requestConfirmationSent', language));
       setCustomAckMessage('');
       await loadAdminData();
     } catch (requestError) {
@@ -476,7 +486,7 @@ export default function AdminDashboard() {
 
   const handlePurgeVisitors = async () => {
     if (!token) return;
-    if (!window.confirm('Delete all visitor users from dashboard and database? Admin and hotel owners will remain.')) {
+    if (!window.confirm(t('deleteVisitorsConfirm', language))) {
       return;
     }
 
@@ -522,7 +532,7 @@ export default function AdminDashboard() {
                     Multi-service marketplace
                   </span>
                 </div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">Admin Dashboard</h1>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">{t('adminDashboardTitle', language)}</h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
                   Register hotels, restaurants, transport, tours, venues, shops, wellness services, and other businesses. Each owner receives their dashboard through the registered email, while availability and bookings sync live.
                 </p>
@@ -531,7 +541,7 @@ export default function AdminDashboard() {
               onClick={() => setShowRegisterModal(true)}
               className="px-6 py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl transition"
             >
-              Register New Business
+              {t('registerNewBusiness', language)}
             </button>
             </div>
           </div>
@@ -552,15 +562,15 @@ export default function AdminDashboard() {
                   : 'This business was saved successfully. No owner onboarding link was created for this entry.'}
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <InfoTile label="Business name" value={registrationDetails.businessName} />
-                <InfoTile label="Business type" value={formatBusinessType(registrationDetails.businessType)} />
+                <InfoTile label={t('businessNameLabel', language)} value={registrationDetails.businessName} />
+                <InfoTile label={t('businessTypeFull', language)} value={formatBusinessType(registrationDetails.businessType)} />
                 <InfoTile label="Owner name" value={registrationDetails.ownerName} />
                 <InfoTile label="Owner email" value={registrationDetails.ownerEmail} />
                 <InfoTile label="Registration page" value={registrationDetails.registrationPath || 'Not created'} />
               </div>
               {registrationDetails.registrationLink && (
                 <div className="mt-3 rounded-xl bg-white p-3 border border-green-100 text-sm">
-                  <p className="text-gray-500">Prefilled registration link</p>
+                  <p className="text-gray-500">{t('prefilledRegistrationLink', language)}</p>
                   <p className="font-semibold text-gray-900 break-all">{registrationDetails.registrationLink}</p>
                 </div>
               )}
@@ -568,9 +578,9 @@ export default function AdminDashboard() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-            <Metric label="Businesses" value={stats?.totalBusinesses ?? stats?.totalHotels ?? 0} />
+            <Metric label={t('totalBusinesses', language)} value={stats?.totalBusinesses ?? stats?.totalHotels ?? 0} />
             <Metric label="Rooms" value={stats?.totalRooms ?? 0} />
-            <Metric label="Available Inventory" value={stats?.availableInventory ?? 0} />
+            <Metric label={t('availability', language)} value={stats?.availableInventory ?? 0} />
             <Metric label="Bookings" value={stats?.totalBookings ?? 0} />
             <Metric label="Revenue" value={formatRwf(stats?.revenue ?? 0)} />
           </div>
@@ -657,7 +667,7 @@ export default function AdminDashboard() {
 
             <div className="p-6">
               {loading ? (
-                <p className="text-gray-600">Loading dashboard...</p>
+                <p className="text-gray-600">{t('loading', language)}</p>
               ) : (
                 <>
                   {activeTab === 'hotels' && (
@@ -671,16 +681,16 @@ export default function AdminDashboard() {
                         <table className="w-full">
                           <thead>
                             <tr className="border-b border-gray-200">
-                              <th className="text-left py-3 px-2">Image</th>
-                              <th className="text-left py-3 px-2">Business</th>
-                              <th className="text-left py-3 px-2">Type</th>
-                              <th className="text-left py-3 px-2">Location</th>
-                              <th className="text-left py-3 px-2">Services</th>
-                              <th className="text-left py-3 px-2">Available</th>
+                              <th className="text-left py-3 px-2">{t('uploadImage', language)}</th>
+                              <th className="text-left py-3 px-2">{t('businessNameLabel', language)}</th>
+                              <th className="text-left py-3 px-2">{t('type', language)}</th>
+                              <th className="text-left py-3 px-2">{t('location', language)}</th>
+                              <th className="text-left py-3 px-2">{t('services', language)}</th>
+                              <th className="text-left py-3 px-2">{t('availability', language)}</th>
                               <th className="text-left py-3 px-2">Total</th>
                               <th className="text-left py-3 px-2">Inventory Type</th>
                               <th className="text-left py-3 px-2">Can Accept Visitor</th>
-                              <th className="text-right py-3 px-2">Actions</th>
+                              <th className="text-right py-3 px-2">{t('actions', language)}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -713,7 +723,7 @@ export default function AdminDashboard() {
                                         : 'bg-red-100 text-red-700'
                                     }`}
                                   >
-                                    {hotel.canAcceptVisitors ? 'Yes' : 'No'}
+                                    {hotel.canAcceptVisitors ? t('yes', language) : t('no', language)}
                                   </span>
                                 </td>
                                 <td className="py-3 px-2 text-right">
@@ -763,7 +773,7 @@ export default function AdminDashboard() {
                       <div className="rounded-2xl border border-gray-200 p-5">
                         <h2 className="text-xl font-bold text-gray-900 mb-1">Final Organized Feature Update</h2>
                         <p className="text-sm text-gray-600">
-                          Trips Management lets admin review each trip, open full details, and assign one or many tour helpers together with the hotel and room.
+                          Booking management lets admin review each request, open full details, and assign the right business resource for its service model.
                         </p>
                       </div>
 
@@ -836,7 +846,7 @@ export default function AdminDashboard() {
                               onClick={() => setActiveTab('connect')}
                               className="px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary-dark text-sm"
                             >
-                              Assign Business And Helpers
+                              Assign Business Resource
                             </button>
                           </div>
 
@@ -888,7 +898,7 @@ export default function AdminDashboard() {
                     <div className="space-y-6">
                       {pendingBookings.length === 0 && (
                         <div className="rounded-xl bg-gray-50 p-5 text-sm text-gray-600">
-                          No pending trips are waiting for connection right now. When a visitor booking request arrives, you can assign hotel, room and helpers here.
+                          No pending bookings are waiting for assignment right now. When a customer request arrives, you can assign a room, table, vehicle, therapist, guide, or service resource here.
                         </div>
                       )}
                       <div>
@@ -898,7 +908,7 @@ export default function AdminDashboard() {
                         <textarea
                           value={customAckMessage}
                           onChange={(e) => setCustomAckMessage(e.target.value)}
-                          placeholder="Admin received your request and is reviewing suitable hotels."
+                          placeholder="Admin received your request and is reviewing suitable marketplace providers."
                           className="w-full px-4 py-3 border border-gray-300 rounded-xl"
                           rows={2}
                         />
@@ -918,7 +928,7 @@ export default function AdminDashboard() {
                               }}
                               className="w-full px-4 py-3 border border-gray-300 rounded-xl"
                             >
-                              <option value="">Select pending trip</option>
+                              <option value="">{t('selectBooking', language)}</option>
                               {pendingBookings.map((booking) => (
                                 <option key={booking._id} value={booking._id}>
                                   {booking._id.slice(-8)} - {booking.touristId?.name || 'Tourist'}
@@ -932,10 +942,9 @@ export default function AdminDashboard() {
                                   <strong>{selectedBooking.destinationLocation}</strong>
                                 </p>
                                 <p>Tourist: {selectedBooking.touristId?.name || selectedBooking.touristId?.email || 'Unknown'}</p>
-                                <p>Guests: {selectedBooking.guests || 1}</p>
-                                <p>Preferred hotel: {selectedBooking.preferredHotelId?.name || 'None selected'}</p>
-                                <p>Check-in: {formatDate(selectedBooking.checkIn)}</p>
-                                <p>Check-out: {formatDate(selectedBooking.checkOut)}</p>
+                                <p>{getBookingQuantityLabel(selectedBooking)}: {selectedBooking.quantity || selectedBooking.guests || 1}</p>
+                                <p>Preferred business: {selectedBooking.preferredHotelId?.name || selectedBooking.preferredBusinessId?.name || 'None selected'}</p>
+                                <p>{getBookingDateSummary(selectedBooking)}</p>
                               </div>
                             )}
                           </div>
@@ -983,9 +992,11 @@ export default function AdminDashboard() {
 
                         <div className="lg:col-span-2 space-y-4">
                           <div className="rounded-2xl border border-gray-200 p-5">
-                            <h3 className="font-bold text-gray-900 mb-3">3. Assign Tour Helpers</h3>
+                            <h3 className="font-bold text-gray-900 mb-3">
+                              3. Assign {selectedBusinessRequiresGuide ? 'Guides' : 'Support Staff'}
+                            </h3>
                             <p className="text-sm text-gray-600 mb-4">
-                              Select one or many helpers for the same trip using checkboxes.
+                              Optional for most service types. Required when assigning activity operators that need a guide.
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                               {helperUsers.map((helper) => (
@@ -1015,7 +1026,7 @@ export default function AdminDashboard() {
                             <div className="flex items-center justify-between gap-4 mb-4">
                               <div>
                                 <h3 className="font-bold text-gray-900">4. Review Selected Business Status</h3>
-                                <p className="text-sm text-gray-600">Business room status updates automatically every {AUTO_REFRESH_MS / 1000} seconds.</p>
+                              <p className="text-sm text-gray-600">{t('businessStatusUpdates', language, { seconds: AUTO_REFRESH_MS / 1000 })}</p>
                               </div>
                               {selectedHotelId && (
                                 <button
@@ -1023,7 +1034,7 @@ export default function AdminDashboard() {
                                   onClick={() => loadHotelStatus(selectedHotelId)}
                                   className="px-4 py-2 border border-gray-300 rounded-xl text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  Refresh Business
+                                  {t('refreshNow', language)}
                                 </button>
                               )}
                             </div>
@@ -1032,11 +1043,17 @@ export default function AdminDashboard() {
                           </div>
 
                           <div className="rounded-2xl border border-gray-200 p-5">
-                            <h3 className="font-bold text-gray-900 mb-3">5. Choose Available Room</h3>
+                            <h3 className="font-bold text-gray-900 mb-3">
+                              {hotelStatus?.stats?.supportsRooms ? t('chooseRoom', language) : `Confirm ${hotelStatus?.hotel?.assignmentType || 'resource'} assignment`}
+                            </h3>
                             {!selectedHotelId ? (
-                              <p className="text-sm text-gray-600">Choose a business first to see the free room numbers.</p>
+                              <p className="text-sm text-gray-600">{t('chooseBusinessFirst', language)}</p>
+                            ) : hotelStatus?.stats?.supportsRooms === false ? (
+                              <p className="text-sm text-green-700">
+                                {t('connectVisitor', language)}: {hotelStatus?.hotel?.assignmentType || hotelStatus?.hotel?.bookingModel || t('service', language)}
+                              </p>
                             ) : availableRoomsForSelectedHotel.length === 0 ? (
-                              <p className="text-sm text-red-600">This business has no available rooms right now.</p>
+                              <p className="text-sm text-red-600">{t('noAvailableRooms', language)}</p>
                             ) : (
                               <div className="space-y-3">
                                 {availableRoomsForSelectedHotel.map((room) => (
@@ -1068,7 +1085,7 @@ export default function AdminDashboard() {
                               onClick={handleConnectTour}
                               className="mt-5 w-full px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-xl"
                             >
-                              Connect Visitor To Selected Business Room
+                              {hotelStatus?.stats?.supportsRooms === false ? t('connectVisitor', language) : t('connectVisitorToRoom', language)}
                             </button>
                           </div>
                         </div>
@@ -1124,7 +1141,7 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Register New Business</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{t('registerNewBusiness', language)}</h2>
               <button onClick={() => setShowRegisterModal(false)} className="text-gray-500 hover:text-gray-700">
                 X
               </button>
@@ -1138,7 +1155,7 @@ export default function AdminDashboard() {
               <input
                 type="text"
                 required
-                placeholder="Business Name"
+                placeholder={t('businessName', language)}
                 value={formData.businessName}
                 onChange={(e) => setFormData((prev) => ({ ...prev, businessName: e.target.value }))}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl"
@@ -1197,7 +1214,7 @@ export default function AdminDashboard() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl"
               />
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Business Image</label>
+                <label className="block text-sm font-medium text-gray-700">{t('uploadImage', language)}</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -1227,7 +1244,7 @@ export default function AdminDashboard() {
                 disabled={isRegisteringBusiness}
                 className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary-dark disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {isRegisteringBusiness ? 'Uploading Image...' : 'Register Business'}
+                {isRegisteringBusiness ? t('loading', language) : t('registerNewBusiness', language)}
               </button>
             </form>
           </div>
@@ -1268,7 +1285,7 @@ function HotelStatusPanel({ status, loading, error, onChooseForConnect, compact 
           <p className="text-sm text-gray-600">{status.hotel?.location}</p>
           <p className="text-sm text-gray-600 mt-1">{status.hotel?.description || 'No description provided.'}</p>
         </div>
-        {onChooseForConnect && supportsRooms && (
+        {onChooseForConnect && (
           <button
             type="button"
             onClick={() => onChooseForConnect(status.hotel?._id)}
@@ -1595,6 +1612,34 @@ function formatBusinessType(value) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function getBookingQuantityLabel(booking) {
+  if (booking?.bookingModel === 'restaurant') return 'Table size';
+  if (booking?.bookingModel === 'transport') return 'Passengers';
+  if (booking?.bookingModel === 'event') return 'Attendees';
+  if (booking?.bookingModel === 'activity') return 'Participants';
+  if (booking?.bookingModel === 'childcare') return 'Children';
+  return 'Quantity';
+}
+
+function getBookingDateSummary(booking) {
+  if (booking?.bookingModel === 'accommodation') {
+    return `Stay: ${formatDate(booking.checkIn)} - ${formatDate(booking.checkOut)}`;
+  }
+  if (booking?.bookingModel === 'transport') {
+    return `Trip date: ${formatDate(booking.reservationDate)}`;
+  }
+  if (booking?.bookingModel === 'appointment' || booking?.bookingModel === 'childcare') {
+    return `Appointment: ${formatDate(booking.reservationDate)} ${booking.reservationTime || ''}`.trim();
+  }
+  if (booking?.bookingModel === 'event') {
+    return `Event date: ${formatDate(booking.reservationDate)}`;
+  }
+  if (booking?.bookingModel === 'activity') {
+    return `Activity date: ${formatDate(booking.reservationDate)}`;
+  }
+  return `Reservation date: ${formatDate(booking?.reservationDate)}`;
 }
 
 function getInventoryMeta(type) {

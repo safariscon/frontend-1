@@ -37,11 +37,11 @@ export default function RegisterPage() {
      setError('');
 
      if (formData.password !== formData.confirmPassword) {
-       setError('Passwords do not match');
+       setError(t('passwordMismatch', language));
        return;
      }
      if (formData.password.length < 6) {
-       setError('Password must be at least 6 characters');
+       setError(t('passwordMinLength', language));
        return;
      }
 

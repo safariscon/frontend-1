@@ -1,8 +1,11 @@
 import { useInstall } from '../context/InstallContext';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 import InstallButton from './InstallButton';
 
 export default function InstallBanner() {
   const { showBanner, dismissBanner, triggerInstall } = useInstall();
+  const { language } = useLanguage();
 
   if (!showBanner) return null;
 
@@ -33,12 +36,12 @@ export default function InstallBanner() {
                   <span className="text-white font-bold text-xl">T</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Install Tour Connect</h3>
-                  <p className="text-xs text-gray-500">Rwanda Tourism App</p>
+                  <h3 className="font-bold text-gray-900">{t('installTourConnect', language)}</h3>
+                  <p className="text-xs text-gray-500">{t('rwandaTourismApp', language)}</p>
                 </div>
               </div>
               <p className="text-sm text-gray-700 mb-4 leading-relaxed">
-                Install Tour Connect on your phone for a better experience
+                {t('installBannerText', language)}
               </p>
               <div className="flex gap-2">
                 <button
@@ -48,12 +51,12 @@ export default function InstallBanner() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  Install Now
+                  {t('installNow', language)}
                 </button>
                 <button
                   onClick={dismissBanner}
                   className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition"
-                  aria-label="Dismiss"
+                  aria-label={t('dismiss', language)}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -8,6 +8,8 @@ import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
 import { getAuthData, hotelApi } from '../lib/api';
 import { formatRwf } from '../lib/currency';
 import { REALTIME_EVENTS, joinRealtimeRoom, subscribeToRealtime } from '../lib/realtime';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 const AUTO_REFRESH_MS = 15000;
 
@@ -192,6 +194,7 @@ function getSellerConfig(type) {
 export default function HotelDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState('overview');
   const [overview, setOverview] = useState(null);
   const [bookings, setBookings] = useState([]);
@@ -223,7 +226,7 @@ export default function HotelDashboard() {
 
   const loadData = async ({ silent = false } = {}) => {
     if (!token) {
-      setError('Session expired. Please login again.');
+      setError(t('sessionExpired', language));
       setLoading(false);
       return;
     }
@@ -459,7 +462,7 @@ export default function HotelDashboard() {
   };
 
   const handleDeleteRoom = async (roomId) => {
-    if (!token || !window.confirm(`Delete this ${sellerConfig.inventoryItemLabel}?`)) return;
+    if (!token || !window.confirm(t('deleteConfirm', language, { item: sellerConfig.inventoryItemLabel }))) return;
 
     setError('');
     setInfo('');
@@ -534,7 +537,7 @@ export default function HotelDashboard() {
   };
 
   const handleDeleteService = async (serviceId) => {
-    if (!token || !window.confirm(`Delete this ${sellerConfig.inventoryItemLabel}?`)) return;
+    if (!token || !window.confirm(t('deleteConfirm', language, { item: sellerConfig.inventoryItemLabel }))) return;
 
     setError('');
     setInfo('');
@@ -581,15 +584,15 @@ export default function HotelDashboard() {
                   </span>
                 </div>
                 <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
-                  {overview?.hotel?.name || user?.businessName || 'Business Dashboard'}
+                  {overview?.hotel?.name || user?.businessName || t('sellerDashboardTitle', language)}
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
                   Manage customer requests, availability, pricing, and listings for this {sellerConfig.typeLabel.toLowerCase()} business. Updates sync in real time across admin, customer, and seller screens.
                 </p>
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                  <InfoPill label="Location" value={overview?.hotel?.location || '-'} />
-                  <InfoPill label="Base price" value={formatRwf(overview?.hotel?.basePrice || 0)} />
+                  <InfoPill label={t('location', language)} value={overview?.hotel?.location || '-'} />
+                  <InfoPill label={t('basePrice', language)} value={formatRwf(overview?.hotel?.basePrice || 0)} />
                   <InfoPill label="Contact" value={overview?.hotel?.contactInfo || overview?.hotel?.ownerEmail || '-'} />
                 </div>
 
@@ -605,7 +608,7 @@ export default function HotelDashboard() {
                     ))
                   ) : (
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                      Add services from Listings Management
+                      {t('listingsManagement', language)}
                     </span>
                   )}
                 </div>
@@ -651,7 +654,7 @@ export default function HotelDashboard() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <Metric label="Business Type" value={sellerConfig.typeLabel} />
+            <Metric label={t('businessType', language)} value={sellerConfig.typeLabel} />
             <Metric label={sellerConfig.bookingLabel} value={overview?.stats?.bookings ?? bookings.length} />
             <Metric label="Revenue" value={formatRwf(revenue)} />
             <Metric
@@ -719,14 +722,14 @@ export default function HotelDashboard() {
 
             <div className="p-6">
               {loading ? (
-                <p className="text-gray-600">Loading seller dashboard...</p>
+                <p className="text-gray-600">{t('loading', language)}</p>
               ) : (
                 <>
                   {activeTab === 'overview' && (
                     <div className="space-y-6">
                       <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Business profile</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('businessStatus', language)}</p>
                           <h3 className="mt-2 text-2xl font-black text-slate-950">{overview?.hotel?.name}</h3>
                           <p className="mt-3 text-sm leading-6 text-slate-600">{overview?.hotel?.description || 'No description added yet.'}</p>
                           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -750,25 +753,25 @@ export default function HotelDashboard() {
                                 </span>
                               ))
                             ) : (
-                              <p className="text-sm text-slate-600">No services were registered for this business yet.</p>
+                              <p className="text-sm text-slate-600">{t('noServicesFound', language)}</p>
                             )}
                           </div>
                         </div>
                       </div>
 
                       <div className="rounded-xl bg-blue-50 border border-blue-100 p-5">
-                        <h4 className="font-bold text-blue-900 mb-2">Business-ready tools</h4>
+                        <h4 className="font-bold text-blue-900 mb-2">{t('businessTools', language)}</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
-                          <FeatureCard title="Listings Management" description={`Create, update, and remove ${sellerConfig.inventoryItemLabel}s.`} />
+                          <FeatureCard title={t('listingsManagement', language)} description={t('listingsDescription', language)} />
                           <FeatureCard title={sellerConfig.availabilityLabel} description={`Control availability by ${sellerConfig.pricingUnit}.`} />
-                          <FeatureCard title="Pricing Management" description={`Set per-${sellerConfig.pricingUnit} pricing for each listing.`} />
+                          <FeatureCard title={t('pricingManagement', language)} description={t('pricingDescription', language)} />
                           <FeatureCard title={sellerConfig.bookingLabel} description={sellerConfig.bookingDescription} />
                         </div>
                       </div>
 
                       {sellerConfig.supportsRooms ? (
                         <div className="rounded-2xl bg-green-50 border border-green-100 p-5">
-                          <h4 className="font-bold text-green-900 mb-2">Free room numbers available now</h4>
+                          <h4 className="font-bold text-green-900 mb-2">{t('chooseRoom', language)}</h4>
                           {availableRooms.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {availableRooms.map((room) => (
@@ -781,7 +784,7 @@ export default function HotelDashboard() {
                               ))}
                             </div>
                           ) : (
-                            <p className="text-sm text-green-900">No free rooms right now.</p>
+                            <p className="text-sm text-green-900">{t('noFreeRooms', language)}</p>
                           )}
                         </div>
                       ) : (
@@ -801,14 +804,14 @@ export default function HotelDashboard() {
                         <input
                           type="text"
                           required
-                          placeholder="Room Number"
+                          placeholder={t('roomNumber', language)}
                           value={roomForm.roomNumber}
                           onChange={(e) => setRoomForm((prev) => ({ ...prev, roomNumber: e.target.value }))}
                           className="px-4 py-3 border border-gray-300 rounded-xl"
                         />
                         <input
                           type="text"
-                          placeholder="Type"
+                          placeholder={t('type', language)}
                           value={roomForm.type}
                           onChange={(e) => setRoomForm((prev) => ({ ...prev, type: e.target.value }))}
                           className="px-4 py-3 border border-gray-300 rounded-xl"
@@ -816,7 +819,7 @@ export default function HotelDashboard() {
                         <input
                           type="number"
                           required
-                          placeholder="Price per night"
+                          placeholder={t('pricePerNight', language)}
                           value={roomForm.price}
                           onChange={(e) => setRoomForm((prev) => ({ ...prev, price: e.target.value }))}
                           className="px-4 py-3 border border-gray-300 rounded-xl"
@@ -826,15 +829,15 @@ export default function HotelDashboard() {
                           onChange={(e) => setRoomForm((prev) => ({ ...prev, status: e.target.value }))}
                           className="px-4 py-3 border border-gray-300 rounded-xl"
                         >
-                          <option value="available">available</option>
-                          <option value="occupied">occupied</option>
-                          <option value="maintenance">maintenance</option>
+                          <option value="available">{t('available', language)}</option>
+                          <option value="occupied">{t('occupied', language)}</option>
+                          <option value="maintenance">{t('maintenance', language)}</option>
                         </select>
                         <button
                           type="submit"
                           className="px-4 py-3 bg-primary text-white rounded-xl hover:bg-primary-dark"
                         >
-                          Add Room
+                          {t('addRoom', language)}
                         </button>
                       </form>
 
@@ -843,10 +846,10 @@ export default function HotelDashboard() {
                           <thead>
                             <tr className="border-b border-gray-200">
                               <th className="text-left py-3 px-2">Room #</th>
-                              <th className="text-left py-3 px-2">Type</th>
-                              <th className="text-left py-3 px-2">Price</th>
-                              <th className="text-left py-3 px-2">Status</th>
-                              <th className="text-right py-3 px-2">Actions</th>
+                              <th className="text-left py-3 px-2">{t('type', language)}</th>
+                              <th className="text-left py-3 px-2">{t('pricePerNight', language)}</th>
+                              <th className="text-left py-3 px-2">{t('status', language)}</th>
+                              <th className="text-right py-3 px-2">{t('actions', language)}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -871,7 +874,7 @@ export default function HotelDashboard() {
                                     onClick={() => handleDeleteRoom(room._id)}
                                     className="text-red-600 hover:underline text-sm"
                                   >
-                                    Delete
+                                    {t('delete', language)}
                                   </button>
                                 </td>
                               </tr>
@@ -928,11 +931,11 @@ export default function HotelDashboard() {
                             checked={serviceForm.isActive}
                             onChange={(e) => setServiceForm((prev) => ({ ...prev, isActive: e.target.checked }))}
                           />
-                          Active listing
+                          {t('activeListing', language)}
                         </label>
                         <textarea
                           required
-                          placeholder="Description"
+                          placeholder={t('description', language)}
                           value={serviceForm.description}
                           onChange={(e) => setServiceForm((prev) => ({ ...prev, description: e.target.value }))}
                           className="md:col-span-2 xl:col-span-3 px-4 py-3 border border-gray-300 rounded-xl"

@@ -1,16 +1,19 @@
 import { Link } from 'react-router-dom';
 import RatingStars from './RatingStars';
 import { formatRwf } from '../lib/currency';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function HotelCard({ hotel, compact = false }) {
+  const { language } = useLanguage();
   const hotelId = hotel.id || hotel._id;
   const price = hotel.basePrice ?? hotel.price ?? 0;
   const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
-  const pricingUnit = getPricingUnit(hotel.type);
+  const pricingUnit = t(hotel.pricingUnit || getPricingUnitKey(hotel.type), language);
 
   return (
     <Link
-      to={`/hotel/${hotelId}`}
+      to={`/business/${hotelId}`}
       className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 block"
     >
       <div className="relative overflow-hidden h-48 md:h-64">
@@ -21,7 +24,7 @@ export default function HotelCard({ hotel, compact = false }) {
         />
         {hotel.isFeatured && (
           <div className="absolute top-3 left-3 bg-secondary text-white text-xs font-bold px-3 py-1 rounded-full">
-            Featured
+            {t('featured', language)}
           </div>
         )}
         <div className="absolute bottom-3 right-3 bg-white bg-opacity-90 backdrop-blur-sm px-2 py-1 rounded-lg">
@@ -60,14 +63,17 @@ export default function HotelCard({ hotel, compact = false }) {
           ))}
           {amenities.length > 3 && (
             <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-md">
-              +{amenities.length - 3} more
+              +{amenities.length - 3} {t('more', language)}
             </span>
           )}
         </div>
 
         <div className="flex items-center justify-between">
           <RatingStars rating={hotel.rating || 0} reviewCount={hotel.reviewCount || 0} size="sm" />
-          <span className="text-primary font-bold">Open Service -&gt;</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            {formatBusinessType(hotel.serviceCategory)} / {formatBusinessType(hotel.bookingModel)}
+          </span>
+          <span className="text-primary font-bold">{t('openService', language)} -&gt;</span>
         </div>
       </div>
     </Link>
@@ -82,7 +88,7 @@ function formatBusinessType(value) {
     .join(' ');
 }
 
-function getPricingUnit(type) {
+function getPricingUnitKey(type) {
   const normalizedType = String(type || '').trim().toLowerCase();
 
   if (

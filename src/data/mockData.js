@@ -1,4 +1,4 @@
-// Mock data for Tour Connect Rwanda Tourism Platform
+// Mock data for SafarisCon Rwanda marketplace platform
 
 export const locations = [
   'Kigali',
@@ -169,7 +169,7 @@ export const hotels = [
 
 export const users = [
   {
-    email: 'admin@tourconnect.com',
+    email: 'admin@safariscon.com',
     password: 'admin123',
     name: 'Admin',
     role: 'admin',

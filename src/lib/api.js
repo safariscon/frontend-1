@@ -2,7 +2,8 @@ const DEFAULT_API_BASE_URL = import.meta.env.PROD
   ? "https://safarisconnback.onrender.com"
   : "http://localhost:5000";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
-const AUTH_STORAGE_KEY = "tourconnect_auth";
+const AUTH_STORAGE_KEY = "safariscon_auth";
+const LEGACY_AUTH_STORAGE_KEY = "tourconnect_auth";
 const LEGACY_USER_KEY = "toorconnect_user";
 
 export const getAuthData = () => {
@@ -12,6 +13,17 @@ export const getAuthData = () => {
       return JSON.parse(raw);
     } catch {
       localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+  }
+
+  const legacyAuthRaw = localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
+  if (legacyAuthRaw) {
+    try {
+      const authData = JSON.parse(legacyAuthRaw);
+      saveAuthData(authData);
+      return authData;
+    } catch {
+      localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
     }
   }
 
@@ -30,11 +42,13 @@ export const getAuthData = () => {
 
 export const saveAuthData = (authData) => {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
+  localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
 };
 
 export const clearAuthData = () => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
 };
 
@@ -139,9 +153,9 @@ export const adminApi = {
   getBookings: (token) => apiRequest("/api/admin/bookings", { token }),
   getRooms: (token) => apiRequest("/api/admin/rooms", { token }),
   getHotelRooms: (token, hotelId) =>
-    apiRequest(`/api/admin/hotels/${hotelId}/rooms`, { token }),
+    apiRequest(`/api/admin/businesses/${hotelId}/rooms`, { token }),
   getHotelStatus: (token, hotelId) =>
-    apiRequest(`/api/admin/hotels/${hotelId}/status`, { token }),
+    apiRequest(`/api/admin/businesses/${hotelId}/status`, { token }),
   uploadImage: (token, file) => {
     const formData = new FormData();
     formData.append("image", file);
@@ -177,7 +191,7 @@ export const adminApi = {
       body: payload,
     }),
   deleteHotel: (token, hotelId) =>
-    apiRequest(`/api/admin/hotels/${hotelId}`, {
+    apiRequest(`/api/admin/businesses/${hotelId}`, {
       method: "DELETE",
       token,
     }),
@@ -194,47 +208,47 @@ export const adminApi = {
 };
 
 export const hotelApi = {
-  getOverview: (token) => apiRequest("/api/hotel/overview", { token }),
-  getMyBookings: (token) => apiRequest("/api/hotel/bookings", { token }),
-  getMyRooms: (token) => apiRequest("/api/hotel/rooms", { token }),
+  getOverview: (token) => apiRequest("/api/business/overview", { token }),
+  getMyBookings: (token) => apiRequest("/api/business/bookings", { token }),
+  getMyRooms: (token) => apiRequest("/api/business/rooms", { token }),
   updateBookingStatus: (token, bookingId, payload) =>
-    apiRequest(`/api/hotel/bookings/${bookingId}/status`, {
+    apiRequest(`/api/business/bookings/${bookingId}/status`, {
       method: "PUT",
       token,
       body: payload,
     }),
-  getMyServices: (token) => apiRequest("/api/hotel/services", { token }),
+  getMyServices: (token) => apiRequest("/api/business/services", { token }),
   createRoom: (token, payload) =>
-    apiRequest("/api/hotel/rooms", {
+    apiRequest("/api/business/rooms", {
       method: "POST",
       token,
       body: payload,
     }),
   updateRoom: (token, roomId, payload) =>
-    apiRequest(`/api/hotel/rooms/${roomId}`, {
+    apiRequest(`/api/business/rooms/${roomId}`, {
       method: "PUT",
       token,
       body: payload,
     }),
   createService: (token, payload) =>
-    apiRequest("/api/hotel/services", {
+    apiRequest("/api/business/services", {
       method: "POST",
       token,
       body: payload,
     }),
   updateService: (token, serviceId, payload) =>
-    apiRequest(`/api/hotel/services/${serviceId}`, {
+    apiRequest(`/api/business/services/${serviceId}`, {
       method: "PUT",
       token,
       body: payload,
     }),
   deleteService: (token, serviceId) =>
-    apiRequest(`/api/hotel/services/${serviceId}`, {
+    apiRequest(`/api/business/services/${serviceId}`, {
       method: "DELETE",
       token,
     }),
   deleteRoom: (token, roomId) =>
-    apiRequest(`/api/hotel/rooms/${roomId}`, {
+    apiRequest(`/api/business/rooms/${roomId}`, {
       method: "DELETE",
       token,
     }),

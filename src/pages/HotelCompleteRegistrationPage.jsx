@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi } from '../lib/api';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function HotelCompleteRegistrationPage() {
   const navigate = useNavigate();
@@ -19,13 +21,14 @@ export default function HotelCompleteRegistrationPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { language } = useLanguage();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('passwordMismatch', language));
       return;
     }
 
@@ -39,7 +42,7 @@ export default function HotelCompleteRegistrationPage() {
       navigate('/login', {
         state: {
           message:
-            'Hotel registration completed. Login with your email and password.',
+            t('hotelRegistrationCompleted', language),
           email: form.email,
         },
       });
@@ -56,14 +59,14 @@ export default function HotelCompleteRegistrationPage() {
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Hotel Owner Registration
+            {t('hotelOwnerRegistration', language)}
           </h1>
           <p className="text-gray-600 mb-6">
-            Use the name and email given by admin, then set your password.
+            {t('hotelOwnerInstructions', language)}
           </p>
           {(form.name || form.email) && (
             <div className="mb-4 p-3 bg-blue-50 text-blue-900 rounded-lg text-sm">
-              Admin details were filled in for you. Create your password to finish hotel account setup.
+              {t('adminDetailsFilled', language)}
             </div>
           )}
 
@@ -77,7 +80,7 @@ export default function HotelCompleteRegistrationPage() {
             <input
               type="text"
               required
-              placeholder="Owner Name (given by admin)"
+              placeholder={t('ownerNameGiven', language)}
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl"
@@ -85,7 +88,7 @@ export default function HotelCompleteRegistrationPage() {
             <input
               type="email"
               required
-              placeholder="Hotel Email (given by admin)"
+              placeholder={t('hotelEmailGiven', language)}
               value={form.email}
               onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl"
@@ -93,7 +96,7 @@ export default function HotelCompleteRegistrationPage() {
             <input
               type="password"
               required
-              placeholder="Create Password"
+              placeholder={t('createPassword', language)}
               value={form.password}
               onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl"
@@ -101,7 +104,7 @@ export default function HotelCompleteRegistrationPage() {
             <input
               type="password"
               required
-              placeholder="Confirm Password"
+              placeholder={t('confirmPassword', language)}
               value={form.confirmPassword}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))
@@ -113,14 +116,14 @@ export default function HotelCompleteRegistrationPage() {
               disabled={loading}
               className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary-dark disabled:opacity-50"
             >
-              {loading ? 'Submitting...' : 'Complete Registration'}
+              {loading ? t('submitting', language) : t('completeRegistration', language)}
             </button>
           </form>
 
           <p className="text-sm text-gray-600 mt-4">
-            Already completed?{' '}
+            {t('alreadyCompleted', language)}{' '}
             <Link to="/login" className="text-primary hover:underline">
-              Login here
+              {t('loginHere', language)}
             </Link>
           </p>
         </div>

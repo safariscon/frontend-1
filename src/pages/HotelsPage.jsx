@@ -17,6 +17,8 @@ export default function HotelsPage() {
    const [searchParams] = useSearchParams();
    const [allHotels, setAllHotels] = useState([]);
    const [sortBy, setSortBy] = useState('recommended');
+   const [categoryFilter, setCategoryFilter] = useState('');
+   const [availableOnly, setAvailableOnly] = useState(false);
    const [loading, setLoading] = useState(true);
    const { language } = useLanguage();
 
@@ -78,6 +80,14 @@ export default function HotelsPage() {
       });
     }
 
+    if (categoryFilter) {
+      result = result.filter((hotel) => hotel.serviceCategory === categoryFilter);
+    }
+
+    if (availableOnly) {
+      result = result.filter((hotel) => hotel.canAcceptVisitors !== false && Number(hotel.availableInventory ?? 1) > 0);
+    }
+
     // Sort
     switch (sortBy) {
       case 'price-low':
@@ -99,7 +109,24 @@ export default function HotelsPage() {
     }
 
     return result;
-  }, [allHotels, locationParam, budgetParam, serviceParam, sortBy]);
+  }, [allHotels, locationParam, budgetParam, serviceParam, categoryFilter, availableOnly, sortBy]);
+
+  const categoryOptions = useMemo(
+    () =>
+      [...new Set(allHotels.map((hotel) => hotel.serviceCategory).filter(Boolean))].sort(),
+    [allHotels]
+  );
+
+  const groupedHotels = useMemo(
+    () =>
+      filteredHotels.reduce((groups, hotel) => {
+        const category = hotel.serviceCategory || 'general';
+        groups[category] = groups[category] || [];
+        groups[category].push(hotel);
+        return groups;
+      }, {}),
+    [filteredHotels]
+  );
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -120,6 +147,28 @@ export default function HotelsPage() {
         <div className="bg-white shadow-md sticky top-16 z-40">
           <div className="max-w-7xl mx-auto px-4 py-4">
             <SearchBar variant="compact" />
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+              >
+                <option value="">All categories</option>
+                {categoryOptions.map((category) => (
+                  <option key={category} value={category}>
+                    {formatLabel(category)}
+                  </option>
+                ))}
+              </select>
+              <label className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={availableOnly}
+                  onChange={(e) => setAvailableOnly(e.target.checked)}
+                />
+                Available now
+              </label>
+            </div>
           </div>
         </div>
 
@@ -163,7 +212,7 @@ export default function HotelsPage() {
               )}
               {budgetParam && (
                 <span className="inline-flex items-center gap-1 bg-primary bg-opacity-10 text-primary px-3 py-1 rounded-full text-sm">
-                  Under {formatRwf(budgetParam)}
+                  {t('underBudget', language, { price: formatRwf(budgetParam) })}
                   <button
                     onClick={() => {
                       const params = new URLSearchParams(searchParams);
@@ -220,9 +269,23 @@ export default function HotelsPage() {
            {loading ? (
              <LoadingSpinner size="lg" />
            ) : filteredHotels.length > 0 ? (
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {filteredHotels.map((hotel) => (
-                 <HotelCard key={hotel.id} hotel={hotel} />
+             <div className="space-y-10">
+               {Object.entries(groupedHotels).map(([category, hotels]) => (
+                 <section key={category}>
+                   <div className="mb-4 flex items-end justify-between gap-3">
+                     <div>
+                       <h3 className="text-xl font-bold text-gray-900">{formatLabel(category)}</h3>
+                       <p className="text-sm text-gray-500">
+                         {hotels.length} {hotels.length === 1 ? t('serviceFound', language) : t('servicesFound', language)}
+                       </p>
+                     </div>
+                   </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {hotels.map((hotel) => (
+                       <HotelCard key={hotel.id} hotel={hotel} />
+                     ))}
+                   </div>
+                 </section>
                ))}
              </div>
            ) : (
@@ -242,4 +305,12 @@ export default function HotelsPage() {
       <Footer />
     </div>
   );
+}
+
+function formatLabel(value) {
+  return String(value || 'service')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
