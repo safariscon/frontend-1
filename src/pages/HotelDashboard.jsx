@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -6,251 +5,58 @@ import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
 import { getAuthData, hotelApi } from '../lib/api';
+import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { formatRwf } from '../lib/currency';
-import { REALTIME_EVENTS, joinRealtimeRoom, subscribeToRealtime } from '../lib/realtime';
-import { useLanguage } from '../context/LanguageContext';
-import { t } from '../lib/translations';
 
-const AUTO_REFRESH_MS = 15000;
-
-const BUSINESS_GROUPS = {
-  accommodation: new Set([
-    'hotel',
-    'hotels-and-resorts',
-    'homestays-and-guesthouses',
-    'tent-rentals-and-camping-sites',
-    'vacation-rentals-and-apartments',
-  ]),
-  transport: new Set([
-    'transport-service',
-    'car-rentals',
-    'motorbike-and-scooter-rentals',
-    'taxi-and-ride-services',
-    'bus-and-minivan-charters',
-  ]),
-  food: new Set([
-    'restaurant-cafe',
-    'restaurants',
-    'bars-and-pubs',
-    'coffee-shops-and-cafes',
-    'food-trucks-and-street-food-stalls',
-  ]),
-  events: new Set([
-    'event-hall',
-    'conference-event-halls-mice',
-    'wedding-venues',
-    'entertainment-venues',
-  ]),
-  tours: new Set([
-    'tours-experiences',
-    'tour-and-activity-operators',
-    'gear-rentals',
-  ]),
-  wellness: new Set(['spas-and-wellness-centers', 'childcare-services']),
-  retail: new Set(['souvenir-shops-and-craft-markets']),
+const EMPTY_FORM = {
+  title: '',
+  description: '',
+  category: 'hotels-and-resorts',
+  price: '',
+  status: 'available',
+  existingImages: [],
+  imageFiles: [],
 };
 
-function normalizeBusinessType(value) {
-  return String(value || 'hotel')
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, 'and')
-    .replace(/[ /]+/g, '-');
-}
-
-function resolveBusinessGroup(type) {
-  const normalized = normalizeBusinessType(type);
-  const foundGroup = Object.entries(BUSINESS_GROUPS).find(([, values]) =>
-    values.has(normalized)
-  );
-  return foundGroup?.[0] || 'general';
-}
-
-function getSellerConfig(type) {
-  const normalizedType = normalizeBusinessType(type);
-  const group = resolveBusinessGroup(normalizedType);
-
-  const shared = {
-    type: normalizedType,
-    group,
-    typeLabel: formatBusinessType(normalizedType),
-    pricingUnit: 'service',
-    availabilityLabel: 'Availability',
-    inventoryLabel: 'Listings',
-    inventoryItemLabel: 'listing',
-    managementLabel: 'Listings Management',
-    bookingLabel: 'Reservations',
-    bookingDescription: 'Track reservations and respond to customer requests.',
-    metricLabel: 'Active Listings',
-    listingCategoryLabel: 'Category',
-    supportsRooms: false,
-  };
-
-  if (group === 'accommodation') {
-    return {
-      ...shared,
-      pricingUnit: 'night',
-      availabilityLabel: 'Night Availability',
-      inventoryLabel: 'Rooms',
-      inventoryItemLabel: 'room',
-      managementLabel: 'Room Management',
-      bookingLabel: 'Bookings',
-      bookingDescription: 'Manage room bookings and live room availability.',
-      metricLabel: 'Available Rooms',
-      listingCategoryLabel: 'Room category',
-      supportsRooms: true,
-    };
-  }
-
-  if (group === 'transport') {
-    return {
-      ...shared,
-      pricingUnit: 'day',
-      availabilityLabel: 'Vehicle Availability',
-      inventoryLabel: 'Vehicles',
-      inventoryItemLabel: 'vehicle',
-      managementLabel: 'Vehicle Management',
-      bookingLabel: 'Reservations',
-      bookingDescription: 'Manage vehicle rentals, transfers, and dispatch requests.',
-      metricLabel: 'Active Vehicles',
-      listingCategoryLabel: 'Vehicle type',
-    };
-  }
-
-  if (group === 'food') {
-    return {
-      ...shared,
-      pricingUnit: 'table',
-      availabilityLabel: 'Table / Order Availability',
-      inventoryLabel: 'Menu & Tables',
-      inventoryItemLabel: 'menu item',
-      managementLabel: 'Menu Management',
-      bookingLabel: 'Orders / Reservations',
-      bookingDescription: 'Handle reservations, menu items, and customer orders.',
-      metricLabel: 'Active Menu Items',
-      listingCategoryLabel: 'Menu section',
-    };
-  }
-
-  if (group === 'events') {
-    return {
-      ...shared,
-      pricingUnit: 'event',
-      availabilityLabel: 'Venue Availability',
-      inventoryLabel: 'Venues & Packages',
-      inventoryItemLabel: 'venue package',
-      managementLabel: 'Venue Management',
-      bookingLabel: 'Venue Bookings',
-      bookingDescription: 'Manage event space bookings, packages, and schedules.',
-      metricLabel: 'Active Venue Packages',
-      listingCategoryLabel: 'Venue package type',
-    };
-  }
-
-  if (group === 'tours') {
-    return {
-      ...shared,
-      pricingUnit: 'person',
-      availabilityLabel: 'Activity Schedule',
-      inventoryLabel: 'Activities',
-      inventoryItemLabel: 'activity',
-      managementLabel: 'Activity Management',
-      bookingLabel: 'Activity Reservations',
-      bookingDescription: 'Manage scheduled activities, departure times, and reservations.',
-      metricLabel: 'Scheduled Activities',
-      listingCategoryLabel: 'Activity category',
-    };
-  }
-
-  if (group === 'wellness') {
-    return {
-      ...shared,
-      pricingUnit: 'hour',
-      availabilityLabel: 'Session Availability',
-      inventoryLabel: 'Sessions & Services',
-      inventoryItemLabel: 'session',
-      managementLabel: 'Session Management',
-      bookingLabel: 'Reservations',
-      bookingDescription: 'Manage sessions, appointments, and reservations.',
-      metricLabel: 'Active Sessions',
-      listingCategoryLabel: 'Session type',
-    };
-  }
-
-  return {
-    ...shared,
-    pricingUnit: 'use',
-    availabilityLabel: 'Availability',
-    inventoryLabel: 'Listings',
-    inventoryItemLabel: 'listing',
-    managementLabel: 'Listings Management',
-    bookingLabel: 'Reservations',
-    bookingDescription: 'Manage listings and reservations relevant to this business.',
-    metricLabel: 'Active Listings',
-    listingCategoryLabel: 'Listing category',
-  };
-}
+const SERVICE_CATEGORIES = [
+  ['Accommodation Services', [['hotels-and-resorts', 'Hotels & Resorts'], ['homestays-and-guesthouses', 'Homestays & Guesthouses'], ['tent-rentals-and-camping-sites', 'Tent Rentals & Camping Sites'], ['vacation-rentals-and-apartments', 'Vacation Rentals & Apartments']]],
+  ['Transport & Mobility Services', [['car-rentals', 'Car Rentals'], ['motorbike-and-scooter-rentals', 'Motorbike & Scooter Rentals'], ['taxi-and-ride-services', 'Taxi & Ride Services'], ['bus-and-minivan-charters', 'Bus & Minivan Charters']]],
+  ['Food & Beverage Services', [['restaurants', 'Restaurants'], ['bars-and-pubs', 'Bars & Pubs'], ['coffee-shops-and-cafes', 'Coffee Shops & Cafes'], ['food-trucks-and-street-food-stalls', 'Food Trucks & Street Food']]],
+  ['Events & Venue Services', [['conference-event-halls-mice', 'Conference & Event Halls'], ['wedding-venues', 'Wedding Venues']]],
+  ['Travel & Experience Services', [['tour-and-activity-operators', 'Tours & Activities'], ['entertainment-venues', 'Entertainment Venues'], ['gear-rentals', 'Gear Rentals']]],
+  ['Shopping & Local Market Services', [['souvenir-shops-and-craft-markets', 'Souvenir Shops & Craft Markets']]],
+  ['Wellness & Personal Care Services', [['spas-and-wellness-centers', 'Spas & Wellness Centers']]],
+  ['Personal Support Services', [['childcare-services', 'Childcare Services']]],
+];
 
 export default function HotelDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { language } = useLanguage();
-  const [activeTab, setActiveTab] = useState('overview');
   const [overview, setOverview] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [rooms, setRooms] = useState([]);
   const [services, setServices] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [activeTab, setActiveTab] = useState('services');
+  const [editingService, setEditingService] = useState(null);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
-  const [metricView, setMetricView] = useState('available');
-  const [roomForm, setRoomForm] = useState({
-    roomNumber: '',
-    type: 'standard',
-    price: '',
-    status: 'available',
-  });
-  const [serviceForm, setServiceForm] = useState({
-    category: '',
-    name: '',
-    description: '',
-    price: '',
-    unit: '',
-    inventory: '1',
-    isActive: true,
-  });
-
   const token = getAuthData()?.token;
-  const businessType = overview?.hotel?.type || user?.businessType || 'hotel';
-  const sellerConfig = useMemo(() => getSellerConfig(businessType), [businessType]);
 
   const loadData = async ({ silent = false } = {}) => {
-    if (!token) {
-      setError(t('sessionExpired', language));
-      setLoading(false);
-      return;
-    }
-
+    if (!token) return;
     if (!silent) setLoading(true);
     setError('');
-
     try {
-      const requests = [
+      const [overviewResp, servicesResp, bookingsResp] = await Promise.all([
         hotelApi.getOverview(token),
-        hotelApi.getMyBookings(token),
         hotelApi.getMyServices(token),
-      ];
-
-      if (sellerConfig.supportsRooms) {
-        requests.push(hotelApi.getMyRooms(token));
-      }
-
-      const [overviewResp, bookingsResp, servicesResp, roomsResp] = await Promise.all(requests);
-
+        hotelApi.getMyBookings(token),
+      ]);
       setOverview(overviewResp);
-      setBookings(bookingsResp.bookings || []);
       setServices(servicesResp.services || []);
-      setRooms(sellerConfig.supportsRooms ? roomsResp?.rooms || [] : []);
+      setBookings(bookingsResp.bookings || []);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -263,302 +69,148 @@ export default function HotelDashboard() {
       navigate('/login');
       return;
     }
-
     if (!isSellerRole(user.role)) {
       navigate(getDashboardRoute(user));
       return;
     }
-
-    loadData();
+    Promise.resolve().then(() => loadData());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, navigate]);
 
   useEffect(() => {
-    if (!user || !isSellerRole(user.role) || !token) return undefined;
-    const intervalId = window.setInterval(() => {
-      loadData({ silent: true });
-    }, AUTO_REFRESH_MS);
-    return () => window.clearInterval(intervalId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, token, sellerConfig.supportsRooms]);
-
-  useEffect(() => {
-    if (!user || !isSellerRole(user.role) || !token) return undefined;
-    joinRealtimeRoom('hotel', user.businessId || user.hotelId);
-    joinRealtimeRoom('user', user.id || user._id);
-
+    if (!token || !user || !isSellerRole(user.role)) return undefined;
+    joinRealtimeChannel('business', user.businessId || user.hotelId);
+    joinRealtimeChannel('user', user.id || user._id);
     return subscribeToRealtime(
-      [
-        REALTIME_EVENTS.BOOKING_CHANGED,
-        REALTIME_EVENTS.ROOM_CHANGED,
-        REALTIME_EVENTS.SERVICE_CHANGED,
-        REALTIME_EVENTS.HOTEL_CHANGED,
-      ],
+      [REALTIME_EVENTS.SERVICE_CHANGED, REALTIME_EVENTS.BOOKING_CHANGED, 'newBooking', 'serviceUpdated', 'bookingStatusChanged'],
       () => loadData({ silent: true })
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, token, sellerConfig.supportsRooms]);
+  }, [token, user]);
 
-  useEffect(() => {
-    if (activeTab === 'rooms' && !sellerConfig.supportsRooms) {
-      setActiveTab('listings');
-    }
-  }, [activeTab, sellerConfig.supportsRooms]);
+  const stats = useMemo(() => {
+    const activeServices = services.filter((service) => service.status === 'available' && service.isActive !== false);
+    const completedBookings = bookings.filter((booking) => booking.status === 'completed');
+    const cancelledBookings = bookings.filter((booking) => booking.status === 'cancelled');
+    const revenue = bookings
+      .filter((booking) => ['confirmed', 'active', 'completed'].includes(booking.status))
+      .reduce((sum, booking) => sum + Number(booking.totalPrice || 0), 0);
+    return {
+      totalServices: services.length,
+      activeServices: activeServices.length,
+      totalBookings: bookings.length,
+      activeBookings: bookings.filter((booking) => ['pending', 'confirmed', 'active'].includes(booking.status)).length,
+      completedBookings: completedBookings.length,
+      cancellationRate: bookings.length ? Math.round((cancelledBookings.length / bookings.length) * 100) : 0,
+      revenue,
+      availableQuantity: services.reduce((sum, service) => sum + Number(service.availableQuantity || 0), 0),
+    };
+  }, [services, bookings]);
 
-  const revenue = useMemo(
-    () =>
-      bookings
-        .filter((booking) => ['confirmed', 'completed'].includes(booking.status))
-        .reduce((sum, booking) => sum + (booking.totalPrice || 0), 0),
-    [bookings]
-  );
+  const startEdit = (service) => {
+    setEditingService(service);
+    setForm({
+      title: service.title || service.name || '',
+      description: service.description || '',
+      category: service.category || service.serviceType || 'hotels-and-resorts',
+      price: service.priceText || '',
+      status: service.status === 'unavailable' ? 'unavailable' : 'available',
+      existingImages: Array.isArray(service.images) ? service.images.filter(Boolean).slice(0, 3) : [],
+      imageFiles: [],
+    });
+    setActiveTab('edit');
+  };
 
-  const availableRooms = useMemo(
-    () => rooms.filter((room) => room.status === 'available'),
-    [rooms]
-  );
-  const maintenanceRooms = useMemo(
-    () => rooms.filter((room) => room.status === 'maintenance'),
-    [rooms]
-  );
-  const activeBookings = useMemo(
-    () => bookings.filter((booking) => ['confirmed', 'pending'].includes(booking.status)),
-    [bookings]
-  );
-  const activeServices = useMemo(
-    () => services.filter((service) => service.isActive !== false),
-    [services]
-  );
-  const registeredServices = useMemo(
-    () => overview?.hotel?.services || [],
-    [overview]
-  );
-  const businessImage = overview?.hotel?.images?.[0] || null;
+  const resetForm = () => {
+    setEditingService(null);
+    setForm(EMPTY_FORM);
+  };
 
-  const summaryMetrics = useMemo(() => {
-    const items = [
-      {
-        id: 'available',
-        label: sellerConfig.metricLabel,
-        value: sellerConfig.supportsRooms ? availableRooms.length : activeServices.length,
-        hint: sellerConfig.supportsRooms
-          ? 'Live inventory that can be booked right now'
-          : 'Listings currently available to customers',
-      },
-      {
-        id: 'bookings',
-        label: sellerConfig.bookingLabel,
-        value: activeBookings.length,
-        hint: 'Pending and confirmed customer requests',
-      },
-      {
-        id: 'services',
-        label: sellerConfig.inventoryLabel,
-        value: sellerConfig.supportsRooms ? rooms.length : services.length,
-        hint: sellerConfig.supportsRooms
-          ? 'Total managed units in this business'
-          : 'Total active service or listing entries',
-      },
-    ];
-
-    if (sellerConfig.supportsRooms) {
-      items.push({
-        id: 'maintenance',
-        label: 'Maintenance',
-        value: maintenanceRooms.length,
-        hint: 'Units unavailable for booking',
-      });
-    } else {
-      items.push({
-        id: 'pricing',
-        label: 'Pricing',
-        value: `${services.filter((service) => service.priceModel?.amount > 0).length}`,
-        hint: `Listings with per-${sellerConfig.pricingUnit} pricing configured`,
-      });
-    }
-
-    return items;
-  }, [
-    activeBookings.length,
-    activeServices.length,
-    availableRooms.length,
-    maintenanceRooms.length,
-    rooms.length,
-    sellerConfig,
-    services,
-  ]);
-
-  const metricItems = useMemo(() => {
-    if (metricView === 'bookings') return activeBookings;
-    if (metricView === 'maintenance') return maintenanceRooms;
-    if (metricView === 'pricing') return services;
-    if (metricView === 'services') return sellerConfig.supportsRooms ? rooms : services;
-    return sellerConfig.supportsRooms ? availableRooms : activeServices;
-  }, [
-    activeBookings,
-    activeServices,
-    availableRooms,
-    maintenanceRooms,
-    metricView,
-    rooms,
-    sellerConfig.supportsRooms,
-    services,
-  ]);
-
-  const tabs = useMemo(() => {
-    const items = [
-      { id: 'overview', label: 'Overview' },
-      {
-        id: sellerConfig.supportsRooms ? 'rooms' : 'listings',
-        label: sellerConfig.managementLabel,
-      },
-      { id: 'bookings', label: sellerConfig.bookingLabel },
-    ];
-
-    if (sellerConfig.supportsRooms) {
-      items.push({ id: 'listings', label: 'Services' });
-    }
-
-    return items;
-  }, [sellerConfig]);
-
-  const handleCreateRoom = async (e) => {
-    e.preventDefault();
+  const saveService = async (event) => {
+    event.preventDefault();
     if (!token) return;
-
+    setSaving(true);
     setError('');
     setInfo('');
+    let uploadedImageUrls = [];
     try {
-      const response = await hotelApi.createRoom(token, {
-        roomNumber: roomForm.roomNumber,
-        type: roomForm.type,
-        price: Number(roomForm.price),
-        status: roomForm.status,
-      });
+      if (form.imageFiles?.length) {
+        const uploadResponse = await hotelApi.uploadServiceImages(token, form.imageFiles);
+        uploadedImageUrls = uploadResponse.urls || [];
+      }
+    } catch (requestError) {
+      setError(requestError.message);
+      setSaving(false);
+      return;
+    }
+
+    const payload = {
+      title: form.title,
+      description: form.description,
+      serviceType: 'rental',
+      category: form.category,
+      pricing: { amount: 0, unit: 'service', currency: 'RWF' },
+      priceText: form.price,
+      availableQuantity: form.status === 'available' ? 1 : 0,
+      status: form.status,
+      images: (uploadedImageUrls.length ? uploadedImageUrls : form.existingImages || []).slice(0, 3),
+      isActive: true,
+    };
+    try {
+      const response = editingService
+        ? await hotelApi.updateService(token, editingService._id, payload)
+        : await hotelApi.createService(token, payload);
       setInfo(response.message);
-      setRoomForm({
-        roomNumber: '',
-        type: 'standard',
-        price: '',
-        status: 'available',
-      });
-      await loadData();
+      resetForm();
+      setActiveTab('services');
+      await loadData({ silent: true });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateStatus = async (service, status) => {
+    startEdit(service);
+    const payload = {
+      title: service.title || service.name,
+      description: service.description,
+      serviceType: service.serviceType || 'rental',
+      category: service.category,
+      pricing: service.pricing,
+      priceText: service.priceText || '',
+      availableQuantity: status === 'available' ? 1 : 0,
+      status,
+      images: service.images || [],
+      isActive: true,
+    };
+    try {
+      const response = await hotelApi.updateService(token, service._id, payload);
+      setInfo(response.message);
+      resetForm();
+      await loadData({ silent: true });
     } catch (requestError) {
       setError(requestError.message);
     }
   };
 
-  const handleRoomStatusChange = async (roomId, status) => {
-    if (!token) return;
-    setError('');
-    setInfo('');
-    try {
-      const response = await hotelApi.updateRoom(token, roomId, { status });
-      setInfo(response.message);
-      await loadData();
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
-  const handleDeleteRoom = async (roomId) => {
-    if (!token || !window.confirm(t('deleteConfirm', language, { item: sellerConfig.inventoryItemLabel }))) return;
-
-    setError('');
-    setInfo('');
-    try {
-      const response = await hotelApi.deleteRoom(token, roomId);
-      setInfo(response.message);
-      await loadData();
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
-  const handleCreateService = async (e) => {
-    e.preventDefault();
-    if (!token) return;
-
-    setError('');
-    setInfo('');
-    try {
-      const response = await hotelApi.createService(token, {
-        category: serviceForm.category || sellerConfig.group,
-        name: serviceForm.name,
-        description: serviceForm.description,
-        priceModel: {
-          type: 'fixed',
-          amount: Number(serviceForm.price) || 0,
-          currency: 'USD',
-          unit: serviceForm.unit || sellerConfig.pricingUnit,
-        },
-        availabilitySchedule: {
-          timezone: 'Africa/Johannesburg',
-          inventory: Number(serviceForm.inventory) || 1,
-          notes: sellerConfig.availabilityLabel,
-        },
-        isActive: serviceForm.isActive,
-      });
-      setInfo(response.message);
-      setServiceForm({
-        category: '',
-        name: '',
-        description: '',
-        price: '',
-        unit: '',
-        inventory: '1',
-        isActive: true,
-      });
-      await loadData();
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
-  const handleToggleService = async (service) => {
-    if (!token) return;
-
-    setError('');
-    setInfo('');
-    try {
-      const response = await hotelApi.updateService(token, service._id, {
-        category: service.category,
-        name: service.name,
-        description: service.description,
-        priceModel: service.priceModel,
-        availabilitySchedule: service.availabilitySchedule,
-        isActive: service.isActive === false,
-      });
-      setInfo(response.message);
-      await loadData();
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
-  const handleDeleteService = async (serviceId) => {
-    if (!token || !window.confirm(t('deleteConfirm', language, { item: sellerConfig.inventoryItemLabel }))) return;
-
-    setError('');
-    setInfo('');
+  const deleteService = async (serviceId) => {
+    if (!window.confirm('Delete this service?')) return;
     try {
       const response = await hotelApi.deleteService(token, serviceId);
       setInfo(response.message);
-      await loadData();
+      await loadData({ silent: true });
     } catch (requestError) {
       setError(requestError.message);
     }
   };
 
-  const handleBookingStatusChange = async (bookingId, status) => {
-    if (!token) return;
-
-    setError('');
-    setInfo('');
+  const updateBookingStatus = async (bookingId, status) => {
     try {
       const response = await hotelApi.updateBookingStatus(token, bookingId, { status });
       setInfo(response.message);
-      await loadData();
+      await loadData({ silent: true });
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -569,630 +221,150 @@ export default function HotelDashboard() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
-
       <main className="flex-1 py-8">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="p-6 md:p-8">
-                <div className="mb-5 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                    Live business dashboard
-                  </span>
-                  <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                    {sellerConfig.typeLabel}
-                  </span>
-                </div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
-                  {overview?.hotel?.name || user?.businessName || t('sellerDashboardTitle', language)}
-                </h1>
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-                  Manage customer requests, availability, pricing, and listings for this {sellerConfig.typeLabel.toLowerCase()} business. Updates sync in real time across admin, customer, and seller screens.
-                </p>
-
-                <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                  <InfoPill label={t('location', language)} value={overview?.hotel?.location || '-'} />
-                  <InfoPill label={t('basePrice', language)} value={formatRwf(overview?.hotel?.basePrice || 0)} />
-                  <InfoPill label="Contact" value={overview?.hotel?.contactInfo || overview?.hotel?.ownerEmail || '-'} />
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {registeredServices.length > 0 ? (
-                    registeredServices.slice(0, 8).map((service) => (
-                      <span
-                        key={service}
-                        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
-                      >
-                        {service}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                      {t('listingsManagement', language)}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="relative min-h-[240px] bg-slate-900">
-                {businessImage ? (
-                  <img
-                    src={businessImage}
-                    alt={overview?.hotel?.name || 'Business'}
-                    className="absolute inset-0 h-full w-full object-cover opacity-80"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-700 via-slate-900 to-sky-800" />
-                )}
-                <div className="absolute inset-0 bg-slate-950/30" />
-                <div className="relative flex h-full flex-col justify-end p-6 text-white">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-200">Realtime status</p>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <HeroStat label={sellerConfig.bookingLabel} value={overview?.stats?.bookings ?? bookings.length} />
-                    <HeroStat
-                      label={sellerConfig.supportsRooms ? 'Available rooms' : 'Active listings'}
-                      value={sellerConfig.supportsRooms ? overview?.stats?.availableRooms ?? 0 : activeServices.length}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => loadData()}
-                    className="mt-5 rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"
-                  >
-                    Refresh Now
-                  </button>
-                </div>
-              </div>
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Business Dashboard</h1>
+              <p className="text-gray-600">Manage {overview?.business?.businessName || overview?.business?.name || 'your business'} services and bookings.</p>
             </div>
+            <button onClick={() => { resetForm(); setActiveTab('edit'); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Add Service</button>
           </div>
 
-          {(error || info) && (
-            <div className="mb-6 space-y-2">
-              {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
-              {info && <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm">{info}</div>}
-            </div>
-          )}
+          {(error || info) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <Metric label={t('businessType', language)} value={sellerConfig.typeLabel} />
-            <Metric label={sellerConfig.bookingLabel} value={overview?.stats?.bookings ?? bookings.length} />
-            <Metric label="Revenue" value={formatRwf(revenue)} />
-            <Metric
-              label={sellerConfig.supportsRooms ? 'Available Rooms' : sellerConfig.metricLabel}
-              value={sellerConfig.supportsRooms ? overview?.stats?.availableRooms ?? 0 : activeServices.length}
-            />
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <Metric label="Services" value={stats.totalServices} />
+            <Metric label="Active" value={stats.activeServices} />
+            <Metric label="Bookings" value={stats.totalBookings} />
+            <Metric label="Revenue" value={formatRwf(stats.revenue)} />
+            <Metric label="Quantity" value={stats.availableQuantity} />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            {summaryMetrics.map((metric) => (
-              <button
-                key={metric.id}
-                type="button"
-                onClick={() => setMetricView(metric.id)}
-                className={`rounded-2xl p-5 text-left border transition ${
-                  metricView === metric.id
-                    ? 'border-primary bg-blue-50 shadow-sm'
-                    : 'border-gray-200 bg-white hover:border-primary/50'
-                }`}
-              >
-                <p className="text-sm text-gray-500">{metric.label}</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
-                <p className="text-xs text-gray-600 mt-2">{metric.hint}</p>
+          <div className="mb-6 flex gap-2 overflow-x-auto">
+            {['services', 'bookings', 'analytics', 'edit'].map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>
+                {tab === 'edit' ? (editingService ? 'Edit Service' : 'Add Service') : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-6 mb-8">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">
-                  {sellerMetricTitle(metricView, sellerConfig)}
-                </h2>
-                <p className="text-sm text-gray-600">
-                  Seller data refreshes automatically every {AUTO_REFRESH_MS / 1000} seconds.
-                </p>
-              </div>
-            </div>
-            <SellerMetricDrilldown
-              metricView={metricView}
-              items={metricItems}
-              supportsRooms={sellerConfig.supportsRooms}
-              inventoryItemLabel={sellerConfig.inventoryItemLabel}
-            />
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="border-b border-gray-200">
-              <nav className="flex overflow-x-auto">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`px-6 py-4 font-medium border-b-2 transition whitespace-nowrap ${
-                      activeTab === tab.id
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            <div className="p-6">
-              {loading ? (
-                <p className="text-gray-600">{t('loading', language)}</p>
-              ) : (
-                <>
-                  {activeTab === 'overview' && (
-                    <div className="space-y-6">
-                      <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('businessStatus', language)}</p>
-                          <h3 className="mt-2 text-2xl font-black text-slate-950">{overview?.hotel?.name}</h3>
-                          <p className="mt-3 text-sm leading-6 text-slate-600">{overview?.hotel?.description || 'No description added yet.'}</p>
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            <InfoPill label="Type" value={sellerConfig.typeLabel} />
-                            <InfoPill label="Location" value={overview?.hotel?.location || '-'} />
-                            <InfoPill label="Starting price" value={formatRwf(overview?.hotel?.basePrice || 0)} />
-                            <InfoPill label="Contact" value={overview?.hotel?.contactInfo || '-'} />
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 p-5">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Registered customer services</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {registeredServices.length > 0 ? (
-                              registeredServices.map((service) => (
-                                <span
-                                  key={service}
-                                  className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800"
-                                >
-                                  {service}
-                                </span>
-                              ))
-                            ) : (
-                              <p className="text-sm text-slate-600">{t('noServicesFound', language)}</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl bg-blue-50 border border-blue-100 p-5">
-                        <h4 className="font-bold text-blue-900 mb-2">{t('businessTools', language)}</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
-                          <FeatureCard title={t('listingsManagement', language)} description={t('listingsDescription', language)} />
-                          <FeatureCard title={sellerConfig.availabilityLabel} description={`Control availability by ${sellerConfig.pricingUnit}.`} />
-                          <FeatureCard title={t('pricingManagement', language)} description={t('pricingDescription', language)} />
-                          <FeatureCard title={sellerConfig.bookingLabel} description={sellerConfig.bookingDescription} />
-                        </div>
-                      </div>
-
-                      {sellerConfig.supportsRooms ? (
-                        <div className="rounded-2xl bg-green-50 border border-green-100 p-5">
-                          <h4 className="font-bold text-green-900 mb-2">{t('chooseRoom', language)}</h4>
-                          {availableRooms.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {availableRooms.map((room) => (
-                                <span
-                                  key={room._id}
-                                  className="px-3 py-1 rounded-full bg-white border border-green-200 text-green-900 text-sm"
-                                >
-                                  Room {room.roomNumber} - {formatRwf(room.price)}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-green-900">{t('noFreeRooms', language)}</p>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl bg-amber-50 border border-amber-100 p-5">
-                          <h4 className="font-bold text-amber-900 mb-2">{sellerConfig.availabilityLabel}</h4>
-                          <p className="text-sm text-amber-900">
-                            Manage schedules and inventory from the {sellerConfig.managementLabel.toLowerCase()} tab.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activeTab === 'rooms' && sellerConfig.supportsRooms && (
-                    <div className="space-y-8">
-                      <form onSubmit={handleCreateRoom} className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        <input
-                          type="text"
-                          required
-                          placeholder={t('roomNumber', language)}
-                          value={roomForm.roomNumber}
-                          onChange={(e) => setRoomForm((prev) => ({ ...prev, roomNumber: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <input
-                          type="text"
-                          placeholder={t('type', language)}
-                          value={roomForm.type}
-                          onChange={(e) => setRoomForm((prev) => ({ ...prev, type: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <input
-                          type="number"
-                          required
-                          placeholder={t('pricePerNight', language)}
-                          value={roomForm.price}
-                          onChange={(e) => setRoomForm((prev) => ({ ...prev, price: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <select
-                          value={roomForm.status}
-                          onChange={(e) => setRoomForm((prev) => ({ ...prev, status: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        >
-                          <option value="available">{t('available', language)}</option>
-                          <option value="occupied">{t('occupied', language)}</option>
-                          <option value="maintenance">{t('maintenance', language)}</option>
-                        </select>
-                        <button
-                          type="submit"
-                          className="px-4 py-3 bg-primary text-white rounded-xl hover:bg-primary-dark"
-                        >
-                          {t('addRoom', language)}
-                        </button>
-                      </form>
-
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-gray-200">
-                              <th className="text-left py-3 px-2">Room #</th>
-                              <th className="text-left py-3 px-2">{t('type', language)}</th>
-                              <th className="text-left py-3 px-2">{t('pricePerNight', language)}</th>
-                              <th className="text-left py-3 px-2">{t('status', language)}</th>
-                              <th className="text-right py-3 px-2">{t('actions', language)}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rooms.map((room) => (
-                              <tr key={room._id} className="border-b border-gray-100">
-                                <td className="py-3 px-2">{room.roomNumber}</td>
-                                <td className="py-3 px-2">{room.type}</td>
-                                <td className="py-3 px-2">{formatRwf(room.price)}</td>
-                                <td className="py-3 px-2">
-                                  <select
-                                    value={room.status}
-                                    onChange={(e) => handleRoomStatusChange(room._id, e.target.value)}
-                                    className="px-2 py-1 border border-gray-300 rounded-lg text-sm"
-                                  >
-                                    <option value="available">available</option>
-                                    <option value="occupied">occupied</option>
-                                    <option value="maintenance">maintenance</option>
-                                  </select>
-                                </td>
-                                <td className="py-3 px-2 text-right">
-                                  <button
-                                    onClick={() => handleDeleteRoom(room._id)}
-                                    className="text-red-600 hover:underline text-sm"
-                                  >
-                                    {t('delete', language)}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'listings' && (
-                    <div className="space-y-8">
-                      <form onSubmit={handleCreateService} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        <input
-                          type="text"
-                          placeholder={sellerConfig.listingCategoryLabel}
-                          value={serviceForm.category}
-                          onChange={(e) => setServiceForm((prev) => ({ ...prev, category: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <input
-                          type="text"
-                          required
-                          placeholder={`Name your ${sellerConfig.inventoryItemLabel}`}
-                          value={serviceForm.name}
-                          onChange={(e) => setServiceForm((prev) => ({ ...prev, name: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <input
-                          type="number"
-                          placeholder={`Price per ${sellerConfig.pricingUnit}`}
-                          value={serviceForm.price}
-                          onChange={(e) => setServiceForm((prev) => ({ ...prev, price: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <input
-                          type="text"
-                          placeholder={`Pricing unit (${sellerConfig.pricingUnit})`}
-                          value={serviceForm.unit}
-                          onChange={(e) => setServiceForm((prev) => ({ ...prev, unit: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <input
-                          type="number"
-                          min="1"
-                          placeholder="Inventory"
-                          value={serviceForm.inventory}
-                          onChange={(e) => setServiceForm((prev) => ({ ...prev, inventory: e.target.value }))}
-                          className="px-4 py-3 border border-gray-300 rounded-xl"
-                        />
-                        <label className="flex items-center gap-2 px-4 py-3 border border-gray-300 rounded-xl text-sm text-gray-700">
-                          <input
-                            type="checkbox"
-                            checked={serviceForm.isActive}
-                            onChange={(e) => setServiceForm((prev) => ({ ...prev, isActive: e.target.checked }))}
-                          />
-                          {t('activeListing', language)}
-                        </label>
-                        <textarea
-                          required
-                          placeholder={t('description', language)}
-                          value={serviceForm.description}
-                          onChange={(e) => setServiceForm((prev) => ({ ...prev, description: e.target.value }))}
-                          className="md:col-span-2 xl:col-span-3 px-4 py-3 border border-gray-300 rounded-xl"
-                          rows={3}
-                        />
-                        <button
-                          type="submit"
-                          className="md:col-span-2 xl:col-span-3 px-4 py-3 bg-primary text-white rounded-xl hover:bg-primary-dark"
-                        >
-                          Add {capitalize(sellerConfig.inventoryItemLabel)}
-                        </button>
-                      </form>
-
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-gray-200">
-                              <th className="text-left py-3 px-2">Name</th>
-                              <th className="text-left py-3 px-2">{sellerConfig.listingCategoryLabel}</th>
-                              <th className="text-left py-3 px-2">Price</th>
-                              <th className="text-left py-3 px-2">{sellerConfig.availabilityLabel}</th>
-                              <th className="text-left py-3 px-2">Status</th>
-                              <th className="text-right py-3 px-2">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {services.map((service) => (
-                              <tr key={service._id} className="border-b border-gray-100">
-                                <td className="py-3 px-2">
-                                  <div>
-                                    <p className="font-medium text-gray-900">{service.name}</p>
-                                    <p className="text-xs text-gray-500">{service.description || '-'}</p>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-2">{service.category || '-'}</td>
-                                <td className="py-3 px-2">
-                                  {formatRwf(service.priceModel?.amount || 0)} / {service.priceModel?.unit || sellerConfig.pricingUnit}
-                                </td>
-                                <td className="py-3 px-2">
-                                  {service.availabilitySchedule?.inventory ?? 1} units
-                                </td>
-                                <td className="py-3 px-2">{service.isActive === false ? 'inactive' : 'active'}</td>
-                                <td className="py-3 px-2 text-right">
-                                  <div className="flex items-center justify-end gap-4">
-                                    <button
-                                      onClick={() => handleToggleService(service)}
-                                      className="text-primary hover:underline text-sm"
-                                    >
-                                      {service.isActive === false ? 'Activate' : 'Pause'}
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteService(service._id)}
-                                      className="text-red-600 hover:underline text-sm"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'bookings' && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-2">Customer</th>
-                            <th className="text-left py-3 px-2">Destination</th>
-                            <th className="text-left py-3 px-2">Reservation Details</th>
-                            <th className="text-left py-3 px-2">Dates</th>
-                            <th className="text-left py-3 px-2">Status</th>
-                            <th className="text-right py-3 px-2">Total</th>
-                            <th className="text-right py-3 px-2">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {bookings.map((booking) => (
-                            <tr key={booking._id} className="border-b border-gray-100">
-                              <td className="py-3 px-2">{booking.touristId?.name || booking.touristId?.email || 'Unknown'}</td>
-                              <td className="py-3 px-2">
-                                {booking.destinationPlace} ({booking.destinationLocation})
-                              </td>
-                              <td className="py-3 px-2">
-                                {sellerConfig.supportsRooms
-                                  ? `Room ${booking.roomId?.roomNumber || '-'}`
-                                  : `${sellerConfig.inventoryItemLabel} reservation`}
-                              </td>
-                              <td className="py-3 px-2">
-                                {formatDate(booking.checkIn)} - {formatDate(booking.checkOut)}
-                              </td>
-                              <td className="py-3 px-2">{booking.status}</td>
-                              <td className="py-3 px-2 text-right">{formatRwf(booking.totalPrice || 0)}</td>
-                              <td className="py-3 px-2 text-right">
-                                <div className="flex items-center justify-end gap-3">
-                                  <button
-                                    onClick={() => handleBookingStatusChange(booking._id, 'confirmed')}
-                                    className="text-green-700 hover:underline text-sm"
-                                    disabled={booking.status === 'confirmed'}
-                                  >
-                                    Accept
-                                  </button>
-                                  <button
-                                    onClick={() => handleBookingStatusChange(booking._id, 'cancelled')}
-                                    className="text-red-600 hover:underline text-sm"
-                                    disabled={booking.status === 'cancelled'}
-                                  >
-                                    Reject
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+          <section className="bg-white rounded-2xl shadow-sm p-4">
+            {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
+            {!loading && activeTab === 'services' && <ServiceGrid services={services} onEdit={startEdit} onDelete={deleteService} onStatus={updateStatus} />}
+            {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} />}
+            {!loading && activeTab === 'analytics' && <Analytics stats={stats} services={services} />}
+            {activeTab === 'edit' && <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} />}
+          </section>
         </div>
       </main>
-
       <Footer />
     </div>
   );
 }
 
-function SellerMetricDrilldown({ metricView, items, supportsRooms, inventoryItemLabel }) {
-  if (items.length === 0) {
-    return <p className="text-sm text-gray-600">No records to show for this section yet.</p>;
-  }
+function Metric({ label, value }) {
+  return <div className="rounded-xl bg-white p-4 shadow-sm"><p className="text-sm text-gray-500">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{value}</p></div>;
+}
 
-  if (metricView === 'bookings') {
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-2">Customer</th>
-              <th className="text-left py-3 px-2">Destination</th>
-              <th className="text-left py-3 px-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((booking) => (
-              <tr key={booking._id} className="border-b border-gray-100">
-                <td className="py-3 px-2">{booking.touristId?.name || booking.touristId?.email || 'Unknown'}</td>
-                <td className="py-3 px-2">
-                  {booking.destinationPlace} <span className="text-gray-500">({booking.destinationLocation})</span>
-                </td>
-                <td className="py-3 px-2">{booking.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  if (supportsRooms) {
-    return (
-      <div className="flex flex-wrap gap-3">
-        {items.map((room) => (
-          <div key={room._id} className="rounded-xl border border-gray-200 p-4 min-w-[200px]">
-            <p className="font-semibold text-gray-900">Room {room.roomNumber}</p>
-            <p className="text-sm text-gray-600">{room.type}</p>
-            <p className="text-sm text-gray-700 mt-1">{formatRwf(room.price)}</p>
-            <p className="text-xs text-gray-500 mt-2">Status: {room.status}</p>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
+  if (!services.length) return <p className="p-4 text-gray-600">No services yet. Add your first service.</p>;
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {items.map((service) => (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {services.map((service) => (
         <div key={service._id} className="rounded-xl border border-gray-200 p-4">
-          <p className="font-semibold text-gray-900">{service.name || capitalize(inventoryItemLabel)}</p>
-          <p className="text-sm text-gray-600">{service.category || '-'}</p>
-          <p className="text-sm text-gray-700 mt-1">
-            {formatRwf(service.priceModel?.amount || 0)} / {service.priceModel?.unit || 'use'}
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            Inventory: {service.availabilitySchedule?.inventory ?? 1}
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-gray-900">{service.title || service.name}</h3>
+              <p className="text-sm text-gray-600">{service.serviceType || service.category}</p>
+            </div>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.status}</span>
+          </div>
+          <p className="mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
+          <p className="mt-3 font-semibold text-primary">{service.priceText || 'Price on request'}</p>
+          {Array.isArray(service.images) && service.images.length > 0 && (
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {service.images.slice(0, 3).map((image) => (
+                <img key={image} src={image} alt={service.title || service.name} className="h-20 w-full rounded-lg object-cover" />
+              ))}
+            </div>
+          )}
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button onClick={() => onEdit(service)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Edit</button>
+            <button onClick={() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available')} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{service.status === 'available' ? 'Set Not Available' : 'Set Available'}</button>
+            <button onClick={() => onDelete(service._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Delete</button>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-function Metric({ label, value }) {
+function BookingList({ bookings, onStatus }) {
+  if (!bookings.length) return <p className="p-4 text-gray-600">No bookings yet.</p>;
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Code</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Status</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
+        <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2">{booking.bookingCode}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2 text-right space-x-2">{['confirmed', 'active', 'completed', 'cancelled'].map((status) => <button key={status} onClick={() => onStatus(booking._id, status)} className="text-primary hover:underline">{status}</button>)}</td></tr>)}</tbody>
+      </table>
     </div>
   );
 }
 
-function FeatureCard({ title, description }) {
+function Analytics({ stats, services }) {
+  const low = services.filter((service) => Number(service.availableQuantity || 0) <= 2);
+  return <div className="grid gap-4 md:grid-cols-2"><Metric label="Active Bookings" value={stats.activeBookings} /><Metric label="Completed" value={stats.completedBookings} /><Metric label="Cancellation Rate" value={`${stats.cancellationRate}%`} /><Metric label="Low Availability" value={low.length} /></div>;
+}
+
+function ServiceForm({ form, setForm, onSubmit, saving, editing }) {
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   return (
-    <div className="rounded-xl bg-white border border-blue-100 p-4">
-      <p className="font-semibold text-gray-900">{title}</p>
-      <p className="text-gray-600 mt-1">{description}</p>
-    </div>
+    <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+      <Input label="Service Name" value={form.title} onChange={(value) => set('title', value)} required />
+      <CategorySelect value={form.category} onChange={(value) => set('category', value)} />
+      <Input label="Price" value={form.price} onChange={(value) => set('price', value)} placeholder="Example: 100 per hour" required />
+      <Select label="Status" value={form.status} onChange={(value) => set('status', value)} options={[['available', 'Available'], ['unavailable', 'Not Available']]} />
+      <TextArea label="Description" value={form.description} onChange={(value) => set('description', value)} required />
+      <label className="block">
+        <span className="text-sm font-semibold text-gray-700">Photos</span>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(event) => set('imageFiles', Array.from(event.target.files || []).slice(0, 3))}
+          className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3"
+        />
+        <span className="mt-1 block text-xs text-gray-500">Maximum 3 photos.</span>
+      </label>
+      <button disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Service' : 'Create Service'}</button>
+    </form>
   );
 }
 
-function InfoPill({ label, value }) {
+function Input({ label, value, onChange, type = 'text', required = false, placeholder = '' }) {
+  return <label className="block"><span className="text-sm font-semibold text-gray-700">{label}</span><input required={required} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
+}
+
+function Select({ label, value, onChange, options }) {
+  return <label className="block"><span className="text-sm font-semibold text-gray-700">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">{options.map((option) => Array.isArray(option) ? <option key={option[0]} value={option[0]}>{option[1]}</option> : <option key={option} value={option}>{option}</option>)}</select></label>;
+}
+
+function CategorySelect({ value, onChange }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/80 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-bold text-slate-900">{value}</p>
-    </div>
+    <label className="block">
+      <span className="text-sm font-semibold text-gray-700">Category</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
+        {SERVICE_CATEGORIES.map(([group, options]) => (
+          <optgroup key={group} label={group}>
+            {options.map(([categoryValue, label]) => <option key={categoryValue} value={categoryValue}>{label}</option>)}
+          </optgroup>
+        ))}
+      </select>
+    </label>
   );
 }
 
-function HeroStat({ label, value }) {
-  return (
-    <div className="rounded-xl border border-white/20 bg-white/10 p-3 backdrop-blur">
-      <p className="text-xs text-white/75">{label}</p>
-      <p className="mt-1 text-2xl font-black text-white">{value}</p>
-    </div>
-  );
-}
-
-function sellerMetricTitle(metricView, sellerConfig) {
-  if (metricView === 'bookings') return `${sellerConfig.bookingLabel} List`;
-  if (metricView === 'maintenance') return 'Maintenance List';
-  if (metricView === 'pricing') return 'Pricing Setup List';
-  if (metricView === 'services') return `${sellerConfig.inventoryLabel} List`;
-  return sellerConfig.supportsRooms ? 'Available Room List' : `${sellerConfig.metricLabel} List`;
-}
-
-function formatBusinessType(value) {
-  return String(value || 'hotel')
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString();
-}
-
-function capitalize(value) {
-  return String(value || '')
-    .trim()
-    .replace(/^./, (char) => char.toUpperCase());
+function TextArea({ label, value, onChange, required = false }) {
+  return <label className="block md:col-span-2"><span className="text-sm font-semibold text-gray-700">{label}</span><textarea required={required} value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
 }

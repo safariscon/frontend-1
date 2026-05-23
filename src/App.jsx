@@ -11,6 +11,7 @@ import BookingPage from './pages/BookingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import HotelCompleteRegistrationPage from './pages/HotelCompleteRegistrationPage';
+import BusinessRegisterPage from './pages/BusinessRegisterPage';
 import UserDashboard from './pages/UserDashboard';
 import HotelDashboard from './pages/HotelDashboard';
 import SellerDashboard from './pages/SellerDashboard';
@@ -53,6 +54,7 @@ function AppContent() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/hotel-register" element={<HotelCompleteRegistrationPage />} />
+            <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard" element={<UserDashboard />} />
             <Route path="/dashboard/seller" element={<SellerDashboard />} />
             <Route path="/hotel-dashboard" element={<HotelDashboard />} />

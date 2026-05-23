@@ -9,9 +9,9 @@ let socket;
 
 export const REALTIME_EVENTS = {
   CATALOG_CHANGED: 'catalog:changed',
-  HOTEL_CHANGED: 'hotel:changed',
+  BUSINESS_CHANGED: 'business:changed',
+  HOTEL_CHANGED: 'business:changed',
   SERVICE_CHANGED: 'service:changed',
-  ROOM_CHANGED: 'room:changed',
   BOOKING_CHANGED: 'booking:changed',
   NOTIFICATION: 'notification:new',
 };
@@ -40,7 +40,7 @@ export const subscribeToRealtime = (events, handler) => {
   };
 };
 
-export const joinRealtimeRoom = (room, id) => {
+export const joinRealtimeChannel = (channel, id) => {
   if (!id) return;
-  getRealtimeSocket().emit(`${room}:join`, id);
+  getRealtimeSocket().emit(`${channel}:join`, id);
 };

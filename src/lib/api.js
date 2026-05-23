@@ -52,6 +52,16 @@ export const clearAuthData = () => {
   localStorage.removeItem(LEGACY_USER_KEY);
 };
 
+const handleUnauthorizedResponse = (payload) => {
+  const message = payload.message || "Unauthorized.";
+  if (message.toLowerCase().includes("token")) {
+    clearAuthData();
+    window.dispatchEvent(new CustomEvent("auth:expired"));
+    return "Your session expired. Please log in again.";
+  }
+  return message;
+};
+
 const buildHeaders = (token, customHeaders = {}) => {
   const headers = { ...customHeaders };
   if (!headers["Content-Type"] && !(customHeaders instanceof FormData)) {
@@ -83,6 +93,9 @@ export const apiRequest = async (path, { method = "GET", body, token, headers } 
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error(handleUnauthorizedResponse(payload));
+    }
     throw new Error(payload.message || "Request failed.");
   }
 
@@ -109,6 +122,9 @@ export const uploadRequest = async (path, { method = "POST", formData, token } =
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error(handleUnauthorizedResponse(payload));
+    }
     throw new Error(payload.message || "Upload failed.");
   }
 
@@ -138,6 +154,11 @@ export const authApi = {
       method: "POST",
       body: userData,
     }),
+  registerBusiness: (payload) =>
+    apiRequest("/api/auth/business-register", {
+      method: "POST",
+      body: payload,
+    }),
   completeHotelRegistration: (payload) =>
     apiRequest("/api/auth/hotel/complete-registration", {
       method: "POST",
@@ -151,11 +172,21 @@ export const adminApi = {
   getHotels: (token) => apiRequest("/api/admin/hotels", { token }),
   getUsers: (token) => apiRequest("/api/admin/users", { token }),
   getBookings: (token) => apiRequest("/api/admin/bookings", { token }),
-  getRooms: (token) => apiRequest("/api/admin/rooms", { token }),
-  getHotelRooms: (token, hotelId) =>
-    apiRequest(`/api/admin/businesses/${hotelId}/rooms`, { token }),
+  getServices: (token) => apiRequest("/api/admin/services", { token }),
+  createService: (token, payload) =>
+    apiRequest("/api/admin/services", {
+      method: "POST",
+      token,
+      body: payload,
+    }),
   getHotelStatus: (token, hotelId) =>
     apiRequest(`/api/admin/businesses/${hotelId}/status`, { token }),
+  updateBusinessVerification: (token, hotelId, status) =>
+    apiRequest(`/api/admin/businesses/${hotelId}/verification`, {
+      method: "PATCH",
+      token,
+      body: { status },
+    }),
   uploadImage: (token, file) => {
     const formData = new FormData();
     formData.append("image", file);
@@ -178,8 +209,8 @@ export const adminApi = {
       token,
       body: payload,
     }),
-  connectTour: (token, payload) =>
-    apiRequest("/api/admin/connect-tour", {
+  assignBooking: (token, payload) =>
+    apiRequest("/api/admin/assign-booking", {
       method: "POST",
       token,
       body: payload,
@@ -200,17 +231,11 @@ export const adminApi = {
       method: "DELETE",
       token,
     }),
-  purgeVisitors: (token) =>
-    apiRequest("/api/admin/users/visitors/purge", {
-      method: "DELETE",
-      token,
-    }),
 };
 
 export const hotelApi = {
   getOverview: (token) => apiRequest("/api/business/overview", { token }),
   getMyBookings: (token) => apiRequest("/api/business/bookings", { token }),
-  getMyRooms: (token) => apiRequest("/api/business/rooms", { token }),
   updateBookingStatus: (token, bookingId, payload) =>
     apiRequest(`/api/business/bookings/${bookingId}/status`, {
       method: "PUT",
@@ -218,18 +243,18 @@ export const hotelApi = {
       body: payload,
     }),
   getMyServices: (token) => apiRequest("/api/business/services", { token }),
-  createRoom: (token, payload) =>
-    apiRequest("/api/business/rooms", {
+  uploadServiceImages: (token, files) => {
+    const formData = new FormData();
+    Array.from(files).slice(0, 3).forEach((file) => {
+      formData.append("images", file);
+    });
+
+    return uploadRequest("/api/business/uploads/service-images", {
       method: "POST",
       token,
-      body: payload,
-    }),
-  updateRoom: (token, roomId, payload) =>
-    apiRequest(`/api/business/rooms/${roomId}`, {
-      method: "PUT",
-      token,
-      body: payload,
-    }),
+      formData,
+    });
+  },
   createService: (token, payload) =>
     apiRequest("/api/business/services", {
       method: "POST",
@@ -247,11 +272,6 @@ export const hotelApi = {
       method: "DELETE",
       token,
     }),
-  deleteRoom: (token, roomId) =>
-    apiRequest(`/api/business/rooms/${roomId}`, {
-      method: "DELETE",
-      token,
-    }),
 };
 
 export const bookingApi = {
@@ -261,9 +281,16 @@ export const bookingApi = {
       token,
       body: payload,
     }),
+  bookService: (token, payload) =>
+    apiRequest("/api/bookings/service", {
+      method: "POST",
+      token,
+      body: payload,
+    }),
   getMyBookings: (token) => apiRequest("/api/bookings/my", { token }),
 };
 
 export const publicApi = {
   getHotels: () => apiRequest("/api/hotels"),
+  getServices: () => apiRequest("/api/services"),
 };

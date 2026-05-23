@@ -13,7 +13,7 @@ export default function RegisterPage() {
       email: '',
       password: '',
       confirmPassword: '',
-      role: 'tourist', // Visitors can only register as tourists
+      role: 'customer',
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -28,7 +28,7 @@ export default function RegisterPage() {
    }, [user, navigate]);
 
    const handleChange = (e) => {
-     if (e.target.name === 'role') return; // Role is fixed to tourist for visitors
+     if (e.target.name === 'role') return;
      setFormData({ ...formData, [e.target.name]: e.target.value });
    };
 
@@ -82,7 +82,7 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                {/* Role Selection - Hidden for visitors, only tourists can register */}
+                {/* Customers can register here. Business owners use /business-register. */}
                 <div className="mb-4">
                   <div className="grid grid-cols-1 gap-3">
                     <div className={`flex items-center justify-center p-3 border-2 rounded-xl bg-primary bg-opacity-5 border-primary`}>

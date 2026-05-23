@@ -5,7 +5,7 @@ import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { bookingApi, getAuthData } from '../lib/api';
 import { formatRwf } from '../lib/currency';
-import { REALTIME_EVENTS, joinRealtimeRoom, subscribeToRealtime } from '../lib/realtime';
+import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 
@@ -45,7 +45,7 @@ export default function UserDashboard() {
     };
 
     Promise.resolve().then(() => loadData());
-    joinRealtimeRoom('user', authData.user?.id || authData.user?._id || user.id || user._id);
+    joinRealtimeChannel('user', authData.user?.id || authData.user?._id || user.id || user._id);
     return subscribeToRealtime(REALTIME_EVENTS.BOOKING_CHANGED, loadData);
   }, [user, navigate]);
 
@@ -87,17 +87,18 @@ export default function UserDashboard() {
             ) : bookings.length > 0 ? (
               <div className="divide-y divide-gray-200">
                 {bookings.map((booking) => {
-                  const assignedHotel = booking.hotelId;
-                  const preferredHotel = booking.preferredHotelId;
-                  const hotelToShow = assignedHotel || preferredHotel;
-                  const waiting = booking.status === 'pending' && !assignedHotel;
+                  const assignedBusiness = booking.businessId || booking.hotelId;
+                  const preferredBusiness = booking.preferredBusinessId || booking.preferredHotelId;
+                  const businessToShow = assignedBusiness || preferredBusiness;
+                  const serviceToShow = booking.serviceId;
+                  const waiting = booking.status === 'pending' && !assignedBusiness;
 
                   return (
                     <div key={booking._id} className="p-6 hover:bg-gray-50 transition">
                       <div className="flex flex-col md:flex-row justify-between gap-4">
                         <div>
                           <h3 className="text-lg font-bold text-gray-900">
-                            {hotelToShow?.name || t('serviceProviderPendingAssignment', language)}
+                            {serviceToShow?.title || serviceToShow?.name || businessToShow?.businessName || businessToShow?.name || t('serviceProviderPendingAssignment', language)}
                           </h3>
                           <p className="text-sm text-gray-700 mt-1">
                             {t('destination', language)} {booking.destinationPlace} ({booking.destinationLocation})
@@ -124,22 +125,10 @@ export default function UserDashboard() {
                               {booking.adminResponseMessage}
                             </p>
                           )}
-                          {assignedHotel && (
+                          {assignedBusiness && (
                             <p className="text-sm text-gray-700 mt-2">
-                              {t('assignedProvider', language)} {assignedHotel.name} - {assignedHotel.location}
+                              {t('assignedProvider', language)} {assignedBusiness.businessName || assignedBusiness.name} - {assignedBusiness.location}
                             </p>
-                          )}
-                          {booking.tourHelpers?.length > 0 && (
-                            <div className="mt-3">
-                              <p className="text-sm font-semibold text-gray-900">{t('tourHelpers', language)}</p>
-                              <div className="space-y-1 mt-1">
-                                {booking.tourHelpers.map((helper) => (
-                                  <p key={helper._id} className="text-sm text-gray-700">
-                                    {helper.name} - {helper.phone || helper.email}
-                                  </p>
-                                ))}
-                              </div>
-                            </div>
                           )}
                         </div>
                         <div className="text-right">

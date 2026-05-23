@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import {
   authApi,
   clearAuthData,
@@ -14,6 +14,12 @@ export function AuthProvider({ children }) {
   const initialAuthData = getAuthData();
   const [user, setUser] = useState(initialAuthData?.user || null);
   const [loading] = useState(false);
+
+  useEffect(() => {
+    const handleExpiredAuth = () => setUser(null);
+    window.addEventListener('auth:expired', handleExpiredAuth);
+    return () => window.removeEventListener('auth:expired', handleExpiredAuth);
+  }, []);
 
   const login = async (email, password) => {
     try {

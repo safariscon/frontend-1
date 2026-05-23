@@ -1,4 +1,4 @@
-export const SELLER_ROLES = ['hotel', 'supplier'];
+export const SELLER_ROLES = ['hotel', 'supplier', 'business'];
 export const CUSTOMER_ROLES = ['tourist', 'customer'];
 
 export function isSellerRole(role) {

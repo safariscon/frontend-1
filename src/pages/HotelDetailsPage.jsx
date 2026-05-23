@@ -5,7 +5,6 @@ import Footer from '../components/Footer';
 import RatingStars from '../components/RatingStars';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { publicApi } from '../lib/api';
-import { formatRwf } from '../lib/currency';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
@@ -59,9 +58,10 @@ export default function HotelDetailsPage() {
       <Navbar />
 
       <main className="flex-1">
-        <div className="relative h-64 md:h-96">
-          <img src={hotel.images[selectedImage]} alt={hotel.name} className="w-full h-full object-cover" />
-          {hotel.images.length > 1 && (
+        {hotel.images.length > 0 && (
+          <div className="relative h-64 md:h-96">
+            <img src={hotel.images[selectedImage] || hotel.images[0]} alt={hotel.name} className="w-full h-full object-cover" />
+            {hotel.images.length > 1 && (
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
               {hotel.images.map((_, idx) => (
                 <button
@@ -71,8 +71,25 @@ export default function HotelDetailsPage() {
                 />
               ))}
             </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
+        {hotel.images.length > 1 && (
+          <div className="max-w-7xl mx-auto px-4 pt-4">
+            <div className="grid grid-cols-3 gap-3">
+              {hotel.images.slice(0, 3).map((image, index) => (
+                <button
+                  key={image}
+                  type="button"
+                  onClick={() => setSelectedImage(index)}
+                  className={`h-24 overflow-hidden rounded-lg border ${selectedImage === index ? 'border-primary' : 'border-gray-200'}`}
+                >
+                  <img src={image} alt={`${hotel.name} ${index + 1}`} className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -116,11 +133,8 @@ export default function HotelDetailsPage() {
                 <div className="border-t border-gray-200 pt-4 mb-4">
                   <div className="flex justify-between mb-2">
                     <span className="text-gray-600">{t('startingFrom', language)}</span>
-                    <span className="text-2xl font-bold text-primary">{formatRwf(hotel.basePrice)}</span>
+                    <span className="text-2xl font-bold text-primary">{hotel.priceText || 'Price on request'}</span>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    {t('pricePerUnit', language, { unit: t(hotel.pricingUnit || 'service', language) })}
-                  </p>
                 </div>
 
                 <button

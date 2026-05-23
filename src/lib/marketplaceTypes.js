@@ -1,9 +1,9 @@
 export const marketplaceTypeConfig = {
-  'hotels-and-resorts': ['accommodation', 'accommodation', 'per_night', 'night', 'rooms', 'room'],
-  hotel: ['accommodation', 'accommodation', 'per_night', 'night', 'rooms', 'room'],
-  'homestays-and-guesthouses': ['accommodation', 'accommodation', 'per_night', 'night', 'rooms', 'room'],
-  'tent-rentals-and-camping-sites': ['accommodation', 'accommodation', 'per_night', 'night', 'rooms', 'room'],
-  'vacation-rentals-and-apartments': ['accommodation', 'accommodation', 'per_night', 'night', 'rooms', 'room'],
+  'hotels-and-resorts': ['accommodation', 'hotel', 'per_night', 'night', 'services', 'service'],
+  hotel: ['accommodation', 'hotel', 'per_night', 'night', 'services', 'service'],
+  'homestays-and-guesthouses': ['accommodation', 'hotel', 'per_night', 'night', 'services', 'service'],
+  'tent-rentals-and-camping-sites': ['accommodation', 'rental', 'per_night', 'night', 'services', 'service'],
+  'vacation-rentals-and-apartments': ['accommodation', 'rental', 'per_night', 'night', 'services', 'service'],
   'car-rentals': ['transport', 'transport', 'per_day', 'day', 'vehicles', 'vehicle'],
   'motorbike-and-scooter-rentals': ['transport', 'transport', 'per_day', 'day', 'vehicles', 'vehicle'],
   'taxi-and-ride-services': ['transport', 'transport', 'per_trip', 'trip', 'vehicles', 'vehicle'],
@@ -35,7 +35,7 @@ export function getMarketplaceTypeConfig(type = 'hotel') {
     pricingUnit,
     inventoryType,
     assignmentType,
-    supportsRooms: assignmentType === 'room',
+    supportsServiceInventory: assignmentType === 'service',
   };
 }
 
@@ -50,6 +50,6 @@ export function decorateBusiness(business) {
     pricingUnit: business?.pricingUnit || config.pricingUnit,
     inventoryType: business?.inventoryType || config.inventoryType,
     assignmentType: business?.assignmentType || config.assignmentType,
-    supportsRooms: Boolean(business?.supportsRooms ?? config.supportsRooms),
+    supportsServiceInventory: Boolean(business?.supportsServiceInventory ?? config.supportsServiceInventory),
   };
 }

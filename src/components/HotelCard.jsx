@@ -1,35 +1,34 @@
 import { Link } from 'react-router-dom';
 import RatingStars from './RatingStars';
-import { formatRwf } from '../lib/currency';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 
 export default function HotelCard({ hotel, compact = false }) {
   const { language } = useLanguage();
   const hotelId = hotel.id || hotel._id;
-  const price = hotel.basePrice ?? hotel.price ?? 0;
+  const priceText = hotel.priceText || 'Price on request';
   const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
-  const pricingUnit = t(hotel.pricingUnit || getPricingUnitKey(hotel.type), language);
 
   return (
     <Link
       to={`/business/${hotelId}`}
       className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 block"
     >
-      <div className="relative overflow-hidden h-48 md:h-64">
-        <img
-          src={hotel.image}
-          alt={hotel.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-        />
+      <div className="relative overflow-hidden h-48 bg-gray-50 md:h-64">
+        {hotel.image ? (
+          <img
+            src={hotel.image}
+            alt={hotel.name}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          />
+        ) : null}
         {hotel.isFeatured && (
           <div className="absolute top-3 left-3 bg-secondary text-white text-xs font-bold px-3 py-1 rounded-full">
             {t('featured', language)}
           </div>
         )}
         <div className="absolute bottom-3 right-3 bg-white bg-opacity-90 backdrop-blur-sm px-2 py-1 rounded-lg">
-          <span className="font-bold text-primary">{formatRwf(price)}</span>
-          <span className="text-gray-500 text-sm">/ {pricingUnit}</span>
+          <span className="font-bold text-primary">{priceText}</span>
         </div>
       </div>
 
@@ -88,47 +87,3 @@ function formatBusinessType(value) {
     .join(' ');
 }
 
-function getPricingUnitKey(type) {
-  const normalizedType = String(type || '').trim().toLowerCase();
-
-  if (
-    [
-      'hotel',
-      'hotels-and-resorts',
-      'homestays-and-guesthouses',
-      'tent-rentals-and-camping-sites',
-      'vacation-rentals-and-apartments',
-    ].includes(normalizedType)
-  ) {
-    return 'night';
-  }
-
-  if (
-    [
-      'car-rentals',
-      'motorbike-and-scooter-rentals',
-      'gear-rentals',
-    ].includes(normalizedType)
-  ) {
-    return 'day';
-  }
-
-  if (
-    [
-      'conference-event-halls-mice',
-      'wedding-venues',
-    ].includes(normalizedType)
-  ) {
-    return 'event';
-  }
-
-  if (normalizedType === 'tour-and-activity-operators') {
-    return 'person';
-  }
-
-  if (normalizedType === 'spas-and-wellness-centers' || normalizedType === 'childcare-services') {
-    return 'hour';
-  }
-
-  return 'service';
-}

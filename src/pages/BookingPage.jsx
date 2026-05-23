@@ -72,7 +72,7 @@ export default function BookingPage() {
 <div className="text-center mb-8">
            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('completeBooking', language)}</h1>
            <p className="text-gray-600">
-             {step === 1 && t('selectRoomAndDates', language)}
+             {step === 1 && (t('selectServiceAndDate', language) || 'Enter service details and date.')}
              {step === 2 && t('reviewDetails', language)}
              {step === 3 && t('paymentComingSoon', language)}
            </p>

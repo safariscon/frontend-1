@@ -16,6 +16,7 @@ export default function HotelCompleteRegistrationPage() {
   const [form, setForm] = useState({
     name: location.state?.ownerName || searchParams.get('name') || '',
     email: location.state?.hotelEmail || searchParams.get('email') || '',
+    accessCode: '',
     password: '',
     confirmPassword: '',
   });
@@ -37,6 +38,7 @@ export default function HotelCompleteRegistrationPage() {
       await authApi.completeHotelRegistration({
         name: form.name,
         email: form.email,
+        accessCode: form.accessCode,
         password: form.password,
       });
       navigate('/login', {
@@ -91,6 +93,14 @@ export default function HotelCompleteRegistrationPage() {
               placeholder={t('hotelEmailGiven', language)}
               value={form.email}
               onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl"
+            />
+            <input
+              type="text"
+              required
+              placeholder="Admin Access Code"
+              value={form.accessCode}
+              onChange={(e) => setForm((prev) => ({ ...prev, accessCode: e.target.value }))}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl"
             />
             <input

@@ -85,7 +85,7 @@ export default function HotelsPage() {
     }
 
     if (availableOnly) {
-      result = result.filter((hotel) => hotel.canAcceptVisitors !== false && Number(hotel.availableInventory ?? 1) > 0);
+      result = result.filter((hotel) => Number(hotel.availableInventory ?? 1) > 0);
     }
 
     // Sort

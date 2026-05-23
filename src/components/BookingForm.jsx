@@ -7,26 +7,87 @@ import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 
-const initialDetails = {
+const TODAY = new Date().toISOString().split('T')[0];
+
+const BASE_VALUES = {
   destinationPlace: '',
   destinationLocation: '',
-  checkIn: '',
-  checkOut: '',
-  reservationDate: '',
-  reservationTime: '',
   pickupLocation: '',
   dropoffLocation: '',
+  startDate: '',
+  endDate: '',
+  reservationTime: '',
   vehicleType: '',
+  packageType: '',
   durationHours: '1',
   durationDays: '1',
-  packageType: '',
-  specialRequests: '',
   quantity: '1',
+  specialRequests: '',
 };
+
+const FIELD_SETS = {
+  transport: [
+    field('destinationPlace', 'Place You Want To Visit', 'text', 'e.g. Volcanoes National Park', true, 'col-span-2'),
+    field('destinationLocation', 'Destination Location', 'text', 'Kigali', true, 'col-span-2'),
+    field('pickupLocation', 'Pickup location', 'text', '', true),
+    field('dropoffLocation', 'Destination', 'text', '', true),
+    field('startDate', 'Trip date', 'date', '', true),
+    field('vehicleType', 'Vehicle type', 'text', '', false),
+    field('durationDays', 'Duration days', 'number', '', true),
+    field('quantity', 'Passengers', 'number', '', true, 'col-span-2'),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+  accommodation: [
+    field('startDate', 'Check-in date', 'date', '', true),
+    field('endDate', 'Check-out date', 'date', '', true),
+    field('quantity', 'Guests', 'number', '', true, 'col-span-2'),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+  food: [
+    field('startDate', 'Reservation date', 'date', '', true),
+    field('reservationTime', 'Reservation time', 'time', '', false),
+    field('quantity', 'Guests / table size', 'number', '', true, 'col-span-2'),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+  event: [
+    field('startDate', 'Event date', 'date', '', true),
+    field('durationHours', 'Duration hours', 'number', '', false),
+    field('quantity', 'Attendees', 'number', '', true, 'col-span-2'),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+  activity: [
+    field('destinationPlace', 'Place You Want To Visit', 'text', 'e.g. Nyungwe Canopy Walk', true, 'col-span-2'),
+    field('destinationLocation', 'Destination Location', 'text', '', true, 'col-span-2'),
+    field('startDate', 'Activity date', 'date', '', true),
+    field('packageType', 'Package type', 'text', '', false),
+    field('quantity', 'Participants', 'number', '', true, 'col-span-2'),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+  appointment: [
+    field('startDate', 'Appointment date', 'date', '', true),
+    field('reservationTime', 'Appointment time', 'time', '', false),
+    field('durationHours', 'Duration hours', 'number', '', false),
+    field('quantity', 'People', 'number', '', true),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+  shopping: [
+    field('quantity', 'Quantity', 'number', '', true),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+  general: [
+    field('startDate', 'Date', 'date', '', true),
+    field('quantity', 'Quantity', 'number', '', true),
+    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
+  ],
+};
+
+function field(name, label, type, placeholder = '', required = false, className = '') {
+  return { name, label, type, placeholder, required, className };
+}
 
 export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [business, setBusiness] = useState(null);
-  const [details, setDetails] = useState(initialDetails);
+  const [values, setValues] = useState(BASE_VALUES);
   const [loading, setLoading] = useState(false);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
@@ -39,8 +100,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         const businesses = normalizeHotels(response.businesses || response.hotels || []);
         const found = businesses.find((item) => String(item.id) === String(hotelId));
         setBusiness(found || null);
-        if (found?.location) {
-          setDetails((prev) => ({ ...prev, destinationLocation: found.location }));
+        if (found) {
+          const service = getSelectedService(found);
+          setValues((prev) => ({
+            ...prev,
+            destinationPlace: service?.title || service?.name || found.name || '',
+            destinationLocation: service?.location || found.location || '',
+          }));
         }
       } finally {
         setLoadingBusiness(false);
@@ -49,63 +115,30 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
     loadBusiness();
     return subscribeToRealtime(
-      [REALTIME_EVENTS.CATALOG_CHANGED, REALTIME_EVENTS.HOTEL_CHANGED, REALTIME_EVENTS.SERVICE_CHANGED, REALTIME_EVENTS.ROOM_CHANGED],
+      [REALTIME_EVENTS.CATALOG_CHANGED, REALTIME_EVENTS.HOTEL_CHANGED, REALTIME_EVENTS.SERVICE_CHANGED],
       loadBusiness
     );
   }, [hotelId]);
 
-  const unitCount = useMemo(() => {
-    if (!business) return 0;
+  const service = useMemo(() => getSelectedService(business), [business]);
+  const bookingConfig = useMemo(() => getBookingConfig({ business, service }), [business, service]);
+  const unitPrice = useMemo(() => getServiceUnitPrice(service), [service]);
+  const unitCount = useMemo(() => getUnitCount(bookingConfig, values), [bookingConfig, values]);
+  const totalPrice = unitPrice * unitCount;
+  const isUnavailable = service?.status && service.status !== 'available';
 
-    if (business.pricingModel === 'per_night' || business.bookingModel === 'rental') {
-      if (!details.checkIn || !details.checkOut) return 0;
-      const start = new Date(details.checkIn);
-      const end = new Date(details.checkOut);
-      if (end <= start) return 0;
-      return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    }
-
-    if (business.pricingModel === 'per_hour') {
-      return Math.max(1, Number(details.durationHours) || 1);
-    }
-
-    if (business.pricingModel === 'per_day') {
-      return Math.max(1, Number(details.durationDays) || 1);
-    }
-
-    if (business.pricingModel === 'per_person') {
-      return Math.max(1, Number(details.quantity) || 1);
-    }
-
-    return 1;
-  }, [business, details]);
-
-  const totalPrice = (business?.basePrice || 0) * unitCount;
-
-  const updateDetail = (key, value) => {
-    setDetails((prev) => ({ ...prev, [key]: value }));
+  const updateValue = (key, value) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
   };
 
   const validate = () => {
-    if (!details.destinationPlace || !details.destinationLocation) {
-      return t('pleaseProvideDestination', language);
+    if (!service?._id) return 'This service is not available for booking yet.';
+    if (isUnavailable) return 'This service is currently not available.';
+    const missing = bookingConfig.fields.find((item) => item.required && !String(values[item.name] || '').trim());
+    if (missing) return `Please complete ${missing.label}.`;
+    if (values.endDate && values.startDate && new Date(values.endDate) <= new Date(values.startDate)) {
+      return 'End date must be after start date.';
     }
-
-    if (business.bookingModel === 'accommodation' || business.bookingModel === 'rental') {
-      if (!details.checkIn || !details.checkOut) return t('pleaseSelectDates', language);
-      if (unitCount <= 0) return t('checkoutAfterCheckin', language);
-    }
-
-    if (business.bookingModel === 'transport') {
-      if (!details.pickupLocation || !details.dropoffLocation || !details.reservationDate) {
-        return t('pleaseCompleteBookingDetails', language);
-      }
-    }
-
-    if (['restaurant', 'event', 'activity', 'appointment', 'childcare'].includes(business.bookingModel)) {
-      if (!details.reservationDate) return t('pleaseSelectReservationDate', language);
-    }
-
     return '';
   };
 
@@ -127,25 +160,29 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
     setLoading(true);
     try {
-      const response = await bookingApi.requestBooking(authData.token, {
-        hotelId: business?.id || null,
-        destinationPlace: details.destinationPlace,
-        destinationLocation: details.destinationLocation,
-        checkIn: details.checkIn || null,
-        checkOut: details.checkOut || null,
-        guests: Number(details.quantity) || 1,
-        quantity: unitCount || 1,
-        totalPrice,
-        reservationDate: details.reservationDate || null,
-        reservationTime: details.reservationTime,
-        pickupLocation: details.pickupLocation,
-        dropoffLocation: details.dropoffLocation,
-        vehicleType: details.vehicleType,
-        durationHours: Number(details.durationHours) || 0,
-        durationDays: Number(details.durationDays) || 0,
-        packageType: details.packageType,
-        specialRequests: details.specialRequests,
-        bookingDetails: details,
+      const response = await bookingApi.bookService(authData.token, {
+        serviceId: service._id,
+        quantity: getReservableQuantity(bookingConfig, values),
+        startDate: values.startDate || null,
+        endDate: values.endDate || values.startDate || null,
+        durationHours: Number(values.durationHours) || 0,
+        durationDays: Number(values.durationDays) || 0,
+        reservationTime: values.reservationTime,
+        destinationPlace: values.destinationPlace,
+        destinationLocation: values.destinationLocation,
+        pickupLocation: values.pickupLocation,
+        dropoffLocation: values.dropoffLocation,
+        vehicleType: values.vehicleType,
+        packageType: values.packageType,
+        specialRequests: values.specialRequests,
+        bookingDetails: {
+          ...values,
+          passengers: bookingConfig.type === 'transport' ? values.quantity : undefined,
+          guests: bookingConfig.type === 'accommodation' ? values.quantity : undefined,
+          serviceCategory: service.category || business?.serviceCategory,
+          bookingType: bookingConfig.type,
+          providerRules: Array.isArray(service.rules) ? service.rules : [],
+        },
       });
 
       onSuccess?.(response.booking);
@@ -158,25 +195,25 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
   if (loadingBusiness) return <LoadingSpinner />;
 
-  if (!business) {
+  if (!business || !service) {
     return (
       <div className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl mx-auto">
-        <p className="text-gray-600">{t('hotelNotAvailable', language)}</p>
+        <p className="text-gray-600">No bookable service was found for this provider.</p>
       </div>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">{business.name}</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{service.title || service.name}</h2>
           <p className="text-gray-600">
-            {business.location} - {business.bookingModel}
+            {business.location} - {bookingConfig.label}
           </p>
         </div>
         {onClose && (
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition" aria-label="Close booking form">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -184,87 +221,45 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <TextField label={t('placeToVisit', language)} value={details.destinationPlace} onChange={(value) => updateDetail('destinationPlace', value)} placeholder={t('placeToVisitPlaceholder', language)} className="col-span-2" />
-        <TextField label={t('destinationLocation', language)} value={details.destinationLocation} onChange={(value) => updateDetail('destinationLocation', value)} placeholder={t('destinationLocationPlaceholder', language)} className="col-span-2" />
-
-        {['accommodation', 'rental'].includes(business.bookingModel) && (
-          <>
-            <DateField label={t('checkIn', language)} value={details.checkIn} onChange={(value) => updateDetail('checkIn', value)} />
-            <DateField label={t('checkOut', language)} value={details.checkOut} onChange={(value) => updateDetail('checkOut', value)} min={details.checkIn} />
-          </>
-        )}
-
-        {business.bookingModel === 'transport' && (
-          <>
-            <TextField label={t('pickupLocation', language)} value={details.pickupLocation} onChange={(value) => updateDetail('pickupLocation', value)} />
-            <TextField label={t('dropoffLocation', language)} value={details.dropoffLocation} onChange={(value) => updateDetail('dropoffLocation', value)} />
-            <DateField label={t('tripDate', language)} value={details.reservationDate} onChange={(value) => updateDetail('reservationDate', value)} />
-            <TextField label={t('vehicleType', language)} value={details.vehicleType} onChange={(value) => updateDetail('vehicleType', value)} />
-            {business.pricingModel === 'per_day' && (
-              <NumberField label={t('durationDays', language)} value={details.durationDays} onChange={(value) => updateDetail('durationDays', value)} />
-            )}
-          </>
-        )}
-
-        {business.bookingModel === 'restaurant' && (
-          <>
-            <DateField label={t('reservationDate', language)} value={details.reservationDate} onChange={(value) => updateDetail('reservationDate', value)} />
-            <TimeField label={t('reservationTime', language)} value={details.reservationTime} onChange={(value) => updateDetail('reservationTime', value)} />
-          </>
-        )}
-
-        {business.bookingModel === 'event' && (
-          <>
-            <DateField label={t('eventDate', language)} value={details.reservationDate} onChange={(value) => updateDetail('reservationDate', value)} />
-            <NumberField label={t('durationHours', language)} value={details.durationHours} onChange={(value) => updateDetail('durationHours', value)} />
-          </>
-        )}
-
-        {business.bookingModel === 'activity' && (
-          <>
-            <DateField label={t('activityDate', language)} value={details.reservationDate} onChange={(value) => updateDetail('reservationDate', value)} />
-            <TextField label={t('packageType', language)} value={details.packageType} onChange={(value) => updateDetail('packageType', value)} />
-          </>
-        )}
-
-        {['appointment', 'childcare'].includes(business.bookingModel) && (
-          <>
-            <DateField label={t('appointmentDate', language)} value={details.reservationDate} onChange={(value) => updateDetail('reservationDate', value)} />
-            <TimeField label={t('appointmentTime', language)} value={details.reservationTime} onChange={(value) => updateDetail('reservationTime', value)} />
-            <NumberField label={t('durationHours', language)} value={details.durationHours} onChange={(value) => updateDetail('durationHours', value)} />
-          </>
-        )}
-
-        <NumberField
-          label={getQuantityLabel(business.bookingModel, language)}
-          value={details.quantity}
-          onChange={(value) => updateDetail('quantity', value)}
-          className="col-span-2"
-        />
-        <TextArea label={t('specialRequests', language)} value={details.specialRequests} onChange={(value) => updateDetail('specialRequests', value)} />
-      </div>
-
-      {unitCount > 0 && (
-        <div className="bg-gray-50 rounded-xl p-4 mb-6">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-gray-600">
-              {formatRwf(business.basePrice)} x {unitCount} {t(business.pricingUnit || 'service', language)}
-            </span>
-            <span className="font-medium">{formatRwf(totalPrice)}</span>
-          </div>
-          <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between">
-            <span className="font-bold text-gray-900">{t('estimatedTotal', language)}</span>
-            <span className="font-bold text-primary text-lg">{formatRwf(totalPrice)}</span>
-          </div>
+      {Array.isArray(service.rules) && service.rules.length > 0 && (
+        <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-bold">Provider rules</p>
+          <ul className="mt-2 list-disc pl-5">
+            {service.rules.map((rule) => <li key={rule}>{rule}</li>)}
+          </ul>
         </div>
       )}
 
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        {bookingConfig.fields.map((item) => (
+          <DynamicField
+            key={item.name}
+            field={item}
+            value={values[item.name] || ''}
+            onChange={(value) => updateValue(item.name, value)}
+          />
+        ))}
+      </div>
+
+      <div className="bg-gray-50 rounded-xl p-4 mb-6">
+        <div className="flex justify-between text-sm mb-2">
+          <span className="text-gray-600">
+            {service.priceText || formatRwf(unitPrice)} x {unitCount} {bookingConfig.unitLabel}
+          </span>
+          <span className="font-medium">{formatRwf(totalPrice)}</span>
+        </div>
+        <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between">
+          <span className="font-bold text-gray-900">{t('estimatedTotal', language)}</span>
+          <span className="font-bold text-primary text-lg">{formatRwf(totalPrice)}</span>
+        </div>
+      </div>
+
+      {isUnavailable && <div className="mb-4 p-3 bg-amber-50 text-amber-700 rounded-lg text-sm">This service is currently not available for booking.</div>}
       {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={loading || isUnavailable}
         className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {loading ? (
@@ -280,56 +275,100 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   );
 }
 
-function getQuantityLabel(bookingModel, language) {
-  if (bookingModel === 'restaurant') return t('tableSize', language);
-  if (bookingModel === 'transport') return t('passengers', language);
-  if (bookingModel === 'event') return t('attendeeCount', language);
-  if (bookingModel === 'activity') return t('participantCount', language);
-  if (bookingModel === 'childcare') return t('childCount', language);
-  return t('guests', language);
+function getReservableQuantity(configData, values) {
+  if (['transport', 'accommodation', 'appointment', 'event'].includes(configData.type)) return 1;
+  return Math.max(1, Number(values.quantity) || 1);
 }
 
-function TextField({ label, value, onChange, placeholder = '', className = '' }) {
+
+function getSelectedService(business) {
+  if (!business) return null;
+  if (business.primaryService?._id) return business.primaryService;
+  if (Array.isArray(business.serviceItems) && business.serviceItems.length) return business.serviceItems[0];
+  return null;
+}
+
+function getBookingConfig({ business, service }) {
+  const categoryText = [
+    service?.category,
+    service?.serviceType,
+    business?.serviceCategory,
+    business?.bookingModel,
+    business?.businessType,
+    business?.type,
+  ].join(' ').toLowerCase();
+
+  if (/(car|motorbike|taxi|bus|transport|charter)/.test(categoryText)) {
+    return config('transport', 'transport', 'day', FIELD_SETS.transport);
+  }
+  if (/(hotel|resort|homestay|guesthouse|camp|vacation|accommodation)/.test(categoryText)) {
+    return config('accommodation', 'accommodation', 'night', FIELD_SETS.accommodation);
+  }
+  if (/(restaurant|bar|coffee|cafe|food|beverage)/.test(categoryText)) {
+    return config('food', 'food', 'booking', FIELD_SETS.food);
+  }
+  if (/(event|wedding|conference|venue|entertainment)/.test(categoryText)) {
+    return config('event', 'event', 'event', FIELD_SETS.event);
+  }
+  if (/(tour|activity|experience|gear)/.test(categoryText)) {
+    return config('activity', 'activity', 'person', FIELD_SETS.activity);
+  }
+  if (/(spa|wellness|childcare|appointment)/.test(categoryText)) {
+    return config('appointment', 'appointment', 'hour', FIELD_SETS.appointment);
+  }
+  if (/(shopping|souvenir|craft|market)/.test(categoryText)) {
+    return config('shopping', 'shopping', 'item', FIELD_SETS.shopping);
+  }
+  return config('general', 'service', 'service', FIELD_SETS.general);
+}
+
+function config(type, label, unitLabel, fields) {
+  return { type, label, unitLabel, fields };
+}
+
+function getServiceUnitPrice(service) {
+  const explicitAmount = Number(service?.pricing?.amount || 0);
+  if (explicitAmount > 0) return explicitAmount;
+  const match = String(service?.priceText || '').replace(/,/g, '').match(/\d+(\.\d+)?/);
+  return match ? Number(match[0]) : 0;
+}
+
+function getUnitCount(configData, values) {
+  if (configData.type === 'accommodation') {
+    if (!values.startDate || !values.endDate) return 1;
+    const start = new Date(values.startDate);
+    const end = new Date(values.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 1;
+    return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+  }
+  if (configData.type === 'transport') return Math.max(1, Number(values.durationDays) || 1);
+  if (configData.type === 'appointment') return Math.max(1, Number(values.durationHours) || 1);
+  return Math.max(1, Number(values.quantity) || 1);
+}
+
+function DynamicField({ field: item, value, onChange }) {
+  const className = item.className || '';
+  if (item.type === 'textarea') {
+    return (
+      <label className={`block ${className}`}>
+        <span className="block text-sm font-medium text-gray-700 mb-1">{item.label}</span>
+        <textarea required={item.required} value={value} onChange={(event) => onChange(event.target.value)} rows={3} className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary" />
+      </label>
+    );
+  }
+
   return (
     <label className={`block ${className}`}>
-      <span className="block text-sm font-medium text-gray-700 mb-1">{label}</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary" />
-    </label>
-  );
-}
-
-function DateField({ label, value, onChange, min = new Date().toISOString().split('T')[0] }) {
-  return (
-    <label className="block">
-      <span className="block text-sm font-medium text-gray-700 mb-1">{label}</span>
-      <input type="date" value={value} onChange={(event) => onChange(event.target.value)} min={min || new Date().toISOString().split('T')[0]} className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary" />
-    </label>
-  );
-}
-
-function TimeField({ label, value, onChange }) {
-  return (
-    <label className="block">
-      <span className="block text-sm font-medium text-gray-700 mb-1">{label}</span>
-      <input type="time" value={value} onChange={(event) => onChange(event.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary" />
-    </label>
-  );
-}
-
-function NumberField({ label, value, onChange, className = '' }) {
-  return (
-    <label className={`block ${className}`}>
-      <span className="block text-sm font-medium text-gray-700 mb-1">{label}</span>
-      <input type="number" min="1" value={value} onChange={(event) => onChange(event.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary" />
-    </label>
-  );
-}
-
-function TextArea({ label, value, onChange }) {
-  return (
-    <label className="block col-span-2">
-      <span className="block text-sm font-medium text-gray-700 mb-1">{label}</span>
-      <textarea value={value} onChange={(event) => onChange(event.target.value)} rows={3} className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary" />
+      <span className="block text-sm font-medium text-gray-700 mb-1">{item.label}</span>
+      <input
+        type={item.type}
+        min={item.type === 'date' ? TODAY : item.type === 'number' ? '1' : undefined}
+        required={item.required}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={item.placeholder}
+        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary"
+      />
     </label>
   );
 }
