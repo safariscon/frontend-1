@@ -121,7 +121,7 @@ export default function BusinessRegisterPage() {
             Add your business to the Rwanda marketplace
           </h1>
           <p className="mt-3 text-lg text-gray-700 dark:text-gray-300">
-            Create your provider account, register your business, and add the first service for admin review.
+            Create your provider account, register your business, and add the first business listing for admin review.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 grid gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
@@ -171,15 +171,15 @@ export default function BusinessRegisterPage() {
             </label>
 
             <div className="border-t border-gray-200 pt-4 dark:border-gray-800">
-              <h2 className="text-xl font-black text-gray-950 dark:text-white">First Service</h2>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">This service is submitted with your business and becomes public after admin approval.</p>
+              <h2 className="text-xl font-black text-gray-950 dark:text-white">First Business Listing</h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">This listing is submitted with your business and becomes public after admin approval.</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Service Name" name="serviceName" value={formData.serviceName} onChange={updateField} />
+              <Field label="Business Listing Name" name="serviceName" value={formData.serviceName} onChange={updateField} />
               <Field label="Price" name="servicePrice" value={formData.servicePrice} onChange={updateField} placeholder="Example: 20,000 RWF per day" />
               <label className="block">
-                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Availability Status</span>
+                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Availability</span>
                 <select
                   name="availabilityStatus"
                   value={formData.availabilityStatus}
@@ -188,13 +188,14 @@ export default function BusinessRegisterPage() {
                 >
                   <option value="available">Available</option>
                   <option value="unavailable">Not Available</option>
+                  <option value="custom">Custom</option>
                 </select>
               </label>
-              <Field label="Remaining Slots / Quantity" name="remainingQuantity" type="number" value={formData.remainingQuantity} onChange={updateField} />
+              <Field label="Remaining Quantity / Availability Note" name="remainingQuantity" value={formData.remainingQuantity} onChange={updateField} placeholder="Example: 5 cars left or weekends only" />
             </div>
 
             <label className="block">
-              <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Service Description</span>
+              <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Business Listing Description</span>
               <textarea
                 name="serviceDescription"
                 value={formData.serviceDescription}

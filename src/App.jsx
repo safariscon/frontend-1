@@ -16,6 +16,7 @@ import UserDashboard from './pages/UserDashboard';
 import HotelDashboard from './pages/HotelDashboard';
 import SellerDashboard from './pages/SellerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import VerificationPage from './pages/VerificationPage';
 import InstallBanner from './components/InstallBanner';
 import InstallModal from './components/InstallModal';
 import MobileFloatingInstall from './components/MobileFloatingInstall';
@@ -59,6 +60,7 @@ function AppContent() {
             <Route path="/dashboard/seller" element={<SellerDashboard />} />
             <Route path="/hotel-dashboard" element={<HotelDashboard />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/verify/:token" element={<VerificationPage />} />
           </Routes>
         </Router>
         

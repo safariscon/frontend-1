@@ -1,17 +1,15 @@
 import { io } from 'socket.io-client';
 
-const DEFAULT_API_BASE_URL = import.meta.env.PROD
-  ? 'https://safarisconnback.onrender.com'
-  : 'http://localhost:5000';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
+const DEFAULT_API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
 
 let socket;
 
 export const REALTIME_EVENTS = {
   CATALOG_CHANGED: 'catalog:changed',
-  BUSINESS_CHANGED: 'business:changed',
-  HOTEL_CHANGED: 'business:changed',
+  HOTEL_CHANGED: 'hotel:changed',
   SERVICE_CHANGED: 'service:changed',
+  ROOM_CHANGED: 'room:changed',
   BOOKING_CHANGED: 'booking:changed',
   NOTIFICATION: 'notification:new',
 };
@@ -40,7 +38,9 @@ export const subscribeToRealtime = (events, handler) => {
   };
 };
 
-export const joinRealtimeChannel = (channel, id) => {
+export const joinRealtimeRoom = (room, id) => {
   if (!id) return;
-  getRealtimeSocket().emit(`${channel}:join`, id);
+  getRealtimeSocket().emit(`${room}:join`, id);
 };
+
+export const joinRealtimeChannel = joinRealtimeRoom;

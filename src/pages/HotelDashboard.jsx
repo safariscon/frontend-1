@@ -14,6 +14,8 @@ const EMPTY_FORM = {
   category: 'hotels-and-resorts',
   price: '',
   status: 'available',
+  customAvailability: '',
+  remainingQuantity: '',
   existingImages: [],
   imageFiles: [],
 };
@@ -103,7 +105,7 @@ export default function HotelDashboard() {
       completedBookings: completedBookings.length,
       cancellationRate: bookings.length ? Math.round((cancelledBookings.length / bookings.length) * 100) : 0,
       revenue,
-      availableQuantity: services.reduce((sum, service) => sum + Number(service.availableQuantity || 0), 0),
+      availableQuantity: services.length,
     };
   }, [services, bookings]);
 
@@ -114,7 +116,9 @@ export default function HotelDashboard() {
       description: service.description || '',
       category: service.category || service.serviceType || 'hotels-and-resorts',
       price: service.priceText || '',
-      status: service.status === 'unavailable' ? 'unavailable' : 'available',
+      status: service.status === 'unavailable' ? 'unavailable' : service.availabilityText ? 'custom' : 'available',
+      customAvailability: service.availabilityText || '',
+      remainingQuantity: service.availabilityText || '',
       existingImages: Array.isArray(service.images) ? service.images.filter(Boolean).slice(0, 3) : [],
       imageFiles: [],
     });
@@ -144,6 +148,9 @@ export default function HotelDashboard() {
       return;
     }
 
+    const normalizedStatus = form.status === 'unavailable' ? 'unavailable' : 'available';
+    const availabilityText = form.status === 'custom' ? form.customAvailability : form.remainingQuantity;
+    const quantityMatch = String(form.remainingQuantity || form.customAvailability || '').replace(/,/g, '').match(/\d+(\.\d+)?/);
     const payload = {
       title: form.title,
       description: form.description,
@@ -151,8 +158,9 @@ export default function HotelDashboard() {
       category: form.category,
       pricing: { amount: 0, unit: 'service', currency: 'RWF' },
       priceText: form.price,
-      availableQuantity: form.status === 'available' ? 1 : 0,
-      status: form.status,
+      availableQuantity: quantityMatch ? Number(quantityMatch[0]) : normalizedStatus === 'available' ? 1 : 0,
+      availabilityText,
+      status: normalizedStatus,
       images: (uploadedImageUrls.length ? uploadedImageUrls : form.existingImages || []).slice(0, 3),
       isActive: true,
     };
@@ -181,6 +189,7 @@ export default function HotelDashboard() {
       pricing: service.pricing,
       priceText: service.priceText || '',
       availableQuantity: status === 'available' ? 1 : 0,
+      availabilityText: service.availabilityText || '',
       status,
       images: service.images || [],
       isActive: true,
@@ -196,7 +205,7 @@ export default function HotelDashboard() {
   };
 
   const deleteService = async (serviceId) => {
-    if (!window.confirm('Delete this service?')) return;
+    if (!window.confirm('Delete this business item?')) return;
     try {
       const response = await hotelApi.deleteService(token, serviceId);
       setInfo(response.message);
@@ -226,25 +235,25 @@ export default function HotelDashboard() {
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Business Dashboard</h1>
-              <p className="text-gray-600">Manage {overview?.business?.businessName || overview?.business?.name || 'your business'} services and bookings.</p>
+              <p className="text-gray-600">Manage {overview?.business?.businessName || overview?.business?.name || 'your business'} listings and bookings.</p>
             </div>
-            <button onClick={() => { resetForm(); setActiveTab('edit'); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Add Service</button>
+            <button onClick={() => { resetForm(); setActiveTab('edit'); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Add Business</button>
           </div>
 
           {(error || info) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-            <Metric label="Services" value={stats.totalServices} />
+            <Metric label="Businesses" value={stats.totalServices} />
             <Metric label="Active" value={stats.activeServices} />
             <Metric label="Bookings" value={stats.totalBookings} />
             <Metric label="Revenue" value={formatRwf(stats.revenue)} />
-            <Metric label="Quantity" value={stats.availableQuantity} />
+            <Metric label="Listings" value={stats.availableQuantity} />
           </div>
 
           <div className="mb-6 flex gap-2 overflow-x-auto">
             {['services', 'bookings', 'analytics', 'edit'].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>
-                {tab === 'edit' ? (editingService ? 'Edit Service' : 'Add Service') : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'services' ? 'Businesses' : tab === 'edit' ? (editingService ? 'Edit Business' : 'Add Business') : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -268,7 +277,7 @@ function Metric({ label, value }) {
 }
 
 function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
-  if (!services.length) return <p className="p-4 text-gray-600">No services yet. Add your first service.</p>;
+  if (!services.length) return <p className="p-4 text-gray-600">No businesses yet. Add your first business listing.</p>;
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {services.map((service) => (
@@ -278,7 +287,7 @@ function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
               <h3 className="font-bold text-gray-900">{service.title || service.name}</h3>
               <p className="text-sm text-gray-600">{service.serviceType || service.category}</p>
             </div>
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.status}</span>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.availabilityText || formatStatus(service.status)}</span>
           </div>
           <p className="mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
           <p className="mt-3 font-semibold text-primary">{service.priceText || 'Price on request'}</p>
@@ -321,10 +330,15 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing }) {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   return (
     <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-      <Input label="Service Name" value={form.title} onChange={(value) => set('title', value)} required />
+      <Input label="Business Name" value={form.title} onChange={(value) => set('title', value)} required />
       <CategorySelect value={form.category} onChange={(value) => set('category', value)} />
       <Input label="Price" value={form.price} onChange={(value) => set('price', value)} placeholder="Example: 100 per hour" required />
-      <Select label="Status" value={form.status} onChange={(value) => set('status', value)} options={[['available', 'Available'], ['unavailable', 'Not Available']]} />
+      <Select label="Availability" value={form.status} onChange={(value) => set('status', value)} options={[['available', 'Available'], ['unavailable', 'Not Available'], ['custom', 'Custom']]} />
+      {form.status === 'custom' ? (
+        <Input label="Custom Availability" value={form.customAvailability} onChange={(value) => set('customAvailability', value)} placeholder="Example: Weekends only" required />
+      ) : (
+        <Input label="Remaining Quantity" value={form.remainingQuantity} onChange={(value) => set('remainingQuantity', value)} placeholder="Example: 5 cars left" />
+      )}
       <TextArea label="Description" value={form.description} onChange={(value) => set('description', value)} required />
       <label className="block">
         <span className="text-sm font-semibold text-gray-700">Photos</span>
@@ -337,7 +351,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing }) {
         />
         <span className="mt-1 block text-xs text-gray-500">Maximum 3 photos.</span>
       </label>
-      <button disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Service' : 'Create Service'}</button>
+      <button disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Business' : 'Create Business'}</button>
     </form>
   );
 }
@@ -367,4 +381,8 @@ function CategorySelect({ value, onChange }) {
 
 function TextArea({ label, value, onChange, required = false }) {
   return <label className="block md:col-span-2"><span className="text-sm font-semibold text-gray-700">{label}</span><textarea required={required} value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
+}
+
+function formatStatus(status) {
+  return status === 'unavailable' ? 'Not Available' : 'Available';
 }

@@ -21,6 +21,7 @@ export default function UserDashboard() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
   const { language } = useLanguage();
 
   useEffect(() => {
@@ -52,6 +53,22 @@ export default function UserDashboard() {
   const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length;
   const pendingCount = bookings.filter((b) => b.status === 'pending').length;
   const completedCount = bookings.filter((b) => b.status === 'completed').length;
+  const payBooking = async (bookingId) => {
+    const authData = getAuthData();
+    if (!authData?.token) return;
+    setMessage('');
+    try {
+      await bookingApi.payBooking(authData.token, bookingId, {
+        paymentMethod: 'mobile-money',
+        senderAccount: user?.email,
+      });
+      setMessage('Payment recorded. QR verification and receipt are ready.');
+      const response = await bookingApi.getMyBookings(authData.token);
+      setBookings(response.bookings || []);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -76,6 +93,7 @@ export default function UserDashboard() {
             <StatCard label={t('pending', language)} value={pendingCount} />
             <StatCard label={t('completed', language)} value={completedCount} />
           </div>
+          {message && <div className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">{message}</div>}
 
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-200">
@@ -136,6 +154,21 @@ export default function UserDashboard() {
                             {t(`${booking.status}Status`, language)}
                           </span>
                           <p className="text-xl font-bold text-primary mt-2">{formatRwf(booking.totalPrice || 0)}</p>
+                          <div className="mt-3 flex flex-col gap-2">
+                            {booking.status === 'confirmed' && booking.paymentStatus !== 'paid' && (
+                              <button onClick={() => payBooking(booking._id)} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">
+                                Pay Your Booking
+                              </button>
+                            )}
+                            {booking.paymentStatus === 'paid' && (
+                              <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-semibold text-gray-700">
+                                Download PDF
+                              </a>
+                            )}
+                            {booking.verificationCode && (
+                              <span className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-mono text-gray-700">{booking.verificationCode}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

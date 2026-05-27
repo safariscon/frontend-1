@@ -6,26 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { adminApi, getAuthData } from '../lib/api';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 
-const EMPTY_SERVICE_FORM = {
-  businessId: '',
-  title: '',
-  description: '',
-  serviceType: 'rental',
-  category: 'rental',
-  price: '',
-  unit: 'per_day',
-  availableQuantity: '1',
-  status: 'available',
-  location: '',
-  images: '',
-};
-
 const EMPTY_BUSINESS_FORM = {
-  businessName: '',
-  businessType: 'hotels-and-resorts',
   ownerName: '',
   ownerEmail: '',
-  location: '',
 };
 
 const BUSINESS_TYPE_GROUPS = [
@@ -53,7 +36,6 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [onboardingCredentials, setOnboardingCredentials] = useState(null);
-  const [serviceForm, setServiceForm] = useState(EMPTY_SERVICE_FORM);
   const [businessForm, setBusinessForm] = useState(EMPTY_BUSINESS_FORM);
   const token = getAuthData()?.token;
 
@@ -109,46 +91,6 @@ export default function AdminDashboard() {
     }, {});
   }, [bookings]);
 
-  const saveService = async (event) => {
-    event.preventDefault();
-    if (!token) return;
-
-    setSavingService(true);
-    setError('');
-    setInfo('');
-
-    const payload = {
-      businessId: serviceForm.businessId,
-      title: serviceForm.title,
-      description: serviceForm.description,
-      serviceType: serviceForm.serviceType,
-      category: serviceForm.category,
-      pricing: {
-        amount: 0,
-        unit: serviceForm.unit,
-        currency: 'USD',
-      },
-      priceText: serviceForm.price,
-      availableQuantity: Number(serviceForm.availableQuantity) || 0,
-      status: serviceForm.status,
-      location: serviceForm.location,
-      images: serviceForm.images.split(/\r?\n/).map((image) => image.trim()).filter(Boolean),
-      isActive: serviceForm.status !== 'paused',
-    };
-
-    try {
-      const response = await adminApi.createService(token, payload);
-      setInfo(response.message || 'Service registered successfully.');
-      setServiceForm(EMPTY_SERVICE_FORM);
-      setActiveTab('services');
-      await loadData({ silent: true });
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setSavingService(false);
-    }
-  };
-
   const reviewBusiness = async (businessId, status) => {
     if (!token) return;
     setError('');
@@ -169,13 +111,11 @@ export default function AdminDashboard() {
     setError('');
     setInfo('');
     try {
-      const response = await adminApi.registerBusiness(token, businessForm);
-      setOnboardingCredentials(response.onboardingCredentials || {
-        ownerName: response.ownerName,
-        ownerEmail: response.ownerEmail,
-        accessCode: response.accessCode,
-        registrationPath: response.registrationPath,
+      const response = await adminApi.createSeller(token, {
+        fullName: businessForm.ownerName,
+        email: businessForm.ownerEmail,
       });
+      setOnboardingCredentials(response.credentials);
       setBusinessForm(EMPTY_BUSINESS_FORM);
       setActiveTab('businesses');
       await loadData({ silent: true });
@@ -197,17 +137,16 @@ export default function AdminDashboard() {
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Marketplace Admin</h1>
-              <p className="text-gray-600">Control businesses, services, bookings, revenue, and live activity.</p>
+              <p className="text-gray-600">Control businesses, users, bookings, revenue, and live activity.</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setActiveTab('register-business'); setBusinessForm(EMPTY_BUSINESS_FORM); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Register Business</button>
-              <button onClick={() => { setActiveTab('register-service'); setServiceForm(EMPTY_SERVICE_FORM); }} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Register Service</button>
+              <button onClick={() => { setActiveTab('register-business'); setBusinessForm(EMPTY_BUSINESS_FORM); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Create Seller</button>
               <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
             </div>
           </div>
 
           {(error || info) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
-          {onboardingCredentials?.accessCode && (
+          {onboardingCredentials?.password && (
             <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h2 className="font-bold">Owner onboarding credentials</h2>
@@ -219,12 +158,12 @@ export default function AdminDashboard() {
                   Hide
                 </button>
               </div>
-              <p>Give these details to the business owner. The access code is shown only after registration.</p>
+              <p>Give these details to the seller. The generated password is shown only after account creation.</p>
               <dl className="mt-3 grid gap-2 md:grid-cols-2">
-                <Credential label="Owner Name" value={onboardingCredentials.ownerName} />
-                <Credential label="Owner Email" value={onboardingCredentials.ownerEmail} />
-                <Credential label="Admin Access Code" value={onboardingCredentials.accessCode} />
-                <Credential label="Registration Page" value={onboardingCredentials.registrationPath || '/hotel-register'} />
+                <Credential label="Seller Name" value={onboardingCredentials.fullName} />
+                <Credential label="Seller Email" value={onboardingCredentials.email} />
+                <Credential label="Seller ID" value={onboardingCredentials.sellerId} />
+                <Credential label="Generated Password" value={onboardingCredentials.password} />
               </dl>
             </div>
           )}
@@ -239,13 +178,13 @@ export default function AdminDashboard() {
           </div>
 
           <div className="mb-6 flex gap-2 overflow-x-auto">
-            {['businesses', 'register-business', 'services', 'register-service', 'bookings', 'revenue', 'activity'].map((tab) => (
+            {['businesses', 'register-business', 'users', 'services', 'bookings', 'revenue', 'activity'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
               >
-                {tab === 'register-business' ? 'Register Business' : tab === 'register-service' ? 'Register Service' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'register-business' ? 'Create Seller' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -254,8 +193,8 @@ export default function AdminDashboard() {
             {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
             {!loading && activeTab === 'businesses' && <BusinessTable businesses={businesses} onReview={reviewBusiness} />}
             {!loading && activeTab === 'register-business' && <AdminBusinessForm form={businessForm} setForm={setBusinessForm} onSubmit={registerBusiness} saving={savingService} />}
+            {!loading && activeTab === 'users' && <UserGroups users={users} />}
             {!loading && activeTab === 'services' && <ServiceTable services={services} />}
-            {!loading && activeTab === 'register-service' && <AdminServiceForm businesses={businesses} form={serviceForm} setForm={setServiceForm} onSubmit={saveService} saving={savingService} />}
             {!loading && activeTab === 'bookings' && <BookingTable bookings={bookings} />}
             {!loading && activeTab === 'revenue' && <RevenueList revenueByType={revenueByType} />}
             {!loading && activeTab === 'activity' && <ActivityFeed bookings={bookings} services={services} businesses={businesses} />}
@@ -290,22 +229,52 @@ function BusinessTable({ businesses, onReview }) {
     business.businessName || business.name,
     business.businessType || business.type,
     business.location,
-    business.verificationStatus || 'pending',
+    business.approvalStatus || business.verificationStatus || 'pending',
     <div className="flex flex-wrap gap-2">
-      <button onClick={() => onReview(business._id || business.id, 'verified')} className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">Approve</button>
+      <button onClick={() => onReview(business._id || business.id, 'approved')} className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">Post</button>
       <button onClick={() => onReview(business._id || business.id, 'rejected')} className="rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">Reject</button>
     </div>,
   ]} />;
 }
 
 function ServiceTable({ services }) {
-  return <SimpleTable rows={services} columns={['Service', 'Type', 'Business', 'Availability', 'Status']} map={(service) => [
+  return <SimpleTable rows={services} columns={['Business Item', 'Type', 'Business', 'Availability', 'Status']} map={(service) => [
     service.title || service.name,
     service.serviceType || service.category,
     service.businessId?.businessName || service.businessId?.name || '-',
-    service.availableQuantity ?? 0,
+    service.availabilityText || (service.availableQuantity ?? 0),
     service.status,
   ]} />;
+}
+
+function UserGroups({ users }) {
+  const grouped = users.reduce((acc, user) => {
+    const role = String(user.role || '').toLowerCase();
+    const key = role === 'admin'
+      ? 'Admin Users'
+      : ['supplier', 'hotel', 'business'].includes(role)
+        ? 'Business Users'
+        : 'Other Users';
+    acc[key] = acc[key] || [];
+    acc[key].push(user);
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-6">
+      {['Business Users', 'Admin Users', 'Other Users'].map((group) => (
+        <section key={group}>
+          <h2 className="mb-2 text-lg font-bold text-gray-900">{group}</h2>
+          <SimpleTable rows={grouped[group] || []} columns={['Name', 'Email', 'Role', 'Business']} map={(user) => [
+            user.name,
+            user.email,
+            user.role,
+            user.businessName || user.hotelId?.businessName || user.hotelId?.name || user.hotelId || '-',
+          ]} />
+        </section>
+      ))}
+    </div>
+  );
 }
 
 function BookingTable({ bookings }) {
@@ -347,55 +316,10 @@ function AdminBusinessForm({ form, setForm, onSubmit, saving }) {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   return (
     <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-      <AdminInput label="Business Name" value={form.businessName} onChange={(value) => set('businessName', value)} required />
-      <label className="block">
-        <span className="text-sm font-semibold text-gray-700">Type of Business</span>
-        <select required value={form.businessType} onChange={(event) => set('businessType', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
-          {BUSINESS_TYPE_GROUPS.map(([group, options]) => (
-            <optgroup key={group} label={group}>
-              {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      <AdminInput label="Provider Name" value={form.ownerName} onChange={(value) => set('ownerName', value)} required />
-      <AdminInput label="Contact Email" type="email" value={form.ownerEmail} onChange={(value) => set('ownerEmail', value)} required />
-      <AdminInput label="Location" value={form.location} onChange={(value) => set('location', value)} required />
+      <AdminInput label="Seller Full Name" value={form.ownerName} onChange={(value) => set('ownerName', value)} required />
+      <AdminInput label="Seller Email" type="email" value={form.ownerEmail} onChange={(value) => set('ownerEmail', value)} required />
       <button disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">
-        {saving ? 'Saving...' : 'Register Business'}
-      </button>
-    </form>
-  );
-}
-
-function AdminServiceForm({ businesses, form, setForm, onSubmit, saving }) {
-  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-  const businessOptions = businesses.map((business) => ({
-    value: business._id || business.id,
-    label: business.businessName || business.name || business.ownerEmail || business._id,
-  }));
-
-  return (
-    <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-      <label className="block">
-        <span className="text-sm font-semibold text-gray-700">Business</span>
-        <select required value={form.businessId} onChange={(event) => set('businessId', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
-          <option value="">Select business</option>
-          {businessOptions.map((business) => <option key={business.value} value={business.value}>{business.label}</option>)}
-        </select>
-      </label>
-      <AdminInput label="Title" value={form.title} onChange={(value) => set('title', value)} required />
-      <AdminSelect label="Service Type" value={form.serviceType} onChange={(value) => set('serviceType', value)} options={['hotel', 'car', 'food', 'spa', 'transport', 'tour', 'event', 'rental']} />
-      <AdminInput label="Category" value={form.category} onChange={(value) => set('category', value)} required />
-      <AdminInput label="Location" value={form.location} onChange={(value) => set('location', value)} />
-      <AdminInput label="Price" value={form.price} onChange={(value) => set('price', value)} />
-      <AdminSelect label="Price Unit" value={form.unit} onChange={(value) => set('unit', value)} options={['per_hour', 'per_day', 'per_night', 'per_person', 'per_plate', 'per_bottle', 'per_trip', 'per_event', 'per_session']} />
-      <AdminInput label="Available Quantity" type="number" value={form.availableQuantity} onChange={(value) => set('availableQuantity', value)} />
-      <AdminSelect label="Status" value={form.status} onChange={(value) => set('status', value)} options={['available', 'unavailable', 'paused', 'fully_booked']} />
-      <AdminTextArea label="Description" value={form.description} onChange={(value) => set('description', value)} />
-      <AdminTextArea label="Image URLs" value={form.images} onChange={(value) => set('images', value)} />
-      <button disabled={saving || businessOptions.length === 0} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">
-        {saving ? 'Saving...' : 'Create Service'}
+        {saving ? 'Saving...' : 'Generate Seller Credentials'}
       </button>
     </form>
   );

@@ -8,6 +8,7 @@ export default function HotelCard({ hotel, compact = false }) {
   const hotelId = hotel.id || hotel._id;
   const priceText = hotel.priceText || 'Price on request';
   const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
+  const availabilityText = hotel.primaryService?.availabilityText || formatStatus(hotel.primaryService?.status);
 
   return (
     <Link
@@ -53,6 +54,9 @@ export default function HotelCard({ hotel, compact = false }) {
         <p className={`text-gray-600 mb-4 ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>
           {hotel.description}
         </p>
+        {availabilityText && (
+          <p className="mb-3 text-sm font-semibold text-primary">{availabilityText}</p>
+        )}
 
         <div className="flex flex-wrap gap-2 mb-4">
           {amenities.slice(0, 3).map((amenity) => (
@@ -72,11 +76,16 @@ export default function HotelCard({ hotel, compact = false }) {
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             {formatBusinessType(hotel.serviceCategory)} / {formatBusinessType(hotel.bookingModel)}
           </span>
-          <span className="text-primary font-bold">{t('openService', language)} -&gt;</span>
+          <span className="text-primary font-bold">Open Business -&gt;</span>
         </div>
       </div>
     </Link>
   );
+}
+
+function formatStatus(status) {
+  if (!status) return "";
+  return status === "unavailable" ? "Not Available" : "Available";
 }
 
 function formatBusinessType(value) {

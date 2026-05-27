@@ -1,4 +1,4 @@
-// Mock data for SafarisCon Rwanda marketplace platform
+// Mock data for Tour Connect Rwanda Tourism Platform
 
 export const locations = [
   'Kigali',
@@ -21,10 +21,10 @@ export const amenities = [
   'Restaurant',
   'Bar/Lounge',
   'Airport Shuttle',
-  'Service Support',
+  'Room Service',
   'Laundry Service',
   'Business Center',
-  'Conference Services',
+  'Conference Rooms',
   'Parking',
   'Pet Friendly',
   'Wheelchair Accessible',
@@ -52,7 +52,7 @@ export const hotels = [
       'https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=800&h=600&fit=crop',
     ],
     amenities: ['Free WiFi', 'Swimming Pool', 'Spa & Wellness', 'Restaurant', 'Fitness Center', 'Airport Shuttle'],
-    services: [
+    rooms: [
       { id: 101, type: 'Standard Double', price: 250, capacity: 2, available: 5 },
       { id: 102, type: 'Deluxe King', price: 350, capacity: 2, available: 3 },
       { id: 103, type: 'Executive Suite', price: 500, capacity: 4, available: 2 },
@@ -74,7 +74,7 @@ export const hotels = [
       'https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800&h=600&fit=crop',
     ],
     amenities: ['Free WiFi', 'Restaurant', 'Spa & Wellness', 'Tours', 'Garden', 'Terrace'],
-    services: [
+    rooms: [
       { id: 201, type: 'Mountain View Cabin', price: 400, capacity: 2, available: 4 },
       { id: 202, type: 'Forest Suite', price: 550, capacity: 3, available: 2 },
     ],
@@ -95,8 +95,8 @@ export const hotels = [
       'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800&h=600&fit=crop',
     ],
     amenities: ['Free WiFi', 'Swimming Pool', 'Restaurant', 'Bar/Lounge', 'Water Sports', 'Beach Access'],
-    services: [
-      { id: 301, type: 'Lake View service', price: 200, capacity: 2, available: 8 },
+    rooms: [
+      { id: 301, type: 'Lake View Room', price: 200, capacity: 2, available: 8 },
       { id: 302, type: 'Garden Bungalow', price: 280, capacity: 3, available: 4 },
     ],
     owner: 'owner2@example.com',
@@ -115,10 +115,10 @@ export const hotels = [
       'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&h=600&fit=crop',
       'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=800&h=600&fit=crop',
     ],
-    amenities: ['Free WiFi', 'Restaurant', 'Bar/Lounge', 'Conference Services', 'Business Center', 'Parking'],
-    services: [
-      { id: 401, type: 'Standard service', price: 180, capacity: 2, available: 10 },
-      { id: 402, type: 'Superior service', price: 250, capacity: 2, available: 6 },
+    amenities: ['Free WiFi', 'Restaurant', 'Bar/Lounge', 'Conference Rooms', 'Business Center', 'Parking'],
+    rooms: [
+      { id: 401, type: 'Standard Room', price: 180, capacity: 2, available: 10 },
+      { id: 402, type: 'Superior Room', price: 250, capacity: 2, available: 6 },
     ],
     owner: 'owner3@example.com',
     isFeatured: false,
@@ -137,8 +137,8 @@ export const hotels = [
       'https://images.unsplash.com/photo-1540979388789-6cee28a1cdc9?w=800&h=600&fit=crop',
     ],
     amenities: ['Free WiFi', 'Restaurant', 'Bar/Lounge', 'Tours', 'Garden', 'Terrace', 'Fireplace'],
-    services: [
-      { id: 501, type: 'Forest View service', price: 320, capacity: 2, available: 6 },
+    rooms: [
+      { id: 501, type: 'Forest View Room', price: 320, capacity: 2, available: 6 },
       { id: 502, type: 'Panorama Suite', price: 450, capacity: 3, available: 3 },
     ],
     owner: 'owner4@example.com',
@@ -158,7 +158,7 @@ export const hotels = [
       'https://images.unsplash.com/photo-1571896359842-33c89424de2d?w=800&h=600&fit=crop',
     ],
     amenities: ['Free WiFi', 'Restaurant', 'Bar/Lounge', 'Swimming Pool', 'Safari Tours', 'Fireplace'],
-    services: [
+    rooms: [
       { id: 601, type: 'Standard Cottage', price: 380, capacity: 2, available: 5 },
       { id: 602, type: 'Luxury Suite', price: 520, capacity: 3, available: 2 },
     ],
@@ -169,7 +169,7 @@ export const hotels = [
 
 export const users = [
   {
-    email: 'admin@safariscon.com',
+    email: 'admin@tourconnect.com',
     password: 'admin123',
     name: 'Admin',
     role: 'admin',
@@ -205,7 +205,7 @@ export const bookings = [
     id: 1,
     userId: 2,
     hotelId: 1,
-    serviceId: 101,
+    roomId: 101,
     checkIn: '2026-05-01',
     checkOut: '2026-05-05',
     guests: 2,
@@ -217,7 +217,7 @@ export const bookings = [
     id: 2,
     userId: 2,
     hotelId: 3,
-    serviceId: 301,
+    roomId: 301,
     checkIn: '2026-06-15',
     checkOut: '2026-06-20',
     guests: 2,
@@ -229,7 +229,7 @@ export const bookings = [
     id: 3,
     userId: 2,
     hotelId: 5,
-    serviceId: 501,
+    roomId: 501,
     checkIn: '2026-07-10',
     checkOut: '2026-07-12',
     guests: 2,
@@ -238,4 +238,3 @@ export const bookings = [
     createdAt: '2026-03-20',
   },
 ];
-

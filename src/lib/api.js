@@ -1,9 +1,7 @@
-const DEFAULT_API_BASE_URL = import.meta.env.PROD
-  ? "https://safarisconnback.onrender.com"
-  : "http://localhost:5000";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
-const AUTH_STORAGE_KEY = "safariscon_auth";
-const LEGACY_AUTH_STORAGE_KEY = "tourconnect_auth";
+const DEFAULT_API_BASE_URL = "http://localhost:5000";
+const trimTrailingSlash = (value) => String(value || "").replace(/\/+$/, "");
+const API_BASE_URL = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL);
+const AUTH_STORAGE_KEY = "tourconnect_auth";
 const LEGACY_USER_KEY = "toorconnect_user";
 
 export const getAuthData = () => {
@@ -13,17 +11,6 @@ export const getAuthData = () => {
       return JSON.parse(raw);
     } catch {
       localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-  }
-
-  const legacyAuthRaw = localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
-  if (legacyAuthRaw) {
-    try {
-      const authData = JSON.parse(legacyAuthRaw);
-      saveAuthData(authData);
-      return authData;
-    } catch {
-      localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
     }
   }
 
@@ -42,24 +29,12 @@ export const getAuthData = () => {
 
 export const saveAuthData = (authData) => {
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
-  localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
 };
 
 export const clearAuthData = () => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
-  localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
-};
-
-const handleUnauthorizedResponse = (payload) => {
-  const message = payload.message || "Unauthorized.";
-  if (message.toLowerCase().includes("token")) {
-    clearAuthData();
-    window.dispatchEvent(new CustomEvent("auth:expired"));
-    return "Your session expired. Please log in again.";
-  }
-  return message;
 };
 
 const buildHeaders = (token, customHeaders = {}) => {
@@ -74,11 +49,18 @@ const buildHeaders = (token, customHeaders = {}) => {
 };
 
 export const apiRequest = async (path, { method = "GET", body, token, headers } = {}) => {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: buildHeaders(token, headers),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: buildHeaders(token, headers),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (error) {
+    throw new Error(
+      `Cannot reach SafarisCon API at ${API_BASE_URL}. Check VITE_API_BASE_URL, backend hosting, HTTPS, and CORS. Original error: ${error.message}`
+    );
+  }
 
   let payload = {};
   try {
@@ -93,9 +75,6 @@ export const apiRequest = async (path, { method = "GET", body, token, headers } 
   }
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error(handleUnauthorizedResponse(payload));
-    }
     throw new Error(payload.message || "Request failed.");
   }
 
@@ -122,9 +101,6 @@ export const uploadRequest = async (path, { method = "POST", formData, token } =
   }
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error(handleUnauthorizedResponse(payload));
-    }
     throw new Error(payload.message || "Upload failed.");
   }
 
@@ -154,11 +130,6 @@ export const authApi = {
       method: "POST",
       body: userData,
     }),
-  registerBusiness: (payload) =>
-    apiRequest("/api/auth/business-register", {
-      method: "POST",
-      body: payload,
-    }),
   completeHotelRegistration: (payload) =>
     apiRequest("/api/auth/hotel/complete-registration", {
       method: "POST",
@@ -172,21 +143,31 @@ export const adminApi = {
   getHotels: (token) => apiRequest("/api/admin/hotels", { token }),
   getUsers: (token) => apiRequest("/api/admin/users", { token }),
   getBookings: (token) => apiRequest("/api/admin/bookings", { token }),
+  approveBooking: (token, bookingId, payload = {}) =>
+    apiRequest(`/api/admin/bookings/${bookingId}/approve`, {
+      method: "PUT",
+      token,
+      body: payload,
+    }),
   getServices: (token) => apiRequest("/api/admin/services", { token }),
-  createService: (token, payload) =>
-    apiRequest("/api/admin/services", {
+  getTransactions: (token) => apiRequest("/api/admin/transactions", { token }),
+  createSeller: (token, payload) =>
+    apiRequest("/api/admin/sellers", {
       method: "POST",
       token,
       body: payload,
     }),
-  getHotelStatus: (token, hotelId) =>
-    apiRequest(`/api/admin/businesses/${hotelId}/status`, { token }),
-  updateBusinessVerification: (token, hotelId, status) =>
-    apiRequest(`/api/admin/businesses/${hotelId}/verification`, {
-      method: "PATCH",
+  updateBusinessVerification: (token, businessId, status) =>
+    apiRequest(`/api/admin/businesses/${businessId}/verification`, {
+      method: "PUT",
       token,
       body: { status },
     }),
+  getRooms: (token) => apiRequest("/api/admin/rooms", { token }),
+  getHotelRooms: (token, hotelId) =>
+    apiRequest(`/api/admin/hotels/${hotelId}/rooms`, { token }),
+  getHotelStatus: (token, hotelId) =>
+    apiRequest(`/api/admin/hotels/${hotelId}/status`, { token }),
   uploadImage: (token, file) => {
     const formData = new FormData();
     formData.append("image", file);
@@ -209,8 +190,8 @@ export const adminApi = {
       token,
       body: payload,
     }),
-  assignBooking: (token, payload) =>
-    apiRequest("/api/admin/assign-booking", {
+  connectTour: (token, payload) =>
+    apiRequest("/api/admin/connect-tour", {
       method: "POST",
       token,
       body: payload,
@@ -222,7 +203,7 @@ export const adminApi = {
       body: payload,
     }),
   deleteHotel: (token, hotelId) =>
-    apiRequest(`/api/admin/businesses/${hotelId}`, {
+    apiRequest(`/api/admin/hotels/${hotelId}`, {
       method: "DELETE",
       token,
     }),
@@ -231,44 +212,56 @@ export const adminApi = {
       method: "DELETE",
       token,
     }),
+  purgeVisitors: (token) =>
+    apiRequest("/api/admin/users/visitors/purge", {
+      method: "DELETE",
+      token,
+    }),
 };
 
 export const hotelApi = {
-  getOverview: (token) => apiRequest("/api/business/overview", { token }),
-  getMyBookings: (token) => apiRequest("/api/business/bookings", { token }),
+  getOverview: (token) => apiRequest("/api/hotel/overview", { token }),
+  getMyBookings: (token) => apiRequest("/api/hotel/bookings", { token }),
+  getMyRooms: (token) => apiRequest("/api/hotel/rooms", { token }),
   updateBookingStatus: (token, bookingId, payload) =>
-    apiRequest(`/api/business/bookings/${bookingId}/status`, {
+    apiRequest(`/api/hotel/bookings/${bookingId}/status`, {
       method: "PUT",
       token,
       body: payload,
     }),
-  getMyServices: (token) => apiRequest("/api/business/services", { token }),
-  uploadServiceImages: (token, files) => {
-    const formData = new FormData();
-    Array.from(files).slice(0, 3).forEach((file) => {
-      formData.append("images", file);
-    });
-
-    return uploadRequest("/api/business/uploads/service-images", {
+  getMyServices: (token) => apiRequest("/api/hotel/services", { token }),
+  uploadServiceImages: async (_token, _files) => ({ urls: [] }),
+  createRoom: (token, payload) =>
+    apiRequest("/api/hotel/rooms", {
       method: "POST",
       token,
-      formData,
-    });
-  },
+      body: payload,
+    }),
+  updateRoom: (token, roomId, payload) =>
+    apiRequest(`/api/hotel/rooms/${roomId}`, {
+      method: "PUT",
+      token,
+      body: payload,
+    }),
   createService: (token, payload) =>
-    apiRequest("/api/business/services", {
+    apiRequest("/api/hotel/services", {
       method: "POST",
       token,
       body: payload,
     }),
   updateService: (token, serviceId, payload) =>
-    apiRequest(`/api/business/services/${serviceId}`, {
+    apiRequest(`/api/hotel/services/${serviceId}`, {
       method: "PUT",
       token,
       body: payload,
     }),
   deleteService: (token, serviceId) =>
-    apiRequest(`/api/business/services/${serviceId}`, {
+    apiRequest(`/api/hotel/services/${serviceId}`, {
+      method: "DELETE",
+      token,
+    }),
+  deleteRoom: (token, roomId) =>
+    apiRequest(`/api/hotel/rooms/${roomId}`, {
       method: "DELETE",
       token,
     }),
@@ -282,15 +275,33 @@ export const bookingApi = {
       body: payload,
     }),
   bookService: (token, payload) =>
-    apiRequest("/api/bookings/service", {
+    apiRequest("/api/bookings/request", {
+      method: "POST",
+      token,
+      body: {
+        hotelId: payload.serviceId,
+        quantity: payload.quantity,
+        guests: payload.quantity,
+        checkIn: payload.startDate,
+        checkOut: payload.endDate,
+        totalPrice: payload.bookingDetails?.totalPrice || payload.totalPrice || 0,
+        destinationPlace: payload.destinationPlace,
+        destinationLocation: payload.destinationLocation,
+      },
+    }),
+  getMyBookings: (token) => apiRequest("/api/bookings/my", { token }),
+  payBooking: (token, bookingId, payload) =>
+    apiRequest(`/api/bookings/${bookingId}/pay`, {
       method: "POST",
       token,
       body: payload,
     }),
-  getMyBookings: (token) => apiRequest("/api/bookings/my", { token }),
+  getReceiptUrl: (bookingOrToken) => `${API_BASE_URL}/api/receipt/${bookingOrToken}`,
 };
 
 export const publicApi = {
   getHotels: () => apiRequest("/api/hotels"),
-  getServices: () => apiRequest("/api/services"),
+  verifyBooking: (token) => apiRequest(`/api/verify/${token}`),
 };
+
+export { API_BASE_URL };

@@ -163,6 +163,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       const response = await bookingApi.bookService(authData.token, {
         serviceId: service._id,
         quantity: getReservableQuantity(bookingConfig, values),
+        totalPrice,
         startDate: values.startDate || null,
         endDate: values.endDate || values.startDate || null,
         durationHours: Number(values.durationHours) || 0,
