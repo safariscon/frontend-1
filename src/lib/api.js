@@ -149,11 +149,18 @@ export const adminApi = {
       token,
       body: payload,
     }),
+  verifyBooking: (token, lookup) => apiRequest(`/api/admin/booking-verification/${encodeURIComponent(lookup)}`, { token }),
   getServices: (token) => apiRequest("/api/admin/services", { token }),
   getTransactions: (token) => apiRequest("/api/admin/transactions", { token }),
   createSeller: (token, payload) =>
     apiRequest("/api/admin/sellers", {
       method: "POST",
+      token,
+      body: payload,
+    }),
+  updateAnnouncement: (token, payload) =>
+    apiRequest("/api/admin/announcement", {
+      method: "PUT",
       token,
       body: payload,
     }),
@@ -212,6 +219,17 @@ export const adminApi = {
       method: "DELETE",
       token,
     }),
+  deleteUsers: (token, userIds) =>
+    apiRequest("/api/admin/users/bulk", {
+      method: "DELETE",
+      token,
+      body: { userIds },
+    }),
+  deleteBusiness: (token, businessId) =>
+    apiRequest(`/api/admin/businesses/${businessId}`, {
+      method: "DELETE",
+      token,
+    }),
   purgeVisitors: (token) =>
     apiRequest("/api/admin/users/visitors/purge", {
       method: "DELETE",
@@ -230,7 +248,15 @@ export const hotelApi = {
       body: payload,
     }),
   getMyServices: (token) => apiRequest("/api/hotel/services", { token }),
-  uploadServiceImages: async (_token, _files) => ({ urls: [] }),
+  uploadServiceImages: (token, files = []) => {
+    const formData = new FormData();
+    files.slice(0, 3).forEach((file) => formData.append("images", file));
+    return uploadRequest("/api/hotel/uploads/images", {
+      method: "POST",
+      token,
+      formData,
+    });
+  },
   createRoom: (token, payload) =>
     apiRequest("/api/hotel/rooms", {
       method: "POST",
@@ -274,6 +300,7 @@ export const bookingApi = {
       token,
       body: payload,
     }),
+  verifyBooking: (token, lookup) => apiRequest(`/api/hotel/booking-verification/${encodeURIComponent(lookup)}`, { token }),
   bookService: (token, payload) =>
     apiRequest("/api/bookings/request", {
       method: "POST",
@@ -287,6 +314,7 @@ export const bookingApi = {
         totalPrice: payload.bookingDetails?.totalPrice || payload.totalPrice || 0,
         destinationPlace: payload.destinationPlace,
         destinationLocation: payload.destinationLocation,
+        bookingDetails: payload.bookingDetails,
       },
     }),
   getMyBookings: (token) => apiRequest("/api/bookings/my", { token }),
@@ -296,11 +324,16 @@ export const bookingApi = {
       token,
       body: payload,
     }),
-  getReceiptUrl: (bookingOrToken) => `${API_BASE_URL}/api/receipt/${bookingOrToken}`,
+  getReceiptUrl: (bookingOrToken) =>
+    bookingOrToken ? `${API_BASE_URL}/api/receipt/${encodeURIComponent(bookingOrToken)}` : "",
+  getVerifyUrl: (token) => `${window.location.origin}/verify/${encodeURIComponent(token)}`,
+  getQrImageUrl: (token) =>
+    `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=${encodeURIComponent(`${window.location.origin}/verify/${token}`)}`,
 };
 
 export const publicApi = {
   getHotels: () => apiRequest("/api/hotels"),
+  getAnnouncement: () => apiRequest("/api/announcement"),
   verifyBooking: (token) => apiRequest(`/api/verify/${token}`),
 };
 

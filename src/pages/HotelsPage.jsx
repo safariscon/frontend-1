@@ -6,7 +6,6 @@ import SearchBar from '../components/SearchBar';
 import HotelCard from '../components/HotelCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { publicApi } from '../lib/api';
-import { formatRwf } from '../lib/currency';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
@@ -20,17 +19,16 @@ export default function HotelsPage() {
    const [categoryFilter, setCategoryFilter] = useState('');
    const [availableOnly, setAvailableOnly] = useState(false);
    const [loading, setLoading] = useState(true);
-   const { language } = useLanguage();
+  const { language } = useLanguage();
 
   const locationParam = searchParams.get('location');
-  const budgetParam = searchParams.get('budget');
   const serviceParam = searchParams.get('service');
 
   const loadHotels = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
       const response = await publicApi.getHotels();
-      setAllHotels(normalizeHotels(response.hotels || []));
+      setAllHotels(normalizeHotels(response.businesses || response.hotels || []));
     } finally {
       if (!silent) setLoading(false);
     }
@@ -52,17 +50,15 @@ export default function HotelsPage() {
   const filteredHotels = useMemo(() => {
     let result = [...allHotels];
 
-    // Filter by location
     if (locationParam) {
+      const locationQuery = locationParam.toLowerCase();
       result = result.filter((hotel) =>
-        hotel.location.toLowerCase() === locationParam.toLowerCase()
+        [hotel.location, hotel.district, hotel.address, hotel.destinationLocation]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(locationQuery)
       );
-    }
-
-    // Filter by budget (base price)
-    if (budgetParam) {
-      const maxBudget = parseInt(budgetParam);
-      result = result.filter((hotel) => hotel.basePrice <= maxBudget);
     }
 
     if (serviceParam) {
@@ -71,6 +67,8 @@ export default function HotelsPage() {
         const serviceText = [
           hotel.name,
           hotel.type,
+          hotel.serviceCategory,
+          hotel.businessType,
           hotel.description,
           ...(hotel.services || []),
         ]
@@ -80,7 +78,7 @@ export default function HotelsPage() {
       });
     }
 
-    if (categoryFilter) {
+    if (categoryFilter && categoryFilter !== 'all') {
       result = result.filter((hotel) => hotel.serviceCategory === categoryFilter);
     }
 
@@ -109,11 +107,22 @@ export default function HotelsPage() {
     }
 
     return result;
-  }, [allHotels, locationParam, budgetParam, serviceParam, categoryFilter, availableOnly, sortBy]);
+  }, [allHotels, locationParam, serviceParam, categoryFilter, availableOnly, sortBy]);
 
   const categoryOptions = useMemo(
     () =>
       [...new Set(allHotels.map((hotel) => hotel.serviceCategory).filter(Boolean))].sort(),
+    [allHotels]
+  );
+
+  const serviceOptions = useMemo(
+    () =>
+      allHotels
+        .map((hotel) => ({
+          value: hotel.name,
+          label: `${hotel.name} - ${formatLabel(hotel.serviceCategory || hotel.type)}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
     [allHotels]
   );
 
@@ -146,14 +155,14 @@ export default function HotelsPage() {
         {/* Search and Filters */}
         <div className="bg-white shadow-md sticky top-16 z-40">
           <div className="max-w-7xl mx-auto px-4 py-4">
-            <SearchBar variant="compact" />
+            <SearchBar variant="compact" serviceOptions={serviceOptions} />
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
               >
-                <option value="">All categories</option>
+                <option value="">All Categories</option>
                 {categoryOptions.map((category) => (
                   <option key={category} value={category}>
                     {formatLabel(category)}
@@ -174,7 +183,7 @@ export default function HotelsPage() {
 
         <div className="max-w-7xl mx-auto px-4 py-8">
           {/* Active Filters */}
-          {(locationParam || budgetParam || serviceParam) && (
+          {(locationParam || serviceParam) && (
             <div className="flex flex-wrap gap-2 mb-6">
               {serviceParam && (
                 <span className="inline-flex items-center gap-1 bg-primary bg-opacity-10 text-primary px-3 py-1 rounded-full text-sm">
@@ -200,23 +209,6 @@ export default function HotelsPage() {
                     onClick={() => {
                       const params = new URLSearchParams(searchParams);
                       params.delete('location');
-                      navigate(`/services?${params.toString()}`);
-                    }}
-                    className="hover:text-primary-dark"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              )}
-              {budgetParam && (
-                <span className="inline-flex items-center gap-1 bg-primary bg-opacity-10 text-primary px-3 py-1 rounded-full text-sm">
-                  {t('underBudget', language, { price: formatRwf(budgetParam) })}
-                  <button
-                    onClick={() => {
-                      const params = new URLSearchParams(searchParams);
-                      params.delete('budget');
                       navigate(`/services?${params.toString()}`);
                     }}
                     className="hover:text-primary-dark"

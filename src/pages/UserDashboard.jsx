@@ -50,6 +50,18 @@ export default function UserDashboard() {
     return subscribeToRealtime(REALTIME_EVENTS.BOOKING_CHANGED, loadData);
   }, [user, navigate]);
 
+  const refreshBookings = async () => {
+    const authData = getAuthData();
+    if (!authData?.token) return;
+    setLoading(true);
+    try {
+      const response = await bookingApi.getMyBookings(authData.token);
+      setBookings(response.bookings || []);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const confirmedCount = bookings.filter((b) => b.status === 'confirmed').length;
   const pendingCount = bookings.filter((b) => b.status === 'pending').length;
   const completedCount = bookings.filter((b) => b.status === 'completed').length;
@@ -86,6 +98,9 @@ export default function UserDashboard() {
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
               {t('trackBookings', language)}
             </p>
+            <button onClick={refreshBookings} className="mt-5 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700">
+              Refresh
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -160,10 +175,28 @@ export default function UserDashboard() {
                                 Pay Your Booking
                               </button>
                             )}
-                            {booking.paymentStatus === 'paid' && (
-                              <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-semibold text-gray-700">
-                                Download PDF
-                              </a>
+                            {booking.paymentStatus === 'paid' && booking.verificationToken && (
+                              <>
+                                <img
+                                  src={bookingApi.getQrImageUrl(booking.verificationToken)}
+                                  alt="Booking QR code"
+                                  className="ml-auto h-28 w-28 rounded-lg border border-gray-200 bg-white p-2"
+                                />
+                                <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-semibold text-gray-700">
+                                  Download PDF
+                                </a>
+                                <a href={bookingApi.getQrImageUrl(booking.verificationToken)} download={`booking-${booking.bookingCode || booking._id}-qr.png`} className="rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-semibold text-gray-700">
+                                  Download QR
+                                </a>
+                                <Link to={`/verify/${booking.verificationToken}`} className="rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-semibold text-gray-700">
+                                  Verify Booking
+                                </Link>
+                              </>
+                            )}
+                            {booking.paymentStatus === 'paid' && !booking.verificationToken && (
+                              <span className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                                Receipt is being prepared. Refresh after payment.
+                              </span>
                             )}
                             {booking.verificationCode && (
                               <span className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-mono text-gray-700">{booking.verificationCode}</span>

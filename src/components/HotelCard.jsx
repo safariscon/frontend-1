@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import RatingStars from './RatingStars';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 
@@ -8,7 +7,11 @@ export default function HotelCard({ hotel, compact = false }) {
   const hotelId = hotel.id || hotel._id;
   const priceText = hotel.priceText || 'Price on request';
   const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
-  const availabilityText = hotel.primaryService?.availabilityText || formatStatus(hotel.primaryService?.status);
+  const remaining = Number(hotel.quantityRemaining ?? hotel.availableQuantity ?? hotel.primaryService?.availableQuantity ?? 1);
+  const isNotAvailable = hotel.status === 'unavailable' || remaining <= 0;
+  const availabilityText = isNotAvailable
+    ? 'Not Available'
+    : hotel.primaryService?.availabilityText || `${remaining} available`;
 
   return (
     <Link
@@ -26,6 +29,11 @@ export default function HotelCard({ hotel, compact = false }) {
         {hotel.isFeatured && (
           <div className="absolute top-3 left-3 bg-secondary text-white text-xs font-bold px-3 py-1 rounded-full">
             {t('featured', language)}
+          </div>
+        )}
+        {isNotAvailable && (
+          <div className="absolute top-3 left-3 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
+            Not Available
           </div>
         )}
         <div className="absolute bottom-3 right-3 bg-white bg-opacity-90 backdrop-blur-sm px-2 py-1 rounded-lg">
@@ -72,7 +80,6 @@ export default function HotelCard({ hotel, compact = false }) {
         </div>
 
         <div className="flex items-center justify-between">
-          <RatingStars rating={hotel.rating || 0} reviewCount={hotel.reviewCount || 0} size="sm" />
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             {formatBusinessType(hotel.serviceCategory)} / {formatBusinessType(hotel.bookingModel)}
           </span>
@@ -81,11 +88,6 @@ export default function HotelCard({ hotel, compact = false }) {
       </div>
     </Link>
   );
-}
-
-function formatStatus(status) {
-  if (!status) return "";
-  return status === "unavailable" ? "Not Available" : "Available";
 }
 
 function formatBusinessType(value) {

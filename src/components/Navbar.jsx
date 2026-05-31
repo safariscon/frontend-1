@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useInstall } from '../context/InstallContext';
@@ -6,6 +6,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supportedLanguages, t } from '../lib/translations';
 import InstallButton from './InstallButton';
+import { publicApi } from '../lib/api';
+import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -14,6 +16,20 @@ export default function Navbar() {
   const { isMobile, isInstalled } = useInstall();
   const { darkMode, toggleDarkMode } = useTheme();
   const { language, setLanguage } = useLanguage();
+  const [announcement, setAnnouncement] = useState(null);
+
+  useEffect(() => {
+    const loadAnnouncement = async () => {
+      try {
+        const response = await publicApi.getAnnouncement();
+        setAnnouncement(response.announcement || null);
+      } catch {
+        setAnnouncement(null);
+      }
+    };
+    loadAnnouncement();
+    return subscribeToRealtime([REALTIME_EVENTS.CATALOG_CHANGED, 'catalogChanged'], loadAnnouncement);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -25,6 +41,24 @@ export default function Navbar() {
 
   return (
     <nav className="bg-white shadow-md sticky top-0 z-50">
+      {announcement?.enabled && announcement.text && (
+        <div className="border-b border-yellow-300 bg-[#ffc928] text-slate-950">
+          <div className="mx-auto flex min-h-10 max-w-7xl items-center justify-center gap-2 px-4 py-2 text-center text-sm font-medium">
+            <BellIcon />
+            <span>
+              {announcement.text}
+              {announcement.linkUrl && (
+                <>
+                  {' '}
+                  <a href={announcement.linkUrl} className="font-extrabold underline decoration-2 underline-offset-2">
+                    {announcement.linkLabel || 'hano'}
+                  </a>
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center gap-2">
@@ -182,6 +216,14 @@ export default function Navbar() {
         )}
       </div>
     </nav>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg className="h-5 w-5 shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 01-6 0" />
+    </svg>
   );
 }
 

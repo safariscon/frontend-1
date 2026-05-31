@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import RatingStars from '../components/RatingStars';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { publicApi } from '../lib/api';
 import { normalizeHotels } from '../lib/hotelMapper';
@@ -15,6 +14,10 @@ export default function HotelDetailsPage() {
   const [hotel, setHotel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [tableSearch, setTableSearch] = useState('');
+  const [sortColumn, setSortColumn] = useState('');
+  const [touchStartX, setTouchStartX] = useState(null);
   const { language } = useLanguage();
 
   useEffect(() => {
@@ -52,32 +55,75 @@ export default function HotelDetailsPage() {
       </div>
     );
   }
+  const remaining = Number(hotel.quantityRemaining ?? hotel.availableQuantity ?? 1);
+  const isNotAvailable = hotel.status === 'unavailable' || remaining <= 0;
+  const images = Array.isArray(hotel.images) ? hotel.images.slice(0, 3) : [];
+  const showPreviousImage = () => setSelectedImage((current) => (current === 0 ? images.length - 1 : current - 1));
+  const showNextImage = () => setSelectedImage((current) => (current + 1) % images.length);
+  const tableColumns = hotel.availabilityTable?.columns || [];
+  const tableRows = hotel.availabilityTable?.rows || [];
+  const filteredRows = tableRows
+    .filter((row) => {
+      const haystack = tableColumns.map((column) => row.cells?.[column.id] || '').join(' ').toLowerCase();
+      return haystack.includes(tableSearch.toLowerCase());
+    })
+    .sort((a, b) => {
+      if (!sortColumn) return 0;
+      return String(a.cells?.[sortColumn] || '').localeCompare(String(b.cells?.[sortColumn] || ''), undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    });
+  const inventoryLabel = getInventoryLabel(hotel.inventoryStatus, isNotAvailable);
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
 
       <main className="flex-1">
-        {hotel.images.length > 0 && (
-          <div className="relative h-64 md:h-96">
-            <img src={hotel.images[selectedImage] || hotel.images[0]} alt={hotel.name} className="w-full h-full object-cover" />
-            {hotel.images.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-              {hotel.images.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setSelectedImage(idx)}
-                  className={`w-2 h-2 rounded-full transition ${selectedImage === idx ? 'bg-white' : 'bg-white bg-opacity-50'}`}
-                />
-              ))}
-            </div>
+        {images.length > 0 && (
+          <div
+            className="relative h-72 bg-gray-100 md:h-[30rem]"
+            onTouchStart={(event) => setTouchStartX(event.touches[0].clientX)}
+            onTouchEnd={(event) => {
+              if (touchStartX === null || images.length < 2) return;
+              const delta = event.changedTouches[0].clientX - touchStartX;
+              if (Math.abs(delta) > 45) {
+                delta > 0 ? showPreviousImage() : showNextImage();
+              }
+              setTouchStartX(null);
+            }}
+          >
+            <button type="button" onClick={() => setLightboxOpen(true)} className="h-full w-full">
+              <img src={images[selectedImage] || images[0]} alt={hotel.name} className="h-full w-full object-cover" />
+            </button>
+            {images.length > 1 && (
+              <>
+                <button type="button" onClick={showPreviousImage} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">
+                  Back
+                </button>
+                <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">
+                  Next
+                </button>
+                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+                  {images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      aria-label={`Show image ${idx + 1}`}
+                      onClick={() => setSelectedImage(idx)}
+                      className={`h-2.5 w-2.5 rounded-full transition ${selectedImage === idx ? 'bg-white' : 'bg-white/50'}`}
+                    />
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
-        {hotel.images.length > 1 && (
+        {images.length > 1 && (
           <div className="max-w-7xl mx-auto px-4 pt-4">
             <div className="grid grid-cols-3 gap-3">
-              {hotel.images.slice(0, 3).map((image, index) => (
+              {images.map((image, index) => (
                 <button
                   key={image}
                   type="button"
@@ -104,7 +150,6 @@ export default function HotelDetailsPage() {
                     </svg>
                     {hotel.location}, Rwanda
                   </div>
-                  <RatingStars rating={hotel.rating} reviewCount={hotel.reviewCount} />
                 </div>
               </div>
 
@@ -112,6 +157,22 @@ export default function HotelDetailsPage() {
                 <h2 className="text-xl font-bold mb-3">{t('aboutThisService', language)}</h2>
                 <p className="text-gray-600 leading-relaxed">{hotel.description}</p>
               </div>
+
+              <div className="mb-8 grid gap-4 md:grid-cols-3">
+                <InfoTile label="Category" value={hotel.type || hotel.category || 'Service'} />
+                <InfoTile label="Seller" value="Verified marketplace seller" />
+                <InfoTile label="Inventory" value={inventoryLabel} />
+              </div>
+
+              <AvailabilityTable
+                columns={tableColumns}
+                rows={filteredRows}
+                updatedAt={hotel.availabilityTable?.updatedAt || hotel.updatedAt}
+                search={tableSearch}
+                setSearch={setTableSearch}
+                sortColumn={sortColumn}
+                setSortColumn={setSortColumn}
+              />
 
               <div className="mb-8">
                 <h2 className="text-xl font-bold mb-4">{t('amenities', language)}</h2>
@@ -135,13 +196,17 @@ export default function HotelDetailsPage() {
                     <span className="text-gray-600">{t('startingFrom', language)}</span>
                     <span className="text-2xl font-bold text-primary">{hotel.priceText || 'Price on request'}</span>
                   </div>
+                  <p className={`text-sm font-semibold ${isNotAvailable ? 'text-red-700' : 'text-primary'}`}>
+                    {inventoryLabel} {isNotAvailable ? '' : `- ${remaining} available`}
+                  </p>
                 </div>
 
                 <button
                   onClick={() => navigate(`/booking/${hotel.id}`)}
-                  className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition"
+                  disabled={isNotAvailable}
+                  className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
-                  {t('requestBooking', language)}
+                  {isNotAvailable ? 'Not Available' : t('requestBooking', language)}
                 </button>
 
                 <p className="text-xs text-gray-500 text-center mt-3">
@@ -153,7 +218,99 @@ export default function HotelDetailsPage() {
         </div>
       </main>
 
+      {lightboxOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+          <button type="button" onClick={() => setLightboxOpen(false)} className="absolute right-4 top-4 rounded-full bg-white px-4 py-2 font-semibold text-gray-900">
+            Close
+          </button>
+          {images.length > 1 && (
+            <button type="button" onClick={showPreviousImage} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white px-4 py-3 font-semibold text-gray-900">
+              Back
+            </button>
+          )}
+          <img src={images[selectedImage] || images[0]} alt={hotel.name} className="max-h-[85vh] max-w-full object-contain" />
+          {images.length > 1 && (
+            <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white px-4 py-3 font-semibold text-gray-900">
+              Next
+            </button>
+          )}
+        </div>
+      )}
+
       <Footer />
     </div>
   );
+}
+
+function InfoTile({ label, value }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 font-bold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortColumn, setSortColumn }) {
+  if (!columns.length) {
+    return (
+      <div className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
+        <h2 className="text-xl font-bold text-gray-900">Availability</h2>
+        <p className="mt-2 text-sm text-gray-600">This seller has not published a custom availability table yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Availability</h2>
+          {updatedAt && <p className="mt-1 text-sm text-gray-500">Updated {new Date(updatedAt).toLocaleString()}</p>}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search table" className="rounded-xl border border-gray-300 px-4 py-2 text-sm" />
+          <select value={sortColumn} onChange={(event) => setSortColumn(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-2 text-sm">
+            <option value="">Original order</option>
+            {columns.map((column) => <option key={column.id} value={column.id}>Sort by {column.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column.id} className="border-b border-gray-200 bg-gray-50 px-4 py-3 text-left font-bold text-gray-800">
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-b border-gray-100">
+                {columns.map((column) => (
+                  <td key={column.id} className="px-4 py-3 text-gray-700">{row.cells?.[column.id] || '-'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!rows.length && <p className="mt-3 text-sm text-gray-500">No matching availability rows.</p>}
+    </div>
+  );
+}
+
+function getInventoryLabel(status, unavailable) {
+  if (unavailable) return 'Out of Stock';
+  const labels = {
+    available: 'Available',
+    limited: 'Limited Availability',
+    'fully-booked': 'Fully Booked',
+    'out-of-stock': 'Out of Stock',
+    'temporarily-unavailable': 'Temporarily Unavailable',
+  };
+  return labels[status] || 'Available';
 }

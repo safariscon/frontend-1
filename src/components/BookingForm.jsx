@@ -13,11 +13,13 @@ const BASE_VALUES = {
   destinationPlace: '',
   destinationLocation: '',
   pickupLocation: '',
-  dropoffLocation: '',
+  returnLocation: '',
   startDate: '',
   endDate: '',
   reservationTime: '',
   vehicleType: '',
+  driverRequired: 'no',
+  phone: '',
   packageType: '',
   durationHours: '1',
   durationDays: '1',
@@ -27,14 +29,14 @@ const BASE_VALUES = {
 
 const FIELD_SETS = {
   transport: [
-    field('destinationPlace', 'Place You Want To Visit', 'text', 'e.g. Volcanoes National Park', true, 'col-span-2'),
-    field('destinationLocation', 'Destination Location', 'text', 'Kigali', true, 'col-span-2'),
-    field('pickupLocation', 'Pickup location', 'text', '', true),
-    field('dropoffLocation', 'Destination', 'text', '', true),
-    field('startDate', 'Trip date', 'date', '', true),
-    field('vehicleType', 'Vehicle type', 'text', '', false),
-    field('durationDays', 'Duration days', 'number', '', true),
-    field('quantity', 'Passengers', 'number', '', true, 'col-span-2'),
+    field('pickupLocation', 'Pickup Location', 'select', '', true, '', ['Kigali', 'Gisenyi', 'Musanze', 'Huye', 'Rubavu', 'Rusizi', 'Nyagatare', 'Other']),
+    field('returnLocation', 'Return Location', 'select', '', true, '', ['Kigali', 'Gisenyi', 'Musanze', 'Huye', 'Rubavu', 'Rusizi', 'Nyagatare', 'Other']),
+    field('startDate', 'Pickup Date', 'date', '', true),
+    field('endDate', 'Return Date', 'date', '', true),
+    field('vehicleType', 'Vehicle Type', 'text', 'Toyota Rav4, Prado, Coaster', false),
+    field('quantity', 'Number of Passengers', 'number', '', true),
+    field('driverRequired', 'Driver Needed?', 'select', '', true, '', ['No', 'Yes']),
+    field('phone', 'Phone Number', 'tel', '078xxxxxxx', true),
     field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
   ],
   accommodation: [
@@ -56,8 +58,8 @@ const FIELD_SETS = {
     field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
   ],
   activity: [
-    field('destinationPlace', 'Place You Want To Visit', 'text', 'e.g. Nyungwe Canopy Walk', true, 'col-span-2'),
-    field('destinationLocation', 'Destination Location', 'text', '', true, 'col-span-2'),
+    field('destinationPlace', 'Activity / Experience', 'text', 'e.g. Nyungwe Canopy Walk', true, 'col-span-2'),
+    field('destinationLocation', 'Activity Location', 'text', '', true, 'col-span-2'),
     field('startDate', 'Activity date', 'date', '', true),
     field('packageType', 'Package type', 'text', '', false),
     field('quantity', 'Participants', 'number', '', true, 'col-span-2'),
@@ -81,13 +83,14 @@ const FIELD_SETS = {
   ],
 };
 
-function field(name, label, type, placeholder = '', required = false, className = '') {
-  return { name, label, type, placeholder, required, className };
+function field(name, label, type, placeholder = '', required = false, className = '', options = []) {
+  return { name, label, type, placeholder, required, className, options };
 }
 
 export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [business, setBusiness] = useState(null);
   const [values, setValues] = useState(BASE_VALUES);
+  const [customValues, setCustomValues] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
@@ -102,10 +105,17 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         setBusiness(found || null);
         if (found) {
           const service = getSelectedService(found);
+          const customDefaults = {};
+          const fields = found.bookingForm?.isPublished ? found.bookingForm.fields || [] : [];
+          fields.forEach((fieldItem) => {
+            customDefaults[fieldItem.id] = fieldItem.type === 'checkbox' ? [] : fieldItem.defaultValue || '';
+          });
+          setCustomValues(customDefaults);
           setValues((prev) => ({
             ...prev,
             destinationPlace: service?.title || service?.name || found.name || '',
             destinationLocation: service?.location || found.location || '',
+            vehicleType: service?.title || service?.name || found.name || '',
           }));
         }
       } finally {
@@ -122,10 +132,15 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
   const service = useMemo(() => getSelectedService(business), [business]);
   const bookingConfig = useMemo(() => getBookingConfig({ business, service }), [business, service]);
+  const customFields = useMemo(
+    () => (business?.bookingForm?.isPublished ? (business.bookingForm.fields || []).filter((item) => item.enabled !== false) : []),
+    [business]
+  );
   const unitPrice = useMemo(() => getServiceUnitPrice(service), [service]);
   const unitCount = useMemo(() => getUnitCount(bookingConfig, values), [bookingConfig, values]);
   const totalPrice = unitPrice * unitCount;
-  const isUnavailable = service?.status && service.status !== 'available';
+  const remainingQuantity = Number(service?.availableQuantity ?? business?.quantityRemaining ?? business?.availableQuantity ?? 1);
+  const isUnavailable = (service?.status && service.status !== 'available') || remainingQuantity <= 0;
 
   const updateValue = (key, value) => {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -134,7 +149,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const validate = () => {
     if (!service?._id) return 'This service is not available for booking yet.';
     if (isUnavailable) return 'This service is currently not available.';
-    const missing = bookingConfig.fields.find((item) => item.required && !String(values[item.name] || '').trim());
+    const missingCustom = customFields.find((item) => item.required && (Array.isArray(customValues[item.id]) ? customValues[item.id].length === 0 : !String(customValues[item.id] || '').trim()));
+    if (missingCustom) return `Please complete ${missingCustom.label}.`;
+    const missing = customFields.length ? null : bookingConfig.fields.find((item) => item.required && !String(values[item.name] || '').trim());
     if (missing) return `Please complete ${missing.label}.`;
     if (values.endDate && values.startDate && new Date(values.endDate) <= new Date(values.startDate)) {
       return 'End date must be after start date.';
@@ -170,19 +187,33 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         durationDays: Number(values.durationDays) || 0,
         reservationTime: values.reservationTime,
         destinationPlace: values.destinationPlace,
-        destinationLocation: values.destinationLocation,
+        destinationLocation: bookingConfig.type === 'transport'
+          ? values.returnLocation || values.pickupLocation
+          : values.destinationLocation,
         pickupLocation: values.pickupLocation,
-        dropoffLocation: values.dropoffLocation,
+        returnLocation: values.returnLocation,
         vehicleType: values.vehicleType,
         packageType: values.packageType,
         specialRequests: values.specialRequests,
         bookingDetails: {
           ...values,
+          serviceName: service.title || service.name,
           passengers: bookingConfig.type === 'transport' ? values.quantity : undefined,
+          driverRequired: bookingConfig.type === 'transport' ? values.driverRequired : undefined,
+          phone: values.phone,
           guests: bookingConfig.type === 'accommodation' ? values.quantity : undefined,
           serviceCategory: service.category || business?.serviceCategory,
           bookingType: bookingConfig.type,
           providerRules: Array.isArray(service.rules) ? service.rules : [],
+          customFormTitle: business?.bookingForm?.title || '',
+          customResponses: customFields.map((fieldItem) => ({
+            fieldId: fieldItem.id,
+            label: fieldItem.label,
+            type: fieldItem.type,
+            value: fieldItem.type === 'file' && customValues[fieldItem.id]?.name
+              ? { fileName: customValues[fieldItem.id].name, size: customValues[fieldItem.id].size, type: customValues[fieldItem.id].type }
+              : customValues[fieldItem.id],
+          })),
         },
       });
 
@@ -232,12 +263,12 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       )}
 
       <div className="grid grid-cols-2 gap-4 mb-6">
-        {bookingConfig.fields.map((item) => (
+        {(customFields.length ? customFields : bookingConfig.fields).map((item) => (
           <DynamicField
-            key={item.name}
+            key={item.id || item.name}
             field={item}
-            value={values[item.name] || ''}
-            onChange={(value) => updateValue(item.name, value)}
+            value={customFields.length ? customValues[item.id] : values[item.name] || ''}
+            onChange={(value) => customFields.length ? setCustomValues((prev) => ({ ...prev, [item.id]: value })) : updateValue(item.name, value)}
           />
         ))}
       </div>
@@ -342,13 +373,62 @@ function getUnitCount(configData, values) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 1;
     return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
   }
-  if (configData.type === 'transport') return Math.max(1, Number(values.durationDays) || 1);
+  if (configData.type === 'transport') {
+    if (values.startDate && values.endDate) {
+      const start = new Date(values.startDate);
+      const end = new Date(values.endDate);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
+        return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+      }
+    }
+    return Math.max(1, Number(values.durationDays) || 1);
+  }
   if (configData.type === 'appointment') return Math.max(1, Number(values.durationHours) || 1);
   return Math.max(1, Number(values.quantity) || 1);
 }
 
 function DynamicField({ field: item, value, onChange }) {
+  const fieldName = item.name || item.id;
   const className = item.className || '';
+  const type = item.type === 'tel' ? 'tel' : item.type;
+  if (item.type === 'select') {
+    return (
+      <label className={`block ${className}`}>
+        <span className="block text-sm font-medium text-gray-700 mb-1">{item.label}</span>
+        <select
+          required={item.required}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary"
+        >
+          <option value="">Select {item.label}</option>
+          {item.options.map((option) => (
+            <option key={option} value={option.toLowerCase() === 'yes' ? 'yes' : option.toLowerCase() === 'no' ? 'no' : option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+  if (item.type === 'radio') {
+    return (
+      <fieldset className={`block ${className}`}>
+        <legend className="block text-sm font-medium text-gray-700 mb-1">{item.label}</legend>
+        <ChoiceList item={item} value={value} onChange={onChange} mode="radio" />
+      </fieldset>
+    );
+  }
+
+  if (item.type === 'checkbox') {
+    return (
+      <fieldset className={`block ${className}`}>
+        <legend className="block text-sm font-medium text-gray-700 mb-1">{item.label}</legend>
+        <ChoiceList item={item} value={Array.isArray(value) ? value : []} onChange={onChange} mode="checkbox" />
+      </fieldset>
+    );
+  }
+
   if (item.type === 'textarea') {
     return (
       <label className={`block ${className}`}>
@@ -357,13 +437,41 @@ function DynamicField({ field: item, value, onChange }) {
       </label>
     );
   }
+  if (item.type === 'file') {
+    return (
+      <label className={`block ${className}`}>
+        <span className="block text-sm font-medium text-gray-700 mb-1">{item.label}</span>
+        {item.helpText && <span className="block text-xs text-gray-500 mb-1">{item.helpText}</span>}
+        <input
+          type="file"
+          required={item.required}
+          accept={item.validation?.acceptedFileTypes || undefined}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return onChange('');
+            const maxBytes = Number(item.validation?.maxFileSizeMb || 5) * 1024 * 1024;
+            if (file.size > maxBytes) {
+              event.target.value = '';
+              window.alert(`Maximum file size is ${item.validation?.maxFileSizeMb || 5} MB.`);
+              return;
+            }
+            onChange(file);
+          }}
+          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary"
+        />
+      </label>
+    );
+  }
 
   return (
     <label className={`block ${className}`}>
       <span className="block text-sm font-medium text-gray-700 mb-1">{item.label}</span>
       <input
-        type={item.type}
-        min={item.type === 'date' ? TODAY : item.type === 'number' ? '1' : undefined}
+        name={fieldName}
+        type={type}
+        min={item.type === 'date' ? TODAY : item.type === 'number' ? item.validation?.min || '1' : undefined}
+        max={item.type === 'number' ? item.validation?.max || undefined : undefined}
+        pattern={item.validation?.pattern || undefined}
         required={item.required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -372,4 +480,11 @@ function DynamicField({ field: item, value, onChange }) {
       />
     </label>
   );
+}
+
+function ChoiceList({ item, value, onChange, mode }) {
+  return <div className="space-y-2 rounded-xl border border-gray-200 p-3">{(item.options || []).map((option) => <label key={option} className="flex items-center gap-2 text-sm text-gray-700"><input type={mode} checked={mode === 'checkbox' ? value.includes(option) : value === option} onChange={(event) => {
+    if (mode === 'radio') return onChange(option);
+    onChange(event.target.checked ? [...value, option] : value.filter((entry) => entry !== option));
+  }} />{option}</label>)}</div>;
 }
