@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tour-connect-shell-v2';
+const CACHE_NAME = 'tour-connect-shell-v3';
 const APP_SHELL = ['/', '/manifest.json', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
