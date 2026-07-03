@@ -5,27 +5,30 @@ import { t } from '../lib/translations';
 export default function HotelCard({ hotel, compact = false }) {
   const { language } = useLanguage();
   const hotelId = hotel.id || hotel._id;
-  const priceText = hotel.priceText || 'Price on request';
   const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
-  const remaining = Number(hotel.quantityRemaining ?? hotel.availableQuantity ?? hotel.primaryService?.availableQuantity ?? 1);
-  const isNotAvailable = hotel.status === 'unavailable' || remaining <= 0;
+  const isNotAvailable = hotel.status === 'unavailable';
   const availabilityText = isNotAvailable
     ? 'Not Available'
-    : hotel.primaryService?.availabilityText || `${remaining} available`;
+    : hotel.primaryService?.availabilityText || 'Available';
+  const promotion = getVisiblePromotion(hotel.promotion);
 
   return (
     <Link
       to={`/business/${hotelId}`}
-      className="group bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 block"
+      className="service-card group bg-white overflow-hidden transition-all duration-300 block"
     >
-      <div className="relative overflow-hidden h-48 bg-gray-50 md:h-64">
+      <div className="relative overflow-hidden h-48 bg-gray-50 md:h-52">
         {hotel.image ? (
           <img
             src={hotel.image}
             alt={hotel.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
-        ) : null}
+        ) : (
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-gray-400">
+            No seller image uploaded
+          </div>
+        )}
         {hotel.isFeatured && (
           <div className="absolute top-3 left-3 bg-secondary text-white text-xs font-bold px-3 py-1 rounded-full">
             {t('featured', language)}
@@ -36,12 +39,14 @@ export default function HotelCard({ hotel, compact = false }) {
             Not Available
           </div>
         )}
-        <div className="absolute bottom-3 right-3 bg-white bg-opacity-90 backdrop-blur-sm px-2 py-1 rounded-lg">
-          <span className="font-bold text-primary">{priceText}</span>
-        </div>
+        {promotion && (
+          <div className="service-promotion-badge absolute right-3 top-3 rounded-full border border-amber-400 bg-amber-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-amber-700 shadow-lg">
+            ★ Promotion
+          </div>
+        )}
       </div>
 
-      <div className="p-4 md:p-5">
+      <div className="p-5 md:p-6">
         <div className="flex items-start justify-between mb-2">
           <h3 className="text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-primary transition">
             {hotel.name}
@@ -62,6 +67,18 @@ export default function HotelCard({ hotel, compact = false }) {
         <p className={`text-gray-600 mb-4 ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>
           {hotel.description}
         </p>
+        {promotion && (
+          <div className="service-promotion-panel mb-4 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-100 p-4 text-left">
+            <div className="grid grid-cols-[2.5rem_1fr] gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-xl text-white">☆</span>
+              <div>
+                <h4 className="font-black text-amber-700">{promotion.title}</h4>
+                <p className="mt-1 text-sm text-slate-800">{promotion.description}</p>
+                <p className="mt-2 text-xs font-semibold text-orange-600">Valid {formatPromotionDate(promotion.startAt)} – {formatPromotionDate(promotion.endAt)}</p>
+              </div>
+            </div>
+          </div>
+        )}
         {availabilityText && (
           <p className="mb-3 text-sm font-semibold text-primary">{availabilityText}</p>
         )}
@@ -83,11 +100,26 @@ export default function HotelCard({ hotel, compact = false }) {
           <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             {formatBusinessType(hotel.serviceCategory)} / {formatBusinessType(hotel.bookingModel)}
           </span>
-          <span className="text-primary font-bold">Open Business -&gt;</span>
+          <span className="card-action text-primary font-bold">View services -&gt;</span>
         </div>
       </div>
     </Link>
   );
+}
+
+function getVisiblePromotion(promotion) {
+  if (!promotion?.enabled || !promotion.title || !promotion.description) return null;
+  const start = new Date(promotion.startAt);
+  const end = new Date(promotion.endAt);
+  const now = new Date();
+  if (!Number.isNaN(start.getTime()) && start > now) return null;
+  return Number.isNaN(end.getTime()) || end >= now ? promotion : null;
+}
+
+function formatPromotionDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'as scheduled';
+  return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function formatBusinessType(value) {

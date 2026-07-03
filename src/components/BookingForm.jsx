@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
-import { bookingApi, getAuthData, publicApi } from '../lib/api';
+import { bookingApi, getAuthData, publicApi, rebookApi } from '../lib/api';
 import { formatRwf } from '../lib/currency';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import DepositPaymentModal from './DepositPaymentModal';
+import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -20,6 +23,15 @@ const BASE_VALUES = {
   vehicleType: '',
   driverRequired: 'no',
   phone: '',
+  fullName: '',
+  email: '',
+  bookingDate: '',
+  startTime: '',
+  endTime: '',
+  numberOfPeople: '1',
+  customerLocation: '',
+  paymentMethod: 'mobile-money',
+  agreeToTerms: false,
   packageType: '',
   durationHours: '1',
   durationDays: '1',
@@ -88,34 +100,55 @@ function field(name, label, type, placeholder = '', required = false, className 
 }
 
 export default function BookingForm({ hotelId, onClose, onSuccess }) {
+  const [searchParams] = useSearchParams();
+  const initialRebookId = searchParams.get('rebookId') || '';
   const [business, setBusiness] = useState(null);
   const [values, setValues] = useState(BASE_VALUES);
   const [customValues, setCustomValues] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
+  const [selectedOffer, setSelectedOffer] = useState('');
+  const [marketplaceRules, setMarketplaceRules] = useState([]);
+  const [marketplaceSettings, setMarketplaceSettings] = useState({ bookingMode: 'manual' });
+  const [quoteResult, setQuoteResult] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [useRebook, setUseRebook] = useState(Boolean(initialRebookId));
+  const [rebookId, setRebookId] = useState(initialRebookId);
+  const [verifiedRebookId, setVerifiedRebookId] = useState('');
+  const [verifyingRebook, setVerifyingRebook] = useState(false);
   const { language } = useLanguage();
 
   useEffect(() => {
     const loadBusiness = async () => {
       try {
-        const response = await publicApi.getHotels();
+        const [response, settingsResponse] = await Promise.all([
+          publicApi.getHotels(),
+          publicApi.getMarketplaceSettings().catch(() => ({ settings: {} })),
+        ]);
+        setMarketplaceRules(settingsResponse.settings?.bookingRules || []);
+        setMarketplaceSettings(settingsResponse.settings || { bookingMode: 'manual' });
         const businesses = normalizeHotels(response.businesses || response.hotels || []);
         const found = businesses.find((item) => String(item.id) === String(hotelId));
-        setBusiness(found || null);
-        if (found) {
+          setBusiness(found || null);
+          if (found) {
           const service = getSelectedService(found);
           const customDefaults = {};
           const fields = found.bookingForm?.isPublished ? found.bookingForm.fields || [] : [];
           fields.forEach((fieldItem) => {
             customDefaults[fieldItem.id] = fieldItem.type === 'checkbox' ? [] : fieldItem.defaultValue || '';
           });
-          setCustomValues(customDefaults);
+            setCustomValues(customDefaults);
+            const firstOffer = found.availabilityTable?.rows?.[0]?.cells?.service || '';
+            setSelectedOffer(firstOffer);
           setValues((prev) => ({
             ...prev,
             destinationPlace: service?.title || service?.name || found.name || '',
             destinationLocation: service?.location || found.location || '',
             vehicleType: service?.title || service?.name || found.name || '',
+            email: getAuthData()?.user?.email || '',
+            fullName: getAuthData()?.user?.name || '',
+            phone: getAuthData()?.user?.phone || '',
           }));
         }
       } finally {
@@ -136,11 +169,12 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     () => (business?.bookingForm?.isPublished ? (business.bookingForm.fields || []).filter((item) => item.enabled !== false) : []),
     [business]
   );
-  const unitPrice = useMemo(() => getServiceUnitPrice(service), [service]);
-  const unitCount = useMemo(() => getUnitCount(bookingConfig, values), [bookingConfig, values]);
-  const totalPrice = unitPrice * unitCount;
-  const remainingQuantity = Number(service?.availableQuantity ?? business?.quantityRemaining ?? business?.availableQuantity ?? 1);
-  const isUnavailable = (service?.status && service.status !== 'available') || remainingQuantity <= 0;
+  const offers = business?.availabilityTable?.rows || [];
+  const selectedOfferRow = offers.find((row) => row.cells?.service === selectedOffer);
+  const effectiveMode = marketplaceSettings.bookingMode === 'service-level'
+    ? business?.bookingMode || service?.bookingMode || 'manual'
+    : marketplaceSettings.bookingMode || 'manual';
+  const isUnavailable = (service?.status || business?.status) === 'unavailable';
 
   const updateValue = (key, value) => {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -149,14 +183,38 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const validate = () => {
     if (!service?._id) return 'This service is not available for booking yet.';
     if (isUnavailable) return 'This service is currently not available.';
+    if (!selectedOffer) return 'Please choose a service from the price table.';
+    if (!values.fullName.trim()) return 'Please complete Full name.';
+    if (!/^\+?[0-9][0-9\s-]{7,18}$/.test(values.phone)) return 'Please enter a valid phone number.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return 'Please enter a valid email address.';
+    if (!values.bookingDate) return 'Please choose a booking date.';
+    if (!values.agreeToTerms) return 'Please agree to the terms and conditions.';
+    if (useRebook && !rebookId.trim()) return 'Enter your Re-book ID.';
+    if (useRebook && verifiedRebookId !== rebookId.trim().toUpperCase()) return 'Verify the Re-book ID before submitting.';
     const missingCustom = customFields.find((item) => item.required && (Array.isArray(customValues[item.id]) ? customValues[item.id].length === 0 : !String(customValues[item.id] || '').trim()));
     if (missingCustom) return `Please complete ${missingCustom.label}.`;
-    const missing = customFields.length ? null : bookingConfig.fields.find((item) => item.required && !String(values[item.name] || '').trim());
-    if (missing) return `Please complete ${missing.label}.`;
     if (values.endDate && values.startDate && new Date(values.endDate) <= new Date(values.startDate)) {
       return 'End date must be after start date.';
     }
     return '';
+  };
+
+  const verifyRebook = async () => {
+    if (!rebookId.trim()) {
+      setError('Enter your Re-book ID.');
+      return;
+    }
+    setVerifyingRebook(true);
+    setError('');
+    try {
+      await rebookApi.verifyId(getAuthData()?.token, rebookId.trim(), service?._id);
+      setVerifiedRebookId(rebookId.trim().toUpperCase());
+    } catch (requestError) {
+      setVerifiedRebookId('');
+      setError(requestError.message);
+    } finally {
+      setVerifyingRebook(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -179,8 +237,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     try {
       const response = await bookingApi.bookService(authData.token, {
         serviceId: service._id,
+        rebookId: useRebook ? verifiedRebookId : undefined,
         quantity: getReservableQuantity(bookingConfig, values),
-        totalPrice,
+        totalPrice: 0,
         startDate: values.startDate || null,
         endDate: values.endDate || values.startDate || null,
         durationHours: Number(values.durationHours) || 0,
@@ -198,9 +257,22 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         bookingDetails: {
           ...values,
           serviceName: service.title || service.name,
+          requestedService: selectedOffer,
+          selectedOptionId: selectedOfferRow?.id,
+          listedPriceRwf: selectedOfferRow?.cells?.price || '',
+          fullName: values.fullName,
+          email: values.email,
+          phone: values.phone,
+          bookingDate: values.bookingDate,
+          startTime: values.startTime,
+          endTime: values.endTime,
+          endDate: values.endDate || values.bookingDate,
+          numberOfPeople: Number(values.numberOfPeople) || 1,
+          quantity: Number(values.quantity) || 1,
+          customerLocation: values.customerLocation,
+          paymentMethod: values.paymentMethod,
           passengers: bookingConfig.type === 'transport' ? values.quantity : undefined,
           driverRequired: bookingConfig.type === 'transport' ? values.driverRequired : undefined,
-          phone: values.phone,
           guests: bookingConfig.type === 'accommodation' ? values.quantity : undefined,
           serviceCategory: service.category || business?.serviceCategory,
           bookingType: bookingConfig.type,
@@ -217,7 +289,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         },
       });
 
-      onSuccess?.(response.booking);
+      trackAnalytics(ANALYTICS_EVENTS.BOOKING_SUBMITTED, {
+        serviceId: service._id,
+        bookingId: response.booking?._id,
+      });
+
+      if (response.quote) setQuoteResult({ booking: response.booking, quote: response.quote });
+      else onSuccess?.(response.booking);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -262,8 +340,49 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        {(customFields.length ? customFields : bookingConfig.fields).map((item) => (
+      {marketplaceRules.length > 0 && (
+        <div className="mb-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-950">
+          <p className="font-bold">SafarisCon booking rules</p>
+          <ul className="mt-2 list-disc pl-5">{marketplaceRules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
+        </div>
+      )}
+
+      <label className="mb-5 block">
+        <span className="text-sm font-bold text-gray-800">Choose a service *</span>
+        <select disabled={Boolean(quoteResult)} value={selectedOffer} onChange={(event) => setSelectedOffer(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 disabled:bg-gray-100" required>
+          <option value="">Select from the seller's table</option>
+          {offers.map((row) => (
+            <option key={row.id} value={row.cells?.service}>{row.cells?.service} — {formatRwf(Number(row.cells?.price || 0))}</option>
+          ))}
+        </select>
+      </label>
+
+      {selectedOfferRow && (
+        <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+          <div className="flex items-center justify-between gap-3">
+            <div><strong>{selectedOfferRow.cells?.service}</strong><p className="mt-1 capitalize">{String(selectedOfferRow.cells?.priceType || 'Manual quote').replace(/-/g, ' ')}</p></div>
+            <button type="button" onClick={() => setDetailsOpen(true)} className="rounded-lg bg-white px-3 py-2 font-bold text-primary">View details</button>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FixedInput label="Full name" value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
+        <FixedInput label="Phone number" type="tel" value={values.phone} onChange={(value) => updateValue('phone', value)} required />
+        <FixedInput label="Email" type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
+        <FixedInput label="Booking date" type="date" min={TODAY} value={values.bookingDate} onChange={(value) => updateValue('bookingDate', value)} required />
+        <FixedInput label="End date (when needed)" type="date" min={values.bookingDate || TODAY} value={values.endDate} onChange={(value) => updateValue('endDate', value)} />
+        <FixedInput label="Start time" type="time" value={values.startTime} onChange={(value) => updateValue('startTime', value)} />
+        <FixedInput label="End time / completion time" type="time" value={values.endTime} onChange={(value) => updateValue('endTime', value)} />
+        <FixedInput label="Number of people" type="number" min="1" value={values.numberOfPeople} onChange={(value) => updateValue('numberOfPeople', value)} required />
+        <FixedInput label="Quantity / units" type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
+        <FixedInput label="Customer location / pickup location" value={values.customerLocation} onChange={(value) => updateValue('customerLocation', value)} />
+        <label className="block"><span className="mb-1 block text-sm font-medium text-gray-700">Payment method</span><select value={values.paymentMethod} onChange={(event) => updateValue('paymentMethod', event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3"><option value="mobile-money">Mobile Money</option><option value="bank">Bank</option></select></label>
+        <label className="block sm:col-span-2"><span className="mb-1 block text-sm font-medium text-gray-700">Special request</span><textarea value={values.specialRequests} onChange={(event) => updateValue('specialRequests', event.target.value)} rows={3} className="w-full rounded-xl border border-gray-300 px-4 py-3" /></label>
+      </div>
+
+      {customFields.length > 0 && <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
+        {customFields.map((item) => (
           <DynamicField
             key={item.id || item.name}
             field={item}
@@ -271,19 +390,24 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             onChange={(value) => customFields.length ? setCustomValues((prev) => ({ ...prev, [item.id]: value })) : updateValue(item.name, value)}
           />
         ))}
+      </div>}
+
+      <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <label className="flex items-center gap-3 text-sm font-bold text-blue-950">
+          <input type="checkbox" checked={useRebook} onChange={(event) => { setUseRebook(event.target.checked); setVerifiedRebookId(''); setError(''); }} />
+          Use a one-time Re-book ID
+        </label>
+        {useRebook && <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input value={rebookId} onChange={(event) => { setRebookId(event.target.value.toUpperCase()); setVerifiedRebookId(''); }} placeholder="RBK-2026-00124" className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono uppercase" />
+          <button type="button" disabled={verifyingRebook} onClick={verifyRebook} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{verifyingRebook ? 'Verifying...' : 'Verify ID'}</button>
+        </div>}
+        {useRebook && verifiedRebookId && <p className="mt-2 text-xs font-bold text-emerald-700">Re-book ID verified. It will be marked used only after this booking is created.</p>}
       </div>
 
-      <div className="bg-gray-50 rounded-xl p-4 mb-6">
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-600">
-            {service.priceText || formatRwf(unitPrice)} x {unitCount} {bookingConfig.unitLabel}
-          </span>
-          <span className="font-medium">{formatRwf(totalPrice)}</span>
-        </div>
-        <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between">
-          <span className="font-bold text-gray-900">{t('estimatedTotal', language)}</span>
-          <span className="font-bold text-primary text-lg">{formatRwf(totalPrice)}</span>
-        </div>
+      <label className="mb-5 flex items-start gap-3 rounded-xl border border-gray-200 p-4 text-sm text-gray-700"><input type="checkbox" checked={values.agreeToTerms} onChange={(event) => updateValue('agreeToTerms', event.target.checked)} required /><span>I agree to the terms and conditions and understand that provider details unlock only after successful deposit payment.</span></label>
+
+      <div className="bg-gray-50 rounded-xl p-4 mb-6 text-sm text-gray-700">
+        {effectiveMode === 'automatic' ? 'Automatic booking: the backend validates availability and calculates the exact RWF quote. You can pay the 30% deposit immediately.' : "Manual booking: admin reviews your request and confirms the exact RWF price before the 30% deposit is available."}
       </div>
 
       {isUnavailable && <div className="mb-4 p-3 bg-amber-50 text-amber-700 rounded-lg text-sm">This service is currently not available for booking.</div>}
@@ -291,7 +415,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
       <button
         type="submit"
-        disabled={loading || isUnavailable}
+        disabled={loading || isUnavailable || Boolean(quoteResult)}
         className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {loading ? (
@@ -300,11 +424,33 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             {t('sending', language)}
           </>
         ) : (
-          t('submitBookingRequest', language)
+          quoteResult ? 'Quote created' : t('submitBookingRequest', language)
         )}
       </button>
+
+      {quoteResult && <QuoteCard result={quoteResult} paymentMethod={values.paymentMethod} onPaid={(booking) => onSuccess?.(booking)} />}
+      {detailsOpen && <DetailsModal row={selectedOfferRow} onClose={() => setDetailsOpen(false)} />}
     </form>
   );
+}
+
+function FixedInput({ label, value, onChange, type = 'text', min, required = false }) {
+  return <label className="block"><span className="mb-1 block text-sm font-medium text-gray-700">{label}</span><input type={type} min={min} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
+}
+
+function QuoteCard({ result, paymentMethod, onPaid }) {
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const pay = async (paymentDetails) => {
+    const response = await bookingApi.payBooking(getAuthData()?.token, result.booking._id, { paymentMethod: paymentDetails.paymentMethod || paymentMethod, senderAccount: paymentDetails.senderAccount });
+    setPaymentOpen(false);
+    onPaid(response.booking);
+  };
+  const { quote } = result;
+  return <><aside className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-blue-700">Automatic quote preview</p><h3 className="mt-1 text-xl font-black">{result.booking.priceSnapshot?.name}</h3><dl className="mt-4 grid gap-2 text-sm"><div className="flex justify-between"><dt>Price type</dt><dd className="capitalize">{String(result.booking.priceSnapshot?.priceType || '').replace(/-/g, ' ')}</dd></div><div className="flex justify-between"><dt>Number of people</dt><dd>{quote.people}</dd></div><div className="flex justify-between"><dt>Quantity / units</dt><dd>{quote.quantity}</dd></div><div className="flex justify-between"><dt>Booking duration</dt><dd>{quote.duration} {result.booking.priceSnapshot?.durationUnit}</dd></div><div className="flex justify-between"><dt>Total price</dt><dd className="font-black">{formatRwf(quote.total)}</dd></div><div className="flex justify-between"><dt>Deposit required (30%)</dt><dd className="font-black text-primary">{formatRwf(quote.deposit)}</dd></div><div className="flex justify-between"><dt>Remaining balance</dt><dd className="font-bold">{formatRwf(quote.remaining)}</dd></div></dl><p className="mt-4 rounded-xl bg-white p-3 text-sm">{quote.reason}</p><button type="button" onClick={() => setPaymentOpen(true)} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black text-white">Pay deposit</button></aside>{paymentOpen && <DepositPaymentModal booking={result.booking} customer={getAuthData()?.user} onClose={() => setPaymentOpen(false)} onConfirm={pay} />}</>;
+}
+
+function DetailsModal({ row, onClose }) {
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-blue-700">Option details & amenities</p><h3 className="mt-1 text-xl font-black">{row?.cells?.service}</h3></div><button type="button" onClick={onClose} className="text-2xl text-gray-500">×</button></div><p className="mt-4 whitespace-pre-wrap text-gray-700">{row?.cells?.details || 'The seller has not added extra amenities for this option.'}</p><button type="button" onClick={onClose} className="mt-5 rounded-xl bg-primary px-4 py-2 font-bold text-white">Close</button></div></div>;
 }
 
 function getReservableQuantity(configData, values) {
@@ -356,35 +502,6 @@ function getBookingConfig({ business, service }) {
 
 function config(type, label, unitLabel, fields) {
   return { type, label, unitLabel, fields };
-}
-
-function getServiceUnitPrice(service) {
-  const explicitAmount = Number(service?.pricing?.amount || 0);
-  if (explicitAmount > 0) return explicitAmount;
-  const match = String(service?.priceText || '').replace(/,/g, '').match(/\d+(\.\d+)?/);
-  return match ? Number(match[0]) : 0;
-}
-
-function getUnitCount(configData, values) {
-  if (configData.type === 'accommodation') {
-    if (!values.startDate || !values.endDate) return 1;
-    const start = new Date(values.startDate);
-    const end = new Date(values.endDate);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 1;
-    return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
-  }
-  if (configData.type === 'transport') {
-    if (values.startDate && values.endDate) {
-      const start = new Date(values.startDate);
-      const end = new Date(values.endDate);
-      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start) {
-        return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
-      }
-    }
-    return Math.max(1, Number(values.durationDays) || 1);
-  }
-  if (configData.type === 'appointment') return Math.max(1, Number(values.durationHours) || 1);
-  return Math.max(1, Number(values.quantity) || 1);
 }
 
 function DynamicField({ field: item, value, onChange }) {

@@ -18,7 +18,9 @@ export default function HotelsPage() {
    const [sortBy, setSortBy] = useState('recommended');
    const [categoryFilter, setCategoryFilter] = useState('');
    const [availableOnly, setAvailableOnly] = useState(false);
+   const [mobileView, setMobileView] = useState('list');
    const [loading, setLoading] = useState(true);
+   const [loadError, setLoadError] = useState('');
   const { language } = useLanguage();
 
   const locationParam = searchParams.get('location');
@@ -26,9 +28,13 @@ export default function HotelsPage() {
 
   const loadHotels = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
+    setLoadError('');
     try {
       const response = await publicApi.getHotels();
       setAllHotels(normalizeHotels(response.businesses || response.hotels || []));
+    } catch (error) {
+      setAllHotels([]);
+      setLoadError(error.message || 'Unable to load services.');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -117,12 +123,14 @@ export default function HotelsPage() {
 
   const serviceOptions = useMemo(
     () =>
-      allHotels
-        .map((hotel) => ({
-          value: hotel.name,
-          label: `${hotel.name} - ${formatLabel(hotel.serviceCategory || hotel.type)}`,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
+      [...new Map(allHotels.map((hotel) => {
+        const category = hotel.serviceCategory || hotel.type;
+        return [category, { value: category, label: formatLabel(category) }];
+      })).values()].sort((a, b) => a.label.localeCompare(b.label)),
+    [allHotels]
+  );
+  const locationOptions = useMemo(
+    () => [...new Set(allHotels.map((hotel) => hotel.destinationLocation).filter(Boolean))].sort(),
     [allHotels]
   );
 
@@ -143,24 +151,29 @@ export default function HotelsPage() {
 
 <main className="flex-1">
        {/* Header */}
-       <div className="bg-gradient-to-br from-primary to-primary-dark text-white py-12">
-         <div className="max-w-7xl mx-auto px-4 text-center">
-           <h1 className="text-4xl md:text-5xl font-bold mb-4">Explore Businesses</h1>
-           <p className="text-lg text-gray-200 max-w-2xl mx-auto">
-             {t('exploreDescription', language)}
-           </p>
+       <div className="relative overflow-hidden border-b border-blue-100 bg-blue-50 py-6">
+         <div className="relative z-10 mx-auto flex max-w-7xl items-center gap-4 px-4">
+           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-blue-100 text-primary">
+             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 8V6a2 2 0 012-2h8a2 2 0 012 2v2M4 8h16v11H4V8zm0 4h16m-9-2h2v4h-2v-4z" /></svg>
+           </span>
+           <div>
+             <h1 className="text-2xl font-black text-blue-950 md:text-3xl">Explore Services</h1>
+             <p className="mt-1 text-sm text-slate-600">Find accommodation, transport, food, tours, events, and more across Rwanda.</p>
+           </div>
          </div>
+         <svg className="absolute bottom-0 right-0 h-full w-1/3 text-blue-100/80" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 120L80 65l35 28 55-60 45 55 50-38 40 42 45-20 50 48H0z" /></svg>
        </div>
 
         {/* Search and Filters */}
-        <div className="bg-white shadow-md sticky top-16 z-40">
+        <div className="sticky top-14 z-40 border-b border-slate-100 bg-white/95 shadow-sm backdrop-blur">
           <div className="max-w-7xl mx-auto px-4 py-4">
-            <SearchBar variant="compact" serviceOptions={serviceOptions} />
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <SearchBar variant="compact" serviceOptions={serviceOptions} locationOptions={locationOptions}>
+              <div className="hidden md:contents">
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                aria-label="All categories"
+                className="search-control w-full bg-white px-4 py-3 text-sm text-slate-900 outline-none"
               >
                 <option value="">All Categories</option>
                 {categoryOptions.map((category) => (
@@ -169,15 +182,16 @@ export default function HotelsPage() {
                   </option>
                 ))}
               </select>
-              <label className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700">
+              <label className="inline-flex min-h-12 items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700">
+                <span>Available now</span>
                 <input
                   type="checkbox"
                   checked={availableOnly}
                   onChange={(e) => setAvailableOnly(e.target.checked)}
                 />
-                Available now
               </label>
-            </div>
+              </div>
+            </SearchBar>
           </div>
         </div>
 
@@ -257,9 +271,22 @@ export default function HotelsPage() {
             </div>
           </div>
 
+          <div className="mb-5 flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm md:hidden" aria-label="Service display style">
+            <button type="button" onClick={() => setMobileView('list')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold ${mobileView === 'list' ? 'bg-blue-950 text-white' : 'text-slate-700'}`}>
+              <span aria-hidden="true">☷</span> List
+            </button>
+            <button type="button" onClick={() => setMobileView('grid')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold ${mobileView === 'grid' ? 'bg-blue-950 text-white' : 'text-slate-700'}`}>
+              <span aria-hidden="true">⊞</span> Grid
+            </button>
+          </div>
+
 {/* Hotel Grid */}
            {loading ? (
              <LoadingSpinner size="lg" />
+           ) : loadError ? (
+             <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+               {loadError}
+             </div>
            ) : filteredHotels.length > 0 ? (
              <div className="space-y-10">
                {Object.entries(groupedHotels).map(([category, hotels]) => (
@@ -272,7 +299,7 @@ export default function HotelsPage() {
                        </p>
                      </div>
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   <div className={`services-results-grid grid gap-6 md:grid-cols-2 lg:grid-cols-3 ${mobileView === 'list' ? 'mobile-list-view' : 'mobile-grid-view'}`}>
                      {hotels.map((hotel) => (
                        <HotelCard key={hotel.id} hotel={hotel} />
                      ))}

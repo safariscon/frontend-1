@@ -4,29 +4,40 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
-import { getAuthData, hotelApi } from '../lib/api';
+import { bookingApi, getAuthData, hotelApi, publicApi } from '../lib/api';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { formatRwf } from '../lib/currency';
+import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES } from '../data/serviceCategories';
+import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 
 const EMPTY_FORM = {
   title: '',
   description: '',
-  location: 'Rwanda',
-  category: 'hotels-and-resorts',
-  price: '',
+  locationDetails: { district: '', sector: '', cell: '', village: '' },
+  category: 'hotel-rooms',
+  payoutDetails: { method: 'mobile-money', accountName: '', accountNumber: '', instructions: '' },
+  contactDetails: { phone: '', whatsapp: '' },
   status: 'available',
   customAvailability: '',
   remainingQuantity: '',
   existingImages: [],
   imageFiles: [],
+  promotion: { enabled: false, title: '', description: '', startAt: '', endAt: '' },
+  promotionHistory: [],
   availabilityTable: {
     columns: [
-      { id: 'service', label: 'Service' },
-      { id: 'availability', label: 'Availability' },
-      { id: 'price', label: 'Price' },
+      { id: 'service', label: 'Option name' },
+      { id: 'price', label: 'Price (RWF)' },
+      { id: 'priceType', label: 'Price type' },
+      { id: 'calculationField', label: 'Calculation field' },
+      { id: 'durationUnit', label: 'Duration unit' },
+      { id: 'maximumDuration', label: 'Maximum duration' },
+      { id: 'availability', label: 'Availability / capacity' },
+      { id: 'details', label: 'Details / amenities' },
     ],
-    rows: [{ id: 'row_1', cells: { service: '', availability: '', price: '' } }],
+    rows: [{ id: 'row_1', cells: { service: '', price: '' } }],
   },
+  bookingMode: 'manual',
   bookingForm: {
     title: 'Booking Request',
     description: '',
@@ -39,26 +50,16 @@ const EMPTY_FORM = {
   },
 };
 
-const SERVICE_CATEGORIES = [
-  ['Accommodation Services', [['hotels-and-resorts', 'Hotels & Resorts'], ['homestays-and-guesthouses', 'Homestays & Guesthouses'], ['tent-rentals-and-camping-sites', 'Tent Rentals & Camping Sites'], ['vacation-rentals-and-apartments', 'Vacation Rentals & Apartments']]],
-  ['Transport & Mobility Services', [['car-rentals', 'Car Rentals'], ['motorbike-and-scooter-rentals', 'Motorbike & Scooter Rentals'], ['taxi-and-ride-services', 'Taxi & Ride Services'], ['bus-and-minivan-charters', 'Bus & Minivan Charters']]],
-  ['Food & Beverage Services', [['restaurants', 'Restaurants'], ['bars-and-pubs', 'Bars & Pubs'], ['coffee-shops-and-cafes', 'Coffee Shops & Cafes'], ['food-trucks-and-street-food-stalls', 'Food Trucks & Street Food']]],
-  ['Events & Venue Services', [['conference-event-halls-mice', 'Conference & Event Halls'], ['wedding-venues', 'Wedding Venues']]],
-  ['Travel & Experience Services', [['tour-and-activity-operators', 'Tours & Activities'], ['entertainment-venues', 'Entertainment Venues'], ['gear-rentals', 'Gear Rentals']]],
-  ['Shopping & Local Market Services', [['souvenir-shops-and-craft-markets', 'Souvenir Shops & Craft Markets']]],
-  ['Wellness & Personal Care Services', [['spas-and-wellness-centers', 'Spas & Wellness Centers']]],
-  ['Personal Support Services', [['childcare-services', 'Childcare Services']]],
+const RWANDA_DISTRICTS = [
+  'Bugesera', 'Burera', 'Gakenke', 'Gasabo', 'Gatsibo', 'Gicumbi', 'Gisagara', 'Huye', 'Kamonyi', 'Karongi',
+  'Kayonza', 'Kicukiro', 'Kirehe', 'Muhanga', 'Musanze', 'Ngoma', 'Ngororero', 'Nyabihu', 'Nyagatare', 'Nyamagabe',
+  'Nyamasheke', 'Nyanza', 'Nyarugenge', 'Nyaruguru', 'Rubavu', 'Ruhango', 'Rulindo', 'Rusizi', 'Rutsiro', 'Rwamagana',
 ];
 
 const makeId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 const normalizeTableForForm = (table) => {
-  const columns = Array.isArray(table?.columns) && table.columns.length
-    ? table.columns.map((column, index) => ({
-        id: column.id || `col_${index + 1}`,
-        label: column.label || `Column ${index + 1}`,
-      }))
-    : EMPTY_FORM.availabilityTable.columns;
+  const columns = EMPTY_FORM.availabilityTable.columns;
   const rows = Array.isArray(table?.rows) && table.rows.length
     ? table.rows.map((row, index) => ({
         id: row.id || `row_${index + 1}`,
@@ -69,6 +70,17 @@ const normalizeTableForForm = (table) => {
   return { columns, rows, updatedAt: table?.updatedAt || null };
 };
 
+const normalizeLocationForForm = (service) => {
+  if (service.locationDetails?.district) return service.locationDetails;
+  const parts = String(service.location || '').split(',').map((part) => part.trim()).filter(Boolean);
+  return {
+    village: parts.length >= 4 ? parts.at(-4) : '',
+    cell: parts.length >= 3 ? parts.at(-3) : '',
+    sector: parts.length >= 2 ? parts.at(-2) : '',
+    district: parts.at(-1) === 'Rwanda' ? parts.at(-2) || '' : parts.at(-1) || '',
+  };
+};
+
 const validateImageFiles = (files) => {
   const maxSize = 5 * 1024 * 1024;
   const accepted = files.filter((file) => file.type.startsWith('image/') && file.size <= maxSize);
@@ -76,6 +88,17 @@ const validateImageFiles = (files) => {
     accepted: accepted.slice(0, 3),
     rejected: files.length !== accepted.length || files.length > 3,
   };
+};
+
+const toDateTimeInput = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16);
+};
+
+const formatDashboardDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 };
 
 const FIELD_TYPES = [
@@ -166,7 +189,7 @@ const QUICK_QUESTIONS = [
     items: [
       { label: 'Service type', type: 'select', placeholder: 'Choose service', required: true, options: ['Standard', 'Premium', 'VIP'] },
       { label: 'Preferred contact method', type: 'radio', required: false, options: ['Phone', 'Email', 'WhatsApp'] },
-      { label: 'Extra services needed', type: 'checkbox', required: false, options: ['Transport', 'Guide', 'Food', 'Photos'] },
+      { label: 'Extra services needed', type: 'checkbox', required: false, options: ['Transport', 'Guide', 'Food', 'Airport pickup'] },
     ],
   },
   {
@@ -212,6 +235,7 @@ export default function HotelDashboard() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [globalBookingMode, setGlobalBookingMode] = useState('manual');
   const token = getAuthData()?.token;
 
   const loadData = async ({ silent = false } = {}) => {
@@ -219,14 +243,16 @@ export default function HotelDashboard() {
     if (!silent) setLoading(true);
     setError('');
     try {
-      const [overviewResp, servicesResp, bookingsResp] = await Promise.all([
+      const [overviewResp, servicesResp, bookingsResp, settingsResp] = await Promise.all([
         hotelApi.getOverview(token),
         hotelApi.getMyServices(token),
         hotelApi.getMyBookings(token),
+        publicApi.getMarketplaceSettings().catch(() => ({ settings: { bookingMode: 'manual' } })),
       ]);
       setOverview(overviewResp);
       setServices(servicesResp.services || []);
       setBookings(bookingsResp.bookings || []);
+      setGlobalBookingMode(settingsResp.settings?.bookingMode || 'manual');
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -282,16 +308,34 @@ export default function HotelDashboard() {
     setForm({
       title: service.title || service.name || '',
       description: service.description || '',
-      location: service.location || 'Rwanda',
-      category: service.category || service.serviceType || 'hotels-and-resorts',
-      price: service.priceText || '',
+      locationDetails: normalizeLocationForForm(service),
+      category: service.category || service.serviceType || 'hotel-rooms',
+      payoutDetails: {
+        method: service.payoutDetails?.method || 'mobile-money',
+        accountName: service.payoutDetails?.accountName || '',
+        accountNumber: service.payoutDetails?.accountNumber || '',
+        instructions: service.payoutDetails?.instructions || '',
+      },
+      contactDetails: {
+        phone: service.contactDetails?.phone || '',
+        whatsapp: service.contactDetails?.whatsapp || '',
+      },
       status: service.status === 'unavailable' ? 'unavailable' : service.availabilityText ? 'custom' : 'available',
       customAvailability: service.availabilityText || '',
       remainingQuantity: service.availabilityText || '',
       existingImages: Array.isArray(service.images) ? service.images.filter(Boolean).slice(0, 3) : [],
       imageFiles: [],
+      promotion: {
+        enabled: service.promotion?.enabled === true,
+        title: service.promotion?.title || '',
+        description: service.promotion?.description || '',
+        startAt: toDateTimeInput(service.promotion?.startAt),
+        endAt: toDateTimeInput(service.promotion?.endAt),
+      },
+      promotionHistory: Array.isArray(service.promotionHistory) ? service.promotionHistory : [],
       availabilityTable: normalizeTableForForm(service.availabilityTable),
       bookingForm: normalizeBookingFormForForm(service.bookingForm),
+      bookingMode: service.bookingMode || 'manual',
     });
     setActiveTab('edit');
   };
@@ -325,15 +369,18 @@ export default function HotelDashboard() {
     const payload = {
       title: form.title,
       description: form.description,
-      location: form.location,
+      locationDetails: form.locationDetails,
+      payoutDetails: form.payoutDetails,
+      contactDetails: form.contactDetails,
       serviceType: 'rental',
       category: form.category,
       pricing: { amount: 0, unit: 'service', currency: 'RWF' },
-      priceText: form.price,
+      priceText: '',
       availableQuantity: quantityMatch ? Number(quantityMatch[0]) : normalizedStatus === 'available' ? 1 : 0,
       availabilityText,
       status: normalizedStatus,
       images: [...(form.existingImages || []), ...uploadedImageUrls].slice(0, 3),
+      promotion: form.promotion,
       availabilityTable: form.availabilityTable,
       bookingForm: form.bookingForm,
       isActive: true,
@@ -354,19 +401,31 @@ export default function HotelDashboard() {
   };
 
   const updateStatus = async (service, status) => {
+    const structuredLocation = normalizeLocationForForm(service);
+    const hasLocation = Object.values(structuredLocation).every(Boolean);
+    const hasPayout = service.payoutDetails?.accountName && service.payoutDetails?.accountNumber;
+    const hasPriceRows = service.availabilityTable?.rows?.some((row) => row.cells?.service && row.cells?.price);
+    if (!hasLocation || !hasPayout || !hasPriceRows) {
+      startEdit(service);
+      setInfo('Complete the exact location, payout account, and Service / Price table before changing availability.');
+      return;
+    }
     startEdit(service);
     const payload = {
       title: service.title || service.name,
       description: service.description,
-      location: service.location || 'Rwanda',
+      locationDetails: structuredLocation,
+      payoutDetails: service.payoutDetails,
+      contactDetails: service.contactDetails || EMPTY_FORM.contactDetails,
       serviceType: service.serviceType || 'rental',
       category: service.category,
       pricing: service.pricing,
-      priceText: service.priceText || '',
+      priceText: '',
       availableQuantity: status === 'available' ? 1 : 0,
       availabilityText: service.availabilityText || '',
       status,
       images: service.images || [],
+      promotion: service.promotion || EMPTY_FORM.promotion,
       availabilityTable: service.availabilityTable || EMPTY_FORM.availabilityTable,
       bookingForm: service.bookingForm || EMPTY_FORM.bookingForm,
       isActive: true,
@@ -407,14 +466,14 @@ export default function HotelDashboard() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
-      <main className="flex-1 py-8">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <main className="seller-dashboard-main flex-1 py-8">
+        <div className="seller-dashboard-shell max-w-7xl mx-auto px-4">
+          <div className="seller-dashboard-header mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Business Dashboard</h1>
               <p className="text-gray-600">Manage {overview?.business?.businessName || overview?.business?.name || 'your business'} listings and bookings.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="seller-dashboard-actions flex gap-2">
               <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
               <button onClick={() => { resetForm(); setActiveTab('edit'); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Add Business</button>
             </div>
@@ -422,7 +481,7 @@ export default function HotelDashboard() {
 
           {(error || info) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
 
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="seller-dashboard-metrics grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <Metric label="Businesses" value={stats.totalServices} />
             <Metric label="Active" value={stats.activeServices} />
             <Metric label="Bookings" value={stats.totalBookings} />
@@ -430,21 +489,22 @@ export default function HotelDashboard() {
             <Metric label="Listings" value={stats.availableQuantity} />
           </div>
 
-          <div className="mb-6 flex gap-2 overflow-x-auto">
-            {['services', 'bookings', 'verification', 'analytics', 'edit'].map((tab) => (
+          <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
+            {['services', 'bookings', 'rebook-requests', 'verification', 'analytics', 'edit'].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>
-                {tab === 'services' ? 'Businesses' : tab === 'edit' ? (editingService ? 'Edit Business' : 'Add Business') : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'services' ? 'Businesses' : tab === 'rebook-requests' ? 'Re-book Requests' : tab === 'edit' ? (editingService ? 'Edit Business' : 'Add Business') : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
 
-          <section className="bg-white rounded-2xl shadow-sm p-4">
+          <section className="seller-dashboard-content bg-white rounded-2xl shadow-sm p-4">
             {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
             {!loading && activeTab === 'services' && <ServiceGrid services={services} onEdit={startEdit} onDelete={deleteService} onStatus={updateStatus} />}
             {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} />}
+            {!loading && activeTab === 'rebook-requests' && <SellerRebookRequests />}
             {!loading && activeTab === 'verification' && <SellerBookingVerification token={token} />}
             {!loading && activeTab === 'analytics' && <Analytics stats={stats} services={services} />}
-            {activeTab === 'edit' && <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} />}
+            {activeTab === 'edit' && <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} globalBookingMode={globalBookingMode} />}
           </section>
         </div>
       </main>
@@ -454,15 +514,15 @@ export default function HotelDashboard() {
 }
 
 function Metric({ label, value }) {
-  return <div className="rounded-xl bg-white p-4 shadow-sm"><p className="text-sm text-gray-500">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{value}</p></div>;
+  return <div className="seller-metric rounded-xl bg-white p-4 shadow-sm"><p className="text-sm text-gray-500">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{value}</p></div>;
 }
 
 function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
   if (!services.length) return <p className="p-4 text-gray-600">No businesses yet. Add your first business listing.</p>;
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="seller-service-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {services.map((service) => (
-        <div key={service._id} className="rounded-xl border border-gray-200 p-4">
+        <div key={service._id} className="seller-service-card rounded-xl border border-gray-200 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="font-bold text-gray-900">{service.title || service.name}</h3>
@@ -470,17 +530,17 @@ function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
             </div>
             <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.availabilityText || formatStatus(service.status)}</span>
           </div>
-          <p className="mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
-          <p className="mt-3 font-semibold text-primary">{service.priceText || 'Price on request'}</p>
+          <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
+          <p className="mt-3 text-sm font-semibold text-primary">Prices are managed in the Service / Price table.</p>
           {Array.isArray(service.images) && service.images.length > 0 && (
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
               {service.images.slice(0, 3).map((image) => (
                 <img key={image} src={image} alt={service.title || service.name} className="h-20 w-full rounded-lg object-cover" />
               ))}
             </div>
           )}
           {service.availabilityTable?.columns?.length > 0 && (
-            <p className="mt-3 text-xs font-semibold text-gray-500">
+            <p className="seller-service-meta mt-3 text-xs font-semibold text-gray-500">
               Availability table: {service.availabilityTable.rows?.length || 0} rows, {service.availabilityTable.columns.length} columns
             </p>
           )}
@@ -500,11 +560,23 @@ function BookingList({ bookings, onStatus }) {
   if (!bookings.length) return <p className="p-4 text-gray-600">No bookings yet.</p>;
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Code</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Status</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
-          <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2">{booking.bookingCode}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2 text-right space-x-2"><button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>{['confirmed', 'active', 'completed', 'cancelled'].map((status) => <button key={status} onClick={() => onStatus(booking._id, status)} className="text-primary hover:underline">{status}</button>)}</td></tr>)}</tbody>
+          <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Code</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Booking</th><th className="py-3 px-2 text-left">Payment</th><th className="py-3 px-2 text-left">Paid</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
+          <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2">{booking.bookingCode}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td><td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td><td className="py-3 px-2 text-right space-x-2"><button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>{booking.status === 'confirmed' && ['completed', 'cancelled'].map((status) => <button key={status} onClick={() => onStatus(booking._id, status)} className="text-primary hover:underline">{status}</button>)}</td></tr>)}</tbody>
         </table>
+      </div>
+      <div className="grid gap-3 md:hidden">
+        {bookings.map((booking) => (
+          <article key={booking._id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-primary">{booking.bookingCode || 'Booking'}</p><h3 className="mt-1 truncate font-black text-slate-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</h3><p className="mt-1 text-sm text-slate-500">{booking.touristId?.name || 'Customer'}</p></div>
+              <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700">{booking.status}</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Payment</span><strong>{booking.paymentStatus || 'unpaid'}</strong></p><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Paid</span><strong>{formatRwf(booking.amountPaid || 0)}</strong></p></div>
+            <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">View</button>{booking.status === 'confirmed' && ['completed', 'cancelled'].map((status) => <button key={status} onClick={() => onStatus(booking._id, status)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">{status}</button>)}</div>
+          </article>
+        ))}
       </div>
       {selectedBooking && <BookingDetailModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />}
     </>
@@ -516,15 +588,25 @@ function Analytics({ stats, services }) {
   return <div className="grid gap-4 md:grid-cols-2"><Metric label="Active Bookings" value={stats.activeBookings} /><Metric label="Completed" value={stats.completedBookings} /><Metric label="Cancellation Rate" value={`${stats.cancellationRate}%`} /><Metric label="Low Availability" value={low.length} /></div>;
 }
 
-function ServiceForm({ form, setForm, onSubmit, saving, editing }) {
+function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMode }) {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setLocation = (key, value) => setForm((prev) => ({ ...prev, locationDetails: { ...prev.locationDetails, [key]: value } }));
+  const setPayout = (key, value) => setForm((prev) => ({ ...prev, payoutDetails: { ...prev.payoutDetails, [key]: value } }));
+  const setContact = (key, value) => setForm((prev) => ({ ...prev, contactDetails: { ...prev.contactDetails, [key]: value } }));
+  const setPromotion = (key, value) => setForm((prev) => ({ ...prev, promotion: { ...prev.promotion, [key]: value } }));
   const updateTable = (updater) => setForm((prev) => ({ ...prev, availabilityTable: updater(prev.availabilityTable) }));
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
+    <form onSubmit={onSubmit} className="seller-service-form grid gap-4 md:grid-cols-2">
       <Input label="Business Name" value={form.title} onChange={(value) => set('title', value)} required />
       <CategorySelect value={form.category} onChange={(value) => set('category', value)} />
-      <Input label="Location" value={form.location} onChange={(value) => set('location', value)} placeholder="Example: Kigali, Rwanda" required />
-      <Input label="Price" value={form.price} onChange={(value) => set('price', value)} placeholder="Example: 100 per hour" required />
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <p className="text-sm font-black text-blue-950">Booking mode: <span className="capitalize">{globalBookingMode === 'service-level' ? form.bookingMode : globalBookingMode}</span></p>
+        <p className="mt-1 text-xs leading-5 text-blue-800">Booking mode is controlled by the administrator. Sellers can update service information, prices, availability, and customer questions, but cannot change this setting.</p>
+      </div>
+      <Select label="District" value={form.locationDetails.district} onChange={(value) => setLocation('district', value)} options={[['', 'Select district'], ...RWANDA_DISTRICTS.map((district) => [district, district])]} required />
+      <Input label="Sector" value={form.locationDetails.sector} onChange={(value) => setLocation('sector', value)} placeholder="Enter sector" required />
+      <Input label="Cell" value={form.locationDetails.cell} onChange={(value) => setLocation('cell', value)} placeholder="Enter cell" required />
+      <Input label="Village" value={form.locationDetails.village} onChange={(value) => setLocation('village', value)} placeholder="Enter village" required />
       <Select label="Availability" value={form.status} onChange={(value) => set('status', value)} options={[['available', 'Available'], ['unavailable', 'Not Available'], ['custom', 'Custom']]} />
       {form.status === 'custom' ? (
         <Input label="Custom Availability" value={form.customAvailability} onChange={(value) => set('customAvailability', value)} placeholder="Example: Weekends only" required />
@@ -532,7 +614,58 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing }) {
         <Input label="Remaining Quantity" value={form.remainingQuantity} onChange={(value) => set('remainingQuantity', value)} placeholder="Example: 5 cars left" />
       )}
       <TextArea label="Description" value={form.description} onChange={(value) => set('description', value)} required />
-      <label className="block">
+      <div className="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <h3 className="font-bold text-emerald-950">Customer contact after payment</h3>
+        <p className="mt-1 text-sm text-emerald-800">Add one phone number and an optional second WhatsApp number. These remain locked until the customer pays.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Input label="Primary phone number" type="tel" value={form.contactDetails.phone} onChange={(value) => setContact('phone', value)} placeholder="Example: +250 788 000 000" required />
+          <Input label="WhatsApp / second phone number" type="tel" value={form.contactDetails.whatsapp} onChange={(value) => setContact('whatsapp', value)} placeholder="Optional second number" />
+        </div>
+      </div>
+      <div className="md:col-span-2 rounded-xl border border-amber-300 bg-amber-50 p-4">
+        <label className="flex items-center gap-3 font-bold text-amber-950">
+          <input type="checkbox" checked={form.promotion.enabled} onChange={(event) => setPromotion('enabled', event.target.checked)} />
+          Add a promotion to this service
+        </label>
+        <p className="mt-1 text-sm text-amber-800">Enable this only when customers should see a special offer such as Happy Hour or Buy 3, Get 1 Free.</p>
+        {form.promotion.enabled && (
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Input label="Promotion title" value={form.promotion.title} onChange={(value) => setPromotion('title', value)} placeholder="Example: Happy Hours!" required />
+            <div className="md:col-span-2">
+              <TextArea label="Promotion description and how it is given" value={form.promotion.description} onChange={(value) => setPromotion('description', value)} required />
+            </div>
+            <Input label="Promotion starts" type="datetime-local" value={form.promotion.startAt} onChange={(value) => setPromotion('startAt', value)} required />
+            <Input label="Promotion ends" type="datetime-local" value={form.promotion.endAt} onChange={(value) => setPromotion('endAt', value)} required />
+          </div>
+        )}
+        {form.promotionHistory.length > 0 && (
+          <details className="mt-4 rounded-lg border border-amber-200 bg-white/80 p-3">
+            <summary className="cursor-pointer text-sm font-bold text-amber-900">View promotion history ({form.promotionHistory.length})</summary>
+            <div className="mt-3 grid gap-2">
+              {[...form.promotionHistory].reverse().map((item, index) => (
+                <div key={item._id || `${item.title}-${index}`} className="rounded-lg border border-amber-100 bg-white p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-amber-800">{item.title}</strong>
+                    <span className="text-xs font-semibold text-slate-500">Recorded {formatDashboardDate(item.recordedAt)}</span>
+                  </div>
+                  <p className="mt-1 text-slate-700">{item.description}</p>
+                  <p className="mt-1 text-xs font-semibold text-orange-600">{formatDashboardDate(item.startAt)} – {formatDashboardDate(item.endAt)}</p>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+      <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <h3 className="font-bold text-blue-950">Where SafarisCon should send your money</h3>
+        <p className="mt-1 text-sm text-blue-800">Use the account belonging to you or your business. Customers never see this information.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <Select label="Payout method" value={form.payoutDetails.method} onChange={(value) => setPayout('method', value)} options={[["mobile-money", "Mobile Money"], ["bank", "Bank account"]]} />
+          <Input label="Account name" value={form.payoutDetails.accountName} onChange={(value) => setPayout('accountName', value)} required />
+          <Input label="Phone / account number" value={form.payoutDetails.accountNumber} onChange={(value) => setPayout('accountNumber', value)} required />
+        </div>
+      </div>
+      <label className="seller-photo-input block">
         <span className="text-sm font-semibold text-gray-700">Photos</span>
         <input
           type="file"
@@ -553,9 +686,9 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing }) {
         <span className="mt-1 block text-xs text-gray-500">Upload 1, 2, or 3 image files. Maximum 5 MB each.</span>
       </label>
       {(form.existingImages.length > 0 || form.imageFiles.length > 0) && (
-        <div className="md:col-span-2 grid grid-cols-3 gap-3">
+        <div className="seller-photo-grid md:col-span-2 grid grid-cols-3 gap-3">
           {form.existingImages.map((image) => (
-            <div key={image} className="relative">
+            <div key={image} className="seller-photo-item relative min-w-0">
               <img src={image} alt="Business" className="h-24 w-full rounded-xl object-cover" />
               <button
                 type="button"
@@ -567,14 +700,18 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing }) {
             </div>
           ))}
           {form.imageFiles.map((file) => (
-            <div key={`${file.name}-${file.size}`} className="rounded-xl border border-dashed border-gray-300 p-3 text-xs text-gray-600">
+            <div key={`${file.name}-${file.size}`} className="seller-photo-item min-w-0 break-words rounded-xl border border-dashed border-gray-300 p-3 text-xs text-gray-600">
               New photo: {file.name}
             </div>
           ))}
         </div>
       )}
       <AvailabilityTableBuilder table={form.availabilityTable} updateTable={updateTable} />
-      <BookingFormBuilder bookingForm={form.bookingForm} setBookingForm={(bookingForm) => set('bookingForm', bookingForm)} />
+      <details className="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-4">
+        <summary className="cursor-pointer font-black text-slate-900">Optional seller questions after the fixed booking form</summary>
+        <p className="mt-2 text-sm text-slate-500">The required customer fields above always stay in place. Open this section only when your service needs extra questions.</p>
+        <div className="mt-4"><BookingFormBuilder bookingForm={form.bookingForm} setBookingForm={(bookingForm) => set('bookingForm', bookingForm)} /></div>
+      </details>
       <button disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Business' : 'Create Business'}</button>
     </form>
   );
@@ -639,17 +776,17 @@ function BookingFormBuilder({ bookingForm, setBookingForm }) {
   };
 
   return (
-    <div className="md:col-span-2 rounded-xl border border-gray-200 p-4">
+    <div className="seller-booking-builder md:col-span-2 min-w-0 rounded-xl border border-gray-200 p-4">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 className="font-bold text-gray-900">Customer Booking Questions</h3>
-          <p className="text-sm text-gray-500">Choose what customers must answer before they send a booking request. Start with a template, then edit the questions.</p>
+          <h3 className="font-bold text-gray-900">Optional Customer Questions</h3>
+          <p className="text-sm text-gray-500">Add only service-specific questions. These appear after the platform's fixed booking form.</p>
         </div>
         <button type="button" onClick={addField} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Add Field</button>
       </div>
       <div className="mb-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-950">
         <p className="font-bold">How to use this</p>
-        <p className="mt-1">Pick a starter form below, change the question names, mark important questions as required, then save the business. Customers will see the preview on the right when they book.</p>
+        <p className="mt-1">These questions supplement the fixed name, phone, email, date, time, people, quantity, location, request, payment, and terms fields.</p>
       </div>
       <div className="mb-4 grid gap-3 md:grid-cols-4">
         {FORM_TEMPLATES.map((template) => (
@@ -764,52 +901,26 @@ function PreviewField({ field }) {
 }
 
 function AvailabilityTableBuilder({ table, updateTable }) {
-  const columns = table?.columns || [];
   const rows = table?.rows || [];
+  const [selectedRowId, setSelectedRowId] = useState(rows[0]?.id || '');
+  const [detailsRow, setDetailsRow] = useState(null);
+  const selectedRow = rows.find((row) => row.id === selectedRowId) || rows[0] || null;
+  const selected = selectedRow?.cells || {};
 
-  const addColumn = () => updateTable((current) => {
-    const column = { id: makeId('col'), label: `Column ${(current.columns?.length || 0) + 1}` };
-    return {
+  const addRow = () => {
+    const id = makeId('row');
+    updateTable((current) => ({
       ...current,
-      columns: [...(current.columns || []), column],
-      rows: (current.rows || []).map((row) => ({ ...row, cells: { ...(row.cells || {}), [column.id]: '' } })),
-    };
-  });
+      rows: [...(current.rows || []), { id, cells: { service: '', price: '', priceType: '', calculationField: '', durationUnit: '', maximumDuration: '', availability: '', details: '' } }],
+    }));
+    setSelectedRowId(id);
+  };
 
-  const renameColumn = (columnId, label) => updateTable((current) => ({
-    ...current,
-    columns: current.columns.map((column) => column.id === columnId ? { ...column, label } : column),
-  }));
-
-  const moveColumn = (columnId, direction) => updateTable((current) => {
-    const index = current.columns.findIndex((column) => column.id === columnId);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= current.columns.length) return current;
-    const columnsCopy = [...current.columns];
-    const [column] = columnsCopy.splice(index, 1);
-    columnsCopy.splice(nextIndex, 0, column);
-    return { ...current, columns: columnsCopy };
-  });
-
-  const deleteColumn = (columnId) => updateTable((current) => ({
-    ...current,
-    columns: current.columns.filter((column) => column.id !== columnId),
-    rows: current.rows.map((row) => {
-      const cells = { ...(row.cells || {}) };
-      delete cells[columnId];
-      return { ...row, cells };
-    }),
-  }));
-
-  const addRow = () => updateTable((current) => ({
-    ...current,
-    rows: [...(current.rows || []), { id: makeId('row'), cells: {} }],
-  }));
-
-  const deleteRow = (rowId) => updateTable((current) => ({
-    ...current,
-    rows: current.rows.filter((row) => row.id !== rowId),
-  }));
+  const deleteRow = (rowId) => {
+    const remaining = rows.filter((row) => row.id !== rowId);
+    updateTable((current) => ({ ...current, rows: remaining }));
+    if (selectedRowId === rowId) setSelectedRowId(remaining[0]?.id || '');
+  };
 
   const updateCell = (rowId, columnId, value) => updateTable((current) => ({
     ...current,
@@ -818,72 +929,137 @@ function AvailabilityTableBuilder({ table, updateTable }) {
       : row),
   }));
 
+  const people = 2;
+  const quantity = 1;
+  const duration = 2;
+  const basePrice = Number(selected.price || 0);
+  const previewTotal = calculatePreviewTotal(selected.priceType, basePrice, people, quantity, duration);
+  const previewDeposit = Math.round(previewTotal * 0.3);
+  const previewBalance = previewTotal - previewDeposit;
+  const priceTypeLabel = PRICE_TABLE_OPTIONS.priceType.find(([value]) => value === selected.priceType)?.[1] || 'Select price type';
+
   return (
-    <div className="md:col-span-2 rounded-xl border border-gray-200 p-4">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h3 className="font-bold text-gray-900">Availability Table</h3>
-          <p className="text-sm text-gray-500">Create the schedule, inventory, room, car, ticket, or service table customers will see.</p>
+    <section className="seller-price-builder md:col-span-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm sm:p-5">
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[1.05fr_1fr_.58fr]">
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4">
+            <div className="flex gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-lg font-black text-primary">1</span>
+              <div><h3 className="font-black text-slate-950">Service price options <span className="font-medium text-slate-500">(Seller view)</span></h3><p className="mt-1 text-xs text-slate-500">Manage what customers can select, book, and pay for.</p></div>
+            </div>
+            <button type="button" onClick={addRow} className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white">+ Add option</button>
+          </div>
+
+          <div className="grid grid-cols-[1.45fr_.65fr_.8fr_.65fr_.55fr] gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+            <span>Option name</span><span>Price</span><span>Price type</span><span>Availability</span><span>Details</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {rows.map((row) => {
+              const cells = row.cells || {};
+              const active = row.id === selectedRow?.id;
+              return <button key={row.id} type="button" onClick={() => setSelectedRowId(row.id)} className={`grid w-full grid-cols-[1.45fr_.65fr_.8fr_.65fr_.55fr] items-center gap-2 px-4 py-4 text-left text-xs transition ${active ? 'bg-blue-50/70' : 'hover:bg-slate-50'}`}>
+                <span className="flex min-w-0 items-center gap-2 font-bold text-slate-900"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-primary">▣</span><span className="truncate">{cells.service || 'New service option'}</span></span>
+                <span className="font-black text-primary">{Number(cells.price || 0).toLocaleString()}</span>
+                <span className="capitalize text-slate-600">{String(cells.priceType || 'Not set').replace(/-/g, ' ')}</span>
+                <span className="font-semibold text-emerald-600">● {Number(cells.availability || 0)} available</span>
+                <span onClick={(event) => { event.stopPropagation(); setDetailsRow(row); }} className="font-bold text-primary">View details</span>
+              </button>;
+            })}
+          </div>
+          {!rows.length && <p className="p-6 text-center text-sm text-slate-500">Add the first service price option.</p>}
+
+          {selectedRow && <div className="border-t border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center justify-between"><h4 className="text-sm font-black text-slate-900">Edit selected option</h4><button type="button" onClick={() => deleteRow(selectedRow.id)} className="text-xs font-bold text-red-600">Delete option</button></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <StudioField label="Option name" value={selected.service || ''} onChange={(value) => updateCell(selectedRow.id, 'service', value)} />
+              <StudioField label="Price (RWF)" type="number" value={selected.price || ''} onChange={(value) => updateCell(selectedRow.id, 'price', value)} />
+              <StudioSelect label="Price type" value={selected.priceType || ''} options={PRICE_TABLE_OPTIONS.priceType} onChange={(value) => updateCell(selectedRow.id, 'priceType', value)} />
+              <StudioSelect label="Calculation field" value={selected.calculationField || ''} options={PRICE_TABLE_OPTIONS.calculationField} onChange={(value) => updateCell(selectedRow.id, 'calculationField', value)} />
+              <StudioSelect label="Duration unit" value={selected.durationUnit || ''} options={PRICE_TABLE_OPTIONS.durationUnit} onChange={(value) => updateCell(selectedRow.id, 'durationUnit', value)} />
+              <StudioField label="Maximum booking duration" type="number" value={selected.maximumDuration || ''} onChange={(value) => updateCell(selectedRow.id, 'maximumDuration', value)} />
+              <StudioField label="Availability / capacity" type="number" value={selected.availability || ''} onChange={(value) => updateCell(selectedRow.id, 'availability', value)} />
+              <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600">Details / amenities</span><textarea rows={2} value={selected.details || ''} onChange={(event) => updateCell(selectedRow.id, 'details', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Wi-Fi, breakfast, private bathroom..." /></label>
+            </div>
+          </div>}
+
+          <div className="m-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900">ⓘ These options appear in the customer booking form. Prices and availability stay synchronized with automatic bookings.</div>
         </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={addColumn} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Add Column</button>
-          <button type="button" onClick={addRow} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Add Row</button>
+
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-primary">●</span><div><h3 className="font-black text-slate-950">Booking form preview <span className="font-medium text-slate-500">(Customer view)</span></h3><p className="mt-1 text-xs text-slate-500">The fixed form sellers cannot remove or replace.</p></div></div>
+          <label className="block text-xs font-bold text-slate-700">Choose a service <span className="text-red-500">*</span><select value={selectedRow?.id || ''} onChange={(event) => setSelectedRowId(event.target.value)} className="mt-1 w-full rounded-lg border-2 border-blue-500 bg-white px-3 py-3 text-sm"><option value="">Choose an option</option>{rows.map((row) => <option key={row.id} value={row.id}>{row.cells?.service || 'New option'} — {formatRwf(Number(row.cells?.price || 0))} {String(row.cells?.priceType || '').replace(/-/g, ' ')}</option>)}</select></label>
+          {selectedRow && <div className="mt-3 flex items-center justify-between rounded-xl bg-blue-50 px-3 py-3 text-xs"><strong className="text-primary">▥ &nbsp;{selected.service || 'Selected option'} — {formatRwf(basePrice)}</strong><button type="button" onClick={() => setDetailsRow(selectedRow)} className="font-bold text-primary">View details ↗</button></div>}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <PreviewInput label="Full name" placeholder="Enter full name" />
+            <PreviewInput label="Phone number" placeholder="+250 7XX XXX XXX" />
+            <PreviewInput label="Email" placeholder="you@example.com" />
+            <PreviewInput label="Booking date" placeholder="Select date" />
+            <PreviewInput label="Start time" placeholder="Select start time" />
+            <PreviewInput label="End time / completion time" placeholder="Select end time" />
+            <PreviewInput label="Number of people" placeholder="2" />
+            <PreviewInput label="Quantity / units" placeholder="1" />
+            <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-700">Special request <span className="font-normal text-slate-400">(optional)</span></span><textarea disabled rows={4} placeholder="Any special request or notes..." className="mt-1 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+          </div>
         </div>
+
+        <aside className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-primary">▦</span><h3 className="text-sm font-black text-slate-950">Automatic quote preview</h3></div>
+          <dl className="mt-5 space-y-4 text-xs text-slate-600">
+            <QuoteLine label="Selected service" value={selected.service || 'Choose an option'} />
+            <QuoteLine label="Price type" value={priceTypeLabel} />
+            <QuoteLine label="Number of people" value={people} />
+            <QuoteLine label="Quantity / units" value={quantity} />
+            <QuoteLine label="Booking duration" value={`${duration} ${selected.durationUnit || 'units'}`} />
+          </dl>
+          <div className="my-5 border-t border-slate-200" />
+          <QuoteLine label="Total price" value={formatRwf(previewTotal)} strong />
+          <div className="mt-5 space-y-4 text-xs"><QuoteLine label="Deposit (30%)" value={formatRwf(previewDeposit)} /><div className="border-t border-slate-100" /><QuoteLine label="Remaining balance" value={formatRwf(previewBalance)} /></div>
+          <button type="button" disabled className="mt-7 w-full rounded-xl bg-primary px-3 py-3 text-sm font-black text-white opacity-90">▣ &nbsp; Pay deposit</button>
+          <p className="mt-3 text-center text-[10px] text-slate-500">♢ Your payment is secure and protected.</p>
+        </aside>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr>
-              {columns.map((column, index) => (
-                <th key={column.id} className="min-w-44 border border-gray-200 bg-gray-50 p-2 align-top">
-                  <input
-                    value={column.label}
-                    onChange={(event) => renameColumn(column.id, event.target.value)}
-                    className="mb-2 w-full rounded-lg border border-gray-300 px-2 py-1 font-semibold"
-                  />
-                  <div className="flex gap-1">
-                    <button type="button" disabled={index === 0} onClick={() => moveColumn(column.id, -1)} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Back</button>
-                    <button type="button" disabled={index === columns.length - 1} onClick={() => moveColumn(column.id, 1)} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Next</button>
-                    <button type="button" onClick={() => deleteColumn(column.id)} className="rounded bg-red-50 px-2 py-1 text-red-700">Delete</button>
-                  </div>
-                </th>
-              ))}
-              <th className="w-24 border border-gray-200 bg-gray-50 p-2">Rows</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                {columns.map((column) => (
-                  <td key={column.id} className="border border-gray-200 p-2">
-                    <input
-                      value={row.cells?.[column.id] || ''}
-                      onChange={(event) => updateCell(row.id, column.id, event.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-2 py-2"
-                      placeholder={column.label}
-                    />
-                  </td>
-                ))}
-                <td className="border border-gray-200 p-2">
-                  <button type="button" onClick={() => deleteRow(row.id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {!columns.length && <p className="mt-3 text-sm text-gray-500">Add a column to start building the table.</p>}
-    </div>
+
+      {detailsRow && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Option details & amenities</p><h3 className="mt-1 text-xl font-black text-slate-950">{detailsRow.cells?.service || 'Service option'}</h3></div><button type="button" onClick={() => setDetailsRow(null)} className="text-2xl text-slate-400">×</button></div><p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{detailsRow.cells?.details || 'No additional details added yet.'}</p><button type="button" onClick={() => setDetailsRow(null)} className="mt-5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white">Close</button></div></div>}
+    </section>
   );
+}
+
+function calculatePreviewTotal(priceType, price, people, quantity, duration) {
+  if (priceType === 'per-person') return price * people;
+  if (['per-night', 'per-day', 'per-hour'].includes(priceType)) return price * quantity * duration;
+  if (['per-room', 'per-item', 'per-ticket', 'per-session'].includes(priceType)) return price * quantity;
+  return price;
+}
+
+function StudioField({ label, value, onChange, type = 'text' }) {
+  return <label><span className="text-xs font-bold text-slate-600">{label}</span><input type={type} min={type === 'number' ? 0 : undefined} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label>;
+}
+
+function StudioSelect({ label, value, onChange, options }) {
+  return <label><span className="text-xs font-bold text-slate-600">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value="">Select</option>{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label>;
+}
+
+function PreviewInput({ label, placeholder }) {
+  return <label><span className="text-xs font-bold text-slate-700">{label} <span className="text-red-500">*</span></span><input disabled placeholder={placeholder} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:text-slate-500" /></label>;
+}
+
+function QuoteLine({ label, value, strong = false }) {
+  return <div className="flex items-start justify-between gap-3"><dt className={strong ? 'font-black text-slate-900' : ''}>{label}</dt><dd className={`text-right ${strong ? 'text-base font-black text-primary' : 'font-semibold text-slate-700'}`}>{value}</dd></div>;
 }
 
 function Input({ label, value, onChange, type = 'text', required = false, placeholder = '' }) {
   return <label className="block"><span className="text-sm font-semibold text-gray-700">{label}</span><input required={required} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
 }
 
-function Select({ label, value, onChange, options }) {
-  return <label className="block"><span className="text-sm font-semibold text-gray-700">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">{options.map((option) => Array.isArray(option) ? <option key={option[0]} value={option[0]}>{option[1]}</option> : <option key={option} value={option}>{option}</option>)}</select></label>;
+function Select({ label, value, onChange, options, required = false, disabled = false }) {
+  return <label className="block"><span className="text-sm font-semibold text-gray-700">{label}</span><select required={required} disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 disabled:bg-blue-50 disabled:font-bold disabled:text-blue-950">{options.map((option) => Array.isArray(option) ? <option key={option[0]} value={option[0]}>{option[1]}</option> : <option key={option} value={option}>{option}</option>)}</select></label>;
 }
+
+const PRICE_TABLE_OPTIONS = {
+  priceType: [['fixed', 'Fixed price'], ['per-person', 'Per person'], ['per-room', 'Per room'], ['per-night', 'Per night'], ['per-day', 'Per day'], ['per-hour', 'Per hour'], ['per-item', 'Per item'], ['per-ticket', 'Per ticket'], ['per-package', 'Per package'], ['per-session', 'Per session']],
+  calculationField: [['people', 'Number of people'], ['quantity', 'Quantity / units'], ['duration', 'Booking duration'], ['package', 'Selected package'], ['fixed', 'Fixed price']],
+  durationUnit: [['minutes', 'Minutes'], ['hours', 'Hours'], ['days', 'Days'], ['nights', 'Nights'], ['same-day', 'Same day only'], ['none', 'No duration needed']],
+};
 
 function CategorySelect({ value, onChange }) {
   return (
@@ -925,11 +1101,14 @@ function BookingDetailModal({ booking, onClose }) {
           Business: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
           Status: booking.status,
           Payment: booking.paymentStatus || 'unpaid',
+          'Amount paid': formatRwf(booking.amountPaid || 0),
+          'Payment purpose': booking.paymentReason || '-',
           Quantity: booking.quantity || booking.guests || 1,
           Date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
         }} />
-        {qrToken && <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=12&data=${encodeURIComponent(`${window.location.origin}/verify/${qrToken}`)}`} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
-        <ResponseList responses={booking.bookingDetails} />
+        <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
+        {qrToken && <img src={bookingApi.getQrImageUrl(qrToken)} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
+        <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
       </div>
     </div>
   );
@@ -976,12 +1155,27 @@ function BookingDetailBody({ booking }) {
         Business: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
         Status: booking.status,
         Payment: booking.paymentStatus || 'unpaid',
+        'Amount paid': formatRwf(booking.amountPaid || 0),
+        'Payment purpose': booking.paymentReason || '-',
         Quantity: booking.quantity || booking.guests || 1,
         Date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
       }} />
-      {qrToken && <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=12&data=${encodeURIComponent(`${window.location.origin}/verify/${qrToken}`)}`} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
+      <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
+      {qrToken && <img src={bookingApi.getQrImageUrl(qrToken)} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
       <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
     </>
+  );
+}
+
+function BookingPromotionSnapshot({ promotion }) {
+  if (!promotion?.title) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-amber-700">Promotion applied at booking</p>
+      <h3 className="mt-1 font-black text-amber-900">{promotion.title}</h3>
+      <p className="mt-1 text-sm text-slate-700">{promotion.description}</p>
+      <p className="mt-2 text-xs font-semibold text-orange-600">Valid {formatDashboardDate(promotion.startAt)} – {formatDashboardDate(promotion.endAt)}</p>
+    </div>
   );
 }
 

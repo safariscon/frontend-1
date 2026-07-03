@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useInstall } from '../context/InstallContext';
 import { useTheme } from '../context/ThemeContext';
@@ -9,27 +9,61 @@ import InstallButton from './InstallButton';
 import { publicApi } from '../lib/api';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 
+const DEFAULT_ANNOUNCEMENTS = [
+  {
+    text: 'Welcome to SafarisCon, the best way to get services anywhere you want across Rwanda destinations.',
+    linkUrl: '/services',
+    linkLabel: 'Browse services',
+  },
+];
+
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { logout, isAuthenticated, isCustomer, isSeller, isAdmin, dashboardRoute } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isMobile, isInstalled } = useInstall();
   const { darkMode, toggleDarkMode } = useTheme();
   const { language, setLanguage } = useLanguage();
-  const [announcement, setAnnouncement] = useState(null);
+  const [announcementFeed, setAnnouncementFeed] = useState({ enabled: true, items: DEFAULT_ANNOUNCEMENTS, intervalSeconds: 5 });
+  const [announcementIndex, setAnnouncementIndex] = useState(0);
 
   useEffect(() => {
     const loadAnnouncement = async () => {
       try {
         const response = await publicApi.getAnnouncement();
-        setAnnouncement(response.announcement || null);
+        const receivedItems = Array.isArray(response.announcements) && response.announcements.length
+          ? response.announcements
+          : response.announcement?.text
+            ? [response.announcement]
+            : [];
+        const backendItems = response.enabled === false ? [] : receivedItems;
+        const items = [...DEFAULT_ANNOUNCEMENTS, ...backendItems].filter(
+          (item, index, all) => item?.text && all.findIndex((entry) => entry?.text === item.text) === index
+        );
+        setAnnouncementFeed({
+          enabled: true,
+          items: items.slice(0, 5),
+          intervalSeconds: Math.max(1, Number(response.intervalSeconds) || 5),
+        });
       } catch {
-        setAnnouncement(null);
+        setAnnouncementFeed({ enabled: true, items: DEFAULT_ANNOUNCEMENTS, intervalSeconds: 5 });
       }
     };
     loadAnnouncement();
     return subscribeToRealtime([REALTIME_EVENTS.CATALOG_CHANGED, 'catalogChanged'], loadAnnouncement);
   }, []);
+
+  useEffect(() => {
+    if (!announcementFeed.enabled || announcementFeed.items.length < 2) return undefined;
+    const timer = window.setInterval(() => {
+      setAnnouncementIndex((current) => (current + 1) % announcementFeed.items.length);
+    }, announcementFeed.intervalSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [announcementFeed]);
+
+  const announcement = announcementFeed.items[announcementIndex] || null;
 
   const handleLogout = () => {
     logout();
@@ -40,10 +74,10 @@ export default function Navbar() {
   const closeMenu = () => setIsOpen(false);
 
   return (
-    <nav className="bg-white shadow-md sticky top-0 z-50">
-      {announcement?.enabled && announcement.text && (
-        <div className="border-b border-yellow-300 bg-[#ffc928] text-slate-950">
-          <div className="mx-auto flex min-h-10 max-w-7xl items-center justify-center gap-2 px-4 py-2 text-center text-sm font-medium">
+    <nav className="site-nav bg-white sticky top-0 z-50">
+      {announcementFeed.enabled && announcement?.text && (
+        <div className="announcement-bar border-b border-blue-500 bg-primary text-white">
+          <div className="mx-auto flex min-h-8 max-w-7xl items-center justify-center gap-1.5 px-4 py-1 text-center text-xs font-medium">
             <BellIcon />
             <span>
               {announcement.text}
@@ -56,23 +90,28 @@ export default function Navbar() {
                 </>
               )}
             </span>
+            {announcementFeed.items.length > 1 && (
+              <span className="whitespace-nowrap text-xs text-blue-100">
+                {announcementIndex + 1}/{announcementFeed.items.length}
+              </span>
+            )}
           </div>
         </div>
       )}
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-lg">U</span>
+        <div className="flex h-14 items-center justify-between">
+          <Link to="/" className="brand-mark flex items-center gap-2.5" aria-label="safariscon home">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary shadow-sm">
+              <span className="text-sm font-bold text-white">S</span>
             </div>
-            <span className="text-2xl font-bold text-gray-900">safariscon</span>
+            <span className="text-xlg font-extrabold tracking-tight text-gray-900">safariscon</span>
           </Link>
 
-          <div className="hidden md:flex items-center space-x-4">
-            <Link to="/" className="text-gray-700 hover:text-primary transition font-medium">
+          <div className="hidden items-center gap-1 md:flex">
+            <Link to="/" className={`nav-link ${location.pathname === '/' ? 'nav-link-active' : ''}`}>
               {t('home', language)}
             </Link>
-            <Link to="/services" className="text-gray-700 hover:text-primary transition font-medium">
+            <Link to="/services" className={`nav-link ${['/services', '/hotels'].includes(location.pathname) ? 'nav-link-active' : ''}`}>
               {t('services', language)}
             </Link>
             <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel />
@@ -121,10 +160,9 @@ export default function Navbar() {
 
           <div className="md:hidden">
             <div className="flex items-center gap-2">
-              <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} />
               <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="text-gray-700 hover:text-primary focus:outline-none p-2"
+                className="nav-icon-button text-gray-700 hover:text-primary focus:outline-none p-2"
                 aria-label={t('openNavigation', language)}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,15 +178,15 @@ export default function Navbar() {
         </div>
 
         {isOpen && (
-          <div className="md:hidden py-4 border-t border-gray-100">
-            <div className="flex flex-col space-y-3">
-              <Link to="/" onClick={closeMenu} className="text-gray-700 hover:text-primary transition font-medium">
+          <div className="mobile-menu md:hidden py-4 border-t border-gray-100">
+            <div className="flex flex-col gap-2">
+              <Link to="/" onClick={closeMenu} className="mobile-nav-link">
                 {t('home', language)}
               </Link>
               <Link
                 to="/services"
                 onClick={closeMenu}
-                className="text-gray-700 hover:text-primary transition font-medium"
+                className="mobile-nav-link"
               >
                 {t('services', language)}
               </Link>
@@ -215,13 +253,51 @@ export default function Navbar() {
           </div>
         )}
       </div>
+      <div className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-[65] grid grid-cols-4 border-t border-slate-200 bg-white px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 md:hidden">
+        <MobileBottomLink to="/" label="Home" icon="home" active={location.pathname === '/'} />
+        <MobileBottomLink to="/services" label="Services" icon="grid" active={['/services', '/hotels'].includes(location.pathname)} />
+        <MobileBottomLink to={isAuthenticated ? dashboardRoute : '/login'} label="Dashboard" icon="calendar" active={location.pathname.includes('dashboard')} />
+        <button type="button" onClick={() => setSettingsOpen(true)} className={`flex flex-col items-center gap-1 text-[11px] font-semibold ${settingsOpen ? 'text-primary' : 'text-slate-500'}`}>
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm7-3.5l2-1-2-3-2 .5a8 8 0 00-2-1L14.5 5h-5L9 7.5a8 8 0 00-2 1L5 8l-2 3 2 1a8 8 0 000 2l-2 1 2 3 2-.5a8 8 0 002 1l.5 2.5h5l.5-2.5a8 8 0 002-1l2 .5 2-3-2-1a8 8 0 000-2z" /></svg>
+          Settings
+        </button>
+      </div>
+      {settingsOpen && (
+        <div className="fixed inset-0 z-[70] bg-slate-950/45 md:hidden" onClick={() => setSettingsOpen(false)}>
+          <div className="absolute inset-x-3 bottom-20 rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <div><p className="text-xs font-bold uppercase tracking-wide text-primary">Preferences</p><h2 className="text-xl font-black text-slate-900">Settings</h2></div>
+              <button type="button" onClick={() => setSettingsOpen(false)} className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600">Close</button>
+            </div>
+            <div className="grid gap-3">
+              <div className="rounded-xl border border-slate-200 p-3"><p className="mb-2 text-xs font-bold uppercase text-slate-500">Language</p><LanguageSelect language={language} onChange={setLanguage} id="settings-language-select" fullWidth /></div>
+              <div className="rounded-xl border border-slate-200 p-3"><p className="mb-2 text-xs font-bold uppercase text-slate-500">Display mode</p><ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel fullWidth /></div>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
+  );
+}
+
+function MobileBottomLink({ to, label, icon, active }) {
+  const paths = {
+    home: 'M3 11.5L12 4l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-8.5z',
+    grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+    calendar: 'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 011 1v14H4V6a1 1 0 011-1z',
+    user: 'M12 12a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 0114 0',
+  };
+  return (
+    <Link to={to} className={`flex flex-col items-center gap-1 text-[11px] font-semibold ${active ? 'text-primary' : 'text-slate-500'}`}>
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d={paths[icon]} /></svg>
+      {label}
+    </Link>
   );
 }
 
 function BellIcon() {
   return (
-    <svg className="h-5 w-5 shrink-0 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <svg className="h-4 w-4 shrink-0 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 01-6 0" />
     </svg>
   );

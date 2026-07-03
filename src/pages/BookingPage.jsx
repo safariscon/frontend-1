@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -6,13 +5,18 @@ import BookingForm from '../components/BookingForm';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import { useEffect } from 'react';
+import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
 
 export default function BookingPage() {
    const { hotelId } = useParams();
    const navigate = useNavigate();
    const { user } = useAuth();
-   const [step] = useState(1);
    const { language } = useLanguage();
+
+   useEffect(() => {
+     if (user) trackAnalytics(ANALYTICS_EVENTS.BOOKING_FORM_OPENED, { serviceId: hotelId });
+   }, [hotelId, user]);
 
    const handleBookingSuccess = () => {
      alert(t('bookingSuccess', language));
@@ -45,36 +49,10 @@ export default function BookingPage() {
 
       <main className="flex-1 py-8">
         <div className="max-w-3xl mx-auto px-4">
-          {/* Progress Steps */}
-          <div className="flex items-center justify-center mb-8">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className="flex items-center">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition ${
-                    step >= s
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  {s}
-                </div>
-                {s < 3 && (
-                  <div
-                    className={`w-16 md:w-24 h-1 transition ${
-                      step > s ? 'bg-primary' : 'bg-gray-200'
-                    }`}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-
 <div className="text-center mb-8">
            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('completeBooking', language)}</h1>
            <p className="text-gray-600">
-             {step === 1 && (t('selectServiceAndDate', language) || 'Enter service details and date.')}
-             {step === 2 && t('reviewDetails', language)}
-             {step === 3 && t('paymentComingSoon', language)}
+             {t('selectServiceAndDate', language) || 'Enter service details and date.'}
            </p>
          </div>
 

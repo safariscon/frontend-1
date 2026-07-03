@@ -1,11 +1,11 @@
 {
   "name": "safariscon",
   "short_name": "safariscon",
-  "description": "Get what you need in eazy way",
+  "description": "Discover and book trusted travel services across Rwanda.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#059669",
+  "theme_color": "#0754d7",
   "orientation": "portrait-primary",
   "icons": [
     {

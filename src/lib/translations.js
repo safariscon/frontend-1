@@ -25,12 +25,13 @@ export const translations = {
     realTimeDiscovery: 'Real-Time Service Discovery',
     realTimeDiscoveryDesc: 'We help customers discover the right sellers instantly through verified photos and real-time availability, from boutique stays to transport and curated experiences.',
     multiCurrency: 'Multi-Currency Support',
-    multiCurrencyDesc: 'Accept both USD and RWF payments with transparent pricing. Choose your preferred currency for seamless transactions with local sellers.',
+    multiCurrencyDesc: 'All prices and payments use Rwandan Francs (RWF) for clear local transactions.',
     fastBooking: 'Fast Real-Time Booking',
     fastBookingDesc: 'From inquiry to confirmed booking in real-time. Our platform ensures instant communication and immediate service confirmation for all your travel needs.',
     
     // Featured Services
     featuredServices: 'Featured Services',
+    allRegisteredServices: 'All Registered Services',
     viewAllServices: 'View all services',
     
     // Ready Section
@@ -52,8 +53,21 @@ export const translations = {
     signIn: 'Sign In',
     noAccount: "Don't have an account?",
     signUp: 'Sign up',
-    hotelRegistration: 'Hotel owner with admin-created email?',
-    completeRegistration: 'Complete hotel registration',
+    providerOnboardingPrompt: 'Service provider with admin-created credentials?',
+    completeProviderRegistration: 'Complete provider registration',
+    providerOnboardingTitle: 'Service Provider Registration',
+    providerOnboardingInstructions: 'Enter the onboarding credentials exactly as supplied by the admin, then choose your new password.',
+    adminProviderDetails: 'Use the provider details and generated password from your admin.',
+    providerName: 'Provider Name',
+    providerEmail: 'Provider Email',
+    providerId: 'Provider ID',
+    generatedPassword: 'Generated Password',
+    createPassword: 'Create New Password',
+    passwordMismatch: 'Passwords do not match.',
+    providerRegistrationCompleted: 'Provider registration completed. Login with your new password.',
+    alreadyCompleted: 'Already completed?',
+    loginHere: 'Login here',
+    submitting: 'Submitting...',
     
     // Register
     createAccount: 'Create Account',
@@ -247,6 +261,7 @@ inactive: 'Ntibikora',
 confirmedStatus: 'Byemejwe',
 pendingStatus: 'Birategerejwe',
 cancelledStatus: 'Byahagaritswe',
+rejectedStatus: 'Byanzwe',
 
 deleteConfirm: 'Urashaka gusiba iki {item}?',
 deleteBusinessConfirm: 'Urashaka gusiba ubu bucuruzi? Ibi bizakuraho uburenganzira bwa nyirabwo, ibyumba, n’andi makuru bifitanye isano.',
@@ -282,12 +297,13 @@ rw: {
      realTimeDiscovery: 'Kuganiraho Serivisi Mu Ruhero',
      realTimeDiscoveryDesc: 'Twebwe turafasha kuganiraho serivisi zishyizweho n\'ibintu byo mu gihe cyo mu ruhero, kuva mu bwerezwa butekanye gukira ku biti byose bishya by\'umuriro, transport no serivisi zishya zose.',
      multiCurrency: 'Support Mu Rukora',
-     multiCurrencyDesc: 'Twemezera gukira n\'kwishyura n\'ibintu bihirihe ibiciro bya USD n\'Igipimo mu buryo bworoshye. Hitamo ibiciro byawe bworoshye kugira ngo ukoresha serivisi zose z\'umuriro.',
+     multiCurrencyDesc: 'Ibiciro n\'ubwishyu byose bikorwa mu mafaranga y\'u Rwanda (RWF).',
      fastBooking: 'Gutegura Mu Ruhero',
      fastBookingDesc: 'Buri inyuma y\'ubu sendi urimo kugeza kuri booking iraragaje. Urutonde rwacu rugufasha umuhuke n\'ibikorwa bya serivisi zose kugira ngo ushobore gukoreshwa neza.',
 
      // Featured Services
      featuredServices: 'Serivisi Zihari',
+     allRegisteredServices: 'Serivisi zose zanditswe',
      viewAllServices: 'Ushobora gusaba service',
 
      // Ready Section
@@ -309,8 +325,21 @@ rw: {
      signIn: 'Injira',
      noAccount: 'N\'afite konti?',
      signUp: 'Iyandikishe',
-     hotelRegistration: 'Umuriro w\'hoteli ufite email y\'umuriro?',
-     completeRegistration: 'Kuzuza kwiyandikisha',
+     providerOnboardingPrompt: 'Utanga serivisi ufite ibyangombwa byatanzwe na admin?',
+     completeProviderRegistration: 'Kuzuza iyandikisha ry\'utanga serivisi',
+     providerOnboardingTitle: 'Iyandikisha ry\'Utanga Serivisi',
+     providerOnboardingInstructions: 'Andika ibyangombwa wahawe na admin uko biri, hanyuma uhitemo ijambo ry\'ibanga rishya.',
+     adminProviderDetails: 'Koresha amakuru y\'utanga serivisi n\'ijambo ry\'ibanga wahawe na admin.',
+     providerName: 'Izina ry\'Utanga Serivisi',
+     providerEmail: 'Email y\'Utanga Serivisi',
+     providerId: 'Nomero y\'Utanga Serivisi',
+     generatedPassword: 'Ijambo ry\'Ibanga Ryatanzwe',
+     createPassword: 'Shyiraho Ijambo ry\'Ibanga Rishya',
+     passwordMismatch: 'Amagambo y\'ibanga ntabwo ahura.',
+     providerRegistrationCompleted: 'Iyandikisha ry\'utanga serivisi ryarangiye. Injira ukoresheje ijambo ry\'ibanga rishya.',
+     alreadyCompleted: 'Warangije?',
+     loginHere: 'Injira hano',
+     submitting: 'Birimo koherezwa...',
 
      // Register
      createAccount: 'Kuzuza Konti',
@@ -504,6 +533,7 @@ inactive: 'Ntibikora',
 confirmedStatus: 'Byemejwe',
 pendingStatus: 'Birategerejwe',
 cancelledStatus: 'Byahagaritswe',
+rejectedStatus: 'Byanzwe',
 
 deleteConfirm: 'Urashaka gusiba {item}?',
 deleteBusinessConfirm: 'Urashaka gusiba ubu bucuruzi? Ibi bizakuraho amakuru, serivisi n’ibikorwa byose bifitanye isano na bwo.',

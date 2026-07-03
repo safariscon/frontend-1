@@ -121,9 +121,9 @@ export default function LoginPage() {
                  </Link>
                </p>
                <p className="text-gray-600 mt-2 text-sm">
-                 {t('hotelRegistration', language)}{' '}
-                 <Link to="/hotel-register" className="text-primary hover:underline font-medium">
-                   {t('completeRegistration', language)}
+                 {t('providerOnboardingPrompt', language)}{' '}
+                 <Link to="/provider-register" className="text-primary hover:underline font-medium">
+                   {t('completeProviderRegistration', language)}
                  </Link>
                </p>
              </div>

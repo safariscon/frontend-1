@@ -59,7 +59,6 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isTourist: user?.role === 'tourist',
     isCustomer: isCustomerRole(user?.role),
-    isHotelOwner: user?.role === 'hotel',
     isSeller: isSellerRole(user?.role),
     isAdmin: user?.role === 'admin',
     dashboardRoute: getDashboardRoute(user),

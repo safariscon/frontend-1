@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 
-export default function SearchBar({ variant = 'compact', serviceOptions = [] }) {
+export default function SearchBar({ variant = 'compact', serviceOptions = [], locationOptions = [], children = null }) {
   const [location, setLocation] = useState('');
   const [serviceName, setServiceName] = useState('');
   const navigate = useNavigate();
@@ -22,53 +22,61 @@ export default function SearchBar({ variant = 'compact', serviceOptions = [] }) 
       onSubmit={handleSubmit}
       className={
         variant === 'hero'
-          ? 'mt-4 grid gap-3 sm:grid-cols-[1.7fr_1.7fr_auto]'
-          : 'grid gap-3 md:grid-cols-[1fr_1fr_auto]'
+          ? 'search-shell search-panel grid gap-4'
+          : `search-shell search-shell-compact grid gap-3 ${children ? 'md:grid-cols-[repeat(4,minmax(0,1fr))_auto]' : 'md:grid-cols-[1fr_1fr_auto]'}`
       }
     >
-      <label className="sr-only" htmlFor="service-input">
-        {t('serviceName', language)}
-      </label>
-      {serviceOptions.length > 0 ? (
-        <select
-          id="service-input"
-          value={serviceName}
-          onChange={(event) => setServiceName(event.target.value)}
-          className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-        >
-          <option value="">All services</option>
-          {serviceOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-        id="service-input"
-        value={serviceName}
-        onChange={(event) => setServiceName(event.target.value)}
-        placeholder={t('serviceNamePlaceholder', language)}
-        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
-      )}
+      <div>
+        <label className={variant === 'hero' ? 'search-label text-lg' : 'sr-only'} htmlFor="service-input">
+          {variant === 'hero' ? 'Book travel experiences and related services' : t('serviceName', language)}
+        </label>
+        {serviceOptions.length > 0 ? (
+          <select
+            id="service-input"
+            value={serviceName}
+            onChange={(event) => setServiceName(event.target.value)}
+            className="search-control w-full bg-white px-4 py-3 text-sm text-slate-900 outline-none transition"
+          >
+            <option value="">All services</option>
+            {serviceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id="service-input"
+            value={serviceName}
+            onChange={(event) => setServiceName(event.target.value)}
+            placeholder={t('serviceNamePlaceholder', language) === 'serviceNamePlaceholder' ? 'e.g. Car rental, Tour guide, Hotel...' : t('serviceNamePlaceholder', language)}
+            className="search-control w-full bg-white px-4 py-3 text-sm text-slate-900 outline-none transition"
+          />
+        )}
+      </div>
 
-      <label className="sr-only" htmlFor="location-input">
-        {t('location', language)}
-      </label>
-      <input
-        id="location-input"
-        value={location}
-        onChange={(event) => setLocation(event.target.value)}
-        placeholder={t('location', language)}
-        className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-      />
+      <div>
+        <label className={variant === 'hero' ? 'search-label text-lg' : 'sr-only'} htmlFor="location-input">
+          {variant === 'hero' ? 'Where?' : t('location', language)}
+        </label>
+        <select
+          id="location-input"
+          value={location}
+          onChange={(event) => setLocation(event.target.value)}
+          className="search-control w-full bg-white px-4 py-3 text-sm text-slate-900 outline-none transition"
+        >
+          <option value="">Select District</option>
+          {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </div>
+
+      {children}
 
       <button
         type="submit"
-        className="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-dark"
+        className="search-button w-full rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-primary-dark"
       >
-        {t('search', language)}
+        Search Services
       </button>
     </form>
   );

@@ -10,7 +10,7 @@ import HotelDetailsPage from './pages/HotelDetailsPage';
 import BookingPage from './pages/BookingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import HotelCompleteRegistrationPage from './pages/HotelCompleteRegistrationPage';
+import ProviderCompleteRegistrationPage from './pages/ProviderCompleteRegistrationPage';
 import BusinessRegisterPage from './pages/BusinessRegisterPage';
 import UserDashboard from './pages/UserDashboard';
 import HotelDashboard from './pages/HotelDashboard';
@@ -20,6 +20,7 @@ import VerificationPage from './pages/VerificationPage';
 import InstallBanner from './components/InstallBanner';
 import InstallModal from './components/InstallModal';
 import MobileFloatingInstall from './components/MobileFloatingInstall';
+import { ANALYTICS_EVENTS, trackAnalytics } from './lib/analytics';
 
 function AppContent() {
   const { darkMode } = useTheme();
@@ -34,11 +35,7 @@ function AppContent() {
 
   useEffect(() => {
     pingBackend();
-    const interval = setInterval(() => {
-      pingBackend();
-    }, 14000);
-
-    return () => clearInterval(interval);
+    trackAnalytics(ANALYTICS_EVENTS.APP_VISIT);
   }, []);
 
   return (
@@ -54,7 +51,7 @@ function AppContent() {
             <Route path="/booking/:hotelId" element={<BookingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route path="/hotel-register" element={<HotelCompleteRegistrationPage />} />
+            <Route path="/provider-register" element={<ProviderCompleteRegistrationPage />} />
             <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard" element={<UserDashboard />} />
             <Route path="/dashboard/seller" element={<SellerDashboard />} />

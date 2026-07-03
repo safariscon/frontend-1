@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "https://umuhuzaback.onrender.com";
+const DEFAULT_API_BASE_URL = "http://localhost:5000";
 const trimTrailingSlash = (value) => String(value || "").replace(/\/+$/, "");
 const API_BASE_URL = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL);
 const AUTH_STORAGE_KEY = "tourconnect_auth";
@@ -130,8 +130,8 @@ export const authApi = {
       method: "POST",
       body: userData,
     }),
-  completeHotelRegistration: (payload) =>
-    apiRequest("/api/auth/hotel/complete-registration", {
+  completeProviderRegistration: (payload) =>
+    apiRequest("/api/auth/provider/complete-registration", {
       method: "POST",
       body: payload,
     }),
@@ -149,9 +149,31 @@ export const adminApi = {
       token,
       body: payload,
     }),
+  rejectBooking: (token, bookingId, payload = {}) =>
+    apiRequest(`/api/admin/bookings/${bookingId}/reject`, {
+      method: "PUT",
+      token,
+      body: payload,
+    }),
+  updateMarketplaceSettings: (token, payload) =>
+    apiRequest("/api/admin/marketplace-settings", { method: "PUT", token, body: payload }),
+  updateServiceBookingMode: (token, businessId, bookingMode) =>
+    apiRequest(`/api/admin/businesses/${businessId}/booking-mode`, { method: "PUT", token, body: { bookingMode } }),
   verifyBooking: (token, lookup) => apiRequest(`/api/admin/booking-verification/${encodeURIComponent(lookup)}`, { token }),
   getServices: (token) => apiRequest("/api/admin/services", { token }),
   getTransactions: (token) => apiRequest("/api/admin/transactions", { token }),
+  getStorageOverview: (token) => apiRequest("/api/admin/storage/overview", { token }),
+  getMongoStorage: (token) => apiRequest("/api/admin/storage/mongodb", { token }),
+  getCloudinaryStorage: (token) => apiRequest("/api/admin/storage/cloudinary", { token }),
+  getAnalyticsOverview: (token, query = "") => apiRequest("/api/admin/analytics/overview" + query, { token }),
+  getAnalyticsServices: (token, query = "") => apiRequest("/api/admin/analytics/services" + query, { token }),
+  getAnalyticsPayments: (token, query = "") => apiRequest("/api/admin/analytics/payments" + query, { token }),
+  updateCommissionStatus: (token, transactionId, commissionStatus) =>
+    apiRequest(`/api/admin/transactions/${transactionId}/commission`, {
+      method: "PUT",
+      token,
+      body: { commissionStatus },
+    }),
   createSeller: (token, payload) =>
     apiRequest("/api/admin/sellers", {
       method: "POST",
@@ -187,12 +209,6 @@ export const adminApi = {
   },
   registerBusiness: (token, payload) =>
     apiRequest("/api/admin/register-business", {
-      method: "POST",
-      token,
-      body: payload,
-    }),
-  registerHotel: (token, payload) =>
-    apiRequest("/api/admin/register-hotel", {
       method: "POST",
       token,
       body: payload,
@@ -235,6 +251,10 @@ export const adminApi = {
       method: "DELETE",
       token,
     }),
+};
+
+export const analyticsApi = {
+  track: (payload, token) => apiRequest("/api/analytics/track", { method: "POST", token, body: payload }),
 };
 
 export const hotelApi = {
@@ -307,6 +327,7 @@ export const bookingApi = {
       token,
       body: {
         hotelId: payload.serviceId,
+        rebookId: payload.rebookId || undefined,
         quantity: payload.quantity,
         guests: payload.quantity,
         checkIn: payload.startDate,
@@ -326,14 +347,32 @@ export const bookingApi = {
     }),
   getReceiptUrl: (bookingOrToken) =>
     bookingOrToken ? `${API_BASE_URL}/api/receipt/${encodeURIComponent(bookingOrToken)}` : "",
+  getPrintableReceiptUrl: (bookingOrToken) =>
+    bookingOrToken ? `${API_BASE_URL}/api/receipt/${encodeURIComponent(bookingOrToken)}?print=1` : "",
   getVerifyUrl: (token) => `${window.location.origin}/verify/${encodeURIComponent(token)}`,
   getQrImageUrl: (token) =>
-    `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=12&data=${encodeURIComponent(`${window.location.origin}/verify/${token}`)}`,
+    `${API_BASE_URL}/api/qr/${encodeURIComponent(token)}`,
+};
+
+export const rebookApi = {
+  createRequest: (token, payload) => apiRequest("/api/rebook/request", { method: "POST", token, body: payload }),
+  getCustomerRequests: (token, page = 1) => apiRequest(`/api/rebook/customer?page=${page}`, { token }),
+  getSellerRequests: (token, page = 1) => apiRequest(`/api/rebook/seller?page=${page}`, { token }),
+  getAdminRequests: (token, page = 1, status = "") => apiRequest(`/api/rebook/admin?page=${page}${status ? `&status=${encodeURIComponent(status)}` : ""}`, { token }),
+  approve: (token, id) => apiRequest(`/api/rebook/${id}/approve`, { method: "POST", token }),
+  reject: (token, id, reason) => apiRequest(`/api/rebook/${id}/reject`, { method: "POST", token, body: { reason } }),
+  approveRefund: (token, id) => apiRequest(`/api/rebook/${id}/refund`, { method: "POST", token }),
+  confirmUnavailable: (token, id) => apiRequest(`/api/rebook/${id}/confirm-unavailable`, { method: "POST", token }),
+  markSellerNotified: (token, id) => apiRequest(`/api/rebook/${id}/mark-seller-notified`, { method: "POST", token }),
+  verifyId: (token, rebookId, serviceId) => apiRequest("/api/rebook/verify-id", { method: "POST", token, body: { rebookId, serviceId } }),
+  getSettings: (token) => apiRequest("/api/rebook/settings", { token }),
+  updateSettings: (token, payload) => apiRequest("/api/rebook/settings", { method: "PUT", token, body: payload }),
 };
 
 export const publicApi = {
   getHotels: () => apiRequest("/api/hotels"),
   getAnnouncement: () => apiRequest("/api/announcement"),
+  getMarketplaceSettings: () => apiRequest("/api/marketplace-settings"),
   verifyBooking: (token) => apiRequest(`/api/verify/${token}`),
 };
 

@@ -7,6 +7,7 @@ import { publicApi } from '../lib/api';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
 
 export default function HotelDetailsPage() {
   const { id } = useParams();
@@ -27,6 +28,7 @@ export default function HotelDetailsPage() {
         const hotels = normalizeHotels(response.hotels || []);
         const found = hotels.find((h) => String(h.id) === String(id));
         setHotel(found || null);
+        if (found) trackAnalytics(ANALYTICS_EVENTS.SERVICE_VIEW, { serviceId: found.id });
       } finally {
         setLoading(false);
       }
@@ -55,8 +57,7 @@ export default function HotelDetailsPage() {
       </div>
     );
   }
-  const remaining = Number(hotel.quantityRemaining ?? hotel.availableQuantity ?? 1);
-  const isNotAvailable = hotel.status === 'unavailable' || remaining <= 0;
+  const isNotAvailable = hotel.status === 'unavailable';
   const images = Array.isArray(hotel.images) ? hotel.images.slice(0, 3) : [];
   const showPreviousImage = () => setSelectedImage((current) => (current === 0 ? images.length - 1 : current - 1));
   const showNextImage = () => setSelectedImage((current) => (current + 1) % images.length);
@@ -75,6 +76,7 @@ export default function HotelDetailsPage() {
       });
     });
   const inventoryLabel = getInventoryLabel(hotel.inventoryStatus, isNotAvailable);
+  const promotion = getVisiblePromotion(hotel.promotion);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -148,7 +150,7 @@ export default function HotelDetailsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    {hotel.location}, Rwanda
+                    {hotel.location} District
                   </div>
                 </div>
               </div>
@@ -160,8 +162,21 @@ export default function HotelDetailsPage() {
 
               <div className="mb-8 grid gap-4 md:grid-cols-3">
                 <InfoTile label="Category" value={hotel.type || hotel.category || 'Service'} />
-                <InfoTile label="Seller" value="Verified marketplace seller" />
-                <InfoTile label="Inventory" value={inventoryLabel} />
+                {promotion ? (
+                  <div className="md:col-span-2 overflow-hidden rounded-xl border border-amber-300 bg-amber-50">
+                    <div className="bg-amber-400 px-4 py-2 text-xs font-black uppercase tracking-wider text-amber-950">★ Promotion</div>
+                    <div className="p-4">
+                      <h3 className="text-lg font-black text-amber-700">{promotion.title}</h3>
+                      <p className="mt-1 text-sm text-slate-800">{promotion.description}</p>
+                      <p className="mt-2 text-xs font-bold text-orange-600">Valid {formatPromotionDate(promotion.startAt)} – {formatPromotionDate(promotion.endAt)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <InfoTile label="Seller" value="Verified marketplace seller" />
+                    <InfoTile label="Inventory" value={inventoryLabel} />
+                  </>
+                )}
               </div>
 
               <AvailabilityTable
@@ -192,12 +207,8 @@ export default function HotelDetailsPage() {
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-24">
                 <div className="border-t border-gray-200 pt-4 mb-4">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-gray-600">{t('startingFrom', language)}</span>
-                    <span className="text-2xl font-bold text-primary">{hotel.priceText || 'Price on request'}</span>
-                  </div>
                   <p className={`text-sm font-semibold ${isNotAvailable ? 'text-red-700' : 'text-primary'}`}>
-                    {inventoryLabel} {isNotAvailable ? '' : `- ${remaining} available`}
+                    {isNotAvailable ? inventoryLabel : 'Available'}
                   </p>
                 </div>
 
@@ -210,7 +221,7 @@ export default function HotelDetailsPage() {
                 </button>
 
                 <p className="text-xs text-gray-500 text-center mt-3">
-                  {t('bookingConnectNote', language)}
+                  Admin confirms your exact RWF quote. Pay only the 30% deposit to unlock full provider details.
                 </p>
               </div>
             </div>
@@ -249,6 +260,21 @@ function InfoTile({ label, value }) {
       <p className="mt-1 font-bold text-gray-900">{value}</p>
     </div>
   );
+}
+
+function getVisiblePromotion(promotion) {
+  if (!promotion?.enabled || !promotion.title || !promotion.description) return null;
+  const start = new Date(promotion.startAt);
+  const end = new Date(promotion.endAt);
+  const now = new Date();
+  if (!Number.isNaN(start.getTime()) && start > now) return null;
+  return Number.isNaN(end.getTime()) || end >= now ? promotion : null;
+}
+
+function formatPromotionDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'as scheduled';
+  return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortColumn, setSortColumn }) {

@@ -3,73 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi, saveAuthData } from '../lib/api';
-
-const SERVICE_CATEGORIES = [
-  {
-    label: 'Accommodation Services',
-    options: [
-      ['hotels-and-resorts', 'Hotels & Resorts'],
-      ['homestays-and-guesthouses', 'Homestays & Guesthouses'],
-      ['tent-rentals-and-camping-sites', 'Tent Rentals & Camping Sites'],
-      ['vacation-rentals-and-apartments', 'Vacation Rentals & Apartments'],
-    ],
-  },
-  {
-    label: 'Transport & Mobility Services',
-    options: [
-      ['car-rentals', 'Car Rentals'],
-      ['motorbike-and-scooter-rentals', 'Motorbike & Scooter Rentals'],
-      ['taxi-and-ride-services', 'Taxi & Ride Services'],
-      ['bus-and-minivan-charters', 'Bus & Minivan Charters'],
-    ],
-  },
-  {
-    label: 'Food & Beverage Services',
-    options: [
-      ['restaurants', 'Restaurants'],
-      ['bars-and-pubs', 'Bars & Pubs'],
-      ['coffee-shops-and-cafes', 'Coffee Shops & Cafes'],
-      ['food-trucks-and-street-food-stalls', 'Food Trucks & Street Food'],
-    ],
-  },
-  {
-    label: 'Events & Venue Services',
-    options: [
-      ['conference-event-halls-mice', 'Conference & Event Halls'],
-      ['wedding-venues', 'Wedding Venues'],
-    ],
-  },
-  {
-    label: 'Travel & Experience Services',
-    options: [
-      ['tour-and-activity-operators', 'Tours & Activities'],
-      ['entertainment-venues', 'Entertainment Venues'],
-      ['gear-rentals', 'Gear Rentals'],
-    ],
-  },
-  {
-    label: 'Shopping & Local Market Services',
-    options: [
-      ['souvenir-shops-and-craft-markets', 'Souvenir Shops & Craft Markets'],
-    ],
-  },
-  {
-    label: 'Wellness & Personal Care Services',
-    options: [
-      ['spas-and-wellness-centers', 'Spas & Wellness Centers'],
-    ],
-  },
-  {
-    label: 'Personal Support Services',
-    options: [
-      ['childcare-services', 'Childcare Services'],
-    ],
-  },
-];
+import { SERVICE_CATEGORY_GROUPS as SERVICE_CATEGORIES } from '../data/serviceCategories';
 
 const initialForm = {
   businessName: '',
-  businessType: 'hotels-and-resorts',
+  businessType: 'hotel-rooms',
   ownerName: '',
   email: '',
   phone: '',
