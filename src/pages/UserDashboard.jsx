@@ -156,18 +156,18 @@ export default function UserDashboard() {
 
                   return (
                     <article key={booking._id} className={`border-b border-slate-200 bg-white transition ${selected ? 'opacity-70 ring-2 ring-blue-300' : 'hover:bg-slate-50'}`}>
-                      <div className="flex items-center justify-between gap-4 p-5">
+                      <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="text-xs font-bold uppercase tracking-wide text-primary">Booked {formatCreatedDate(booking.createdAt)}</p>
                           <h3 className="mt-1 truncate font-black text-slate-900">{title}</h3>
                           <p className="mt-1 text-xs text-slate-500">{booking.bookingCode || booking._id}</p>
                           {booking.promotionSnapshot?.title && <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black uppercase text-amber-700">Promotion applied</span>}
                         </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          {canPay && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPaymentBooking(booking); }} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Pay 30% Deposit</button>}
-                          {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setChangeBookingId(booking._id); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700">Request change</button>}
-                          <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>{booking.status}</span>
-                          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedBooking(booking); }} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">View</button>
+                        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-3">
+                          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedBooking(booking); }} className="col-span-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white sm:col-span-1">View</button>
+                          {canPay && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPaymentBooking(booking); }} className="rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">Pay 30% Deposit</button>}
+                          {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setChangeBookingId(booking._id); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-700">Request change</button>}
+                          <span className={`flex min-h-10 items-center justify-center rounded-full px-3 py-1 text-center text-[11px] font-bold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>{formatStatus(booking.status)}</span>
                         </div>
                       </div>
                       {showInlineDetails && (

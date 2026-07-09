@@ -129,6 +129,7 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     } else {
       markerRef.current.setLatLng(latLng);
     }
+    mapRef.current.setView(latLng, 15);
   }, [location.latitude, location.longitude]);
 
   useEffect(() => {

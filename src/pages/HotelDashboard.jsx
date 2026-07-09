@@ -71,6 +71,41 @@ const RWANDA_DISTRICTS = [
   'Nyamasheke', 'Nyanza', 'Nyarugenge', 'Nyaruguru', 'Rubavu', 'Ruhango', 'Rulindo', 'Rusizi', 'Rutsiro', 'Rwamagana',
 ];
 
+const RWANDA_PROVINCE_BY_DISTRICT = {
+  Bugesera: 'Eastern Province',
+  Burera: 'Northern Province',
+  Gakenke: 'Northern Province',
+  Gasabo: 'Kigali City',
+  Gatsibo: 'Eastern Province',
+  Gicumbi: 'Northern Province',
+  Gisagara: 'Southern Province',
+  Huye: 'Southern Province',
+  Kamonyi: 'Southern Province',
+  Karongi: 'Western Province',
+  Kayonza: 'Eastern Province',
+  Kicukiro: 'Kigali City',
+  Kirehe: 'Eastern Province',
+  Muhanga: 'Southern Province',
+  Musanze: 'Northern Province',
+  Ngoma: 'Eastern Province',
+  Ngororero: 'Western Province',
+  Nyabihu: 'Western Province',
+  Nyagatare: 'Eastern Province',
+  Nyamagabe: 'Southern Province',
+  Nyamasheke: 'Western Province',
+  Nyanza: 'Southern Province',
+  Nyarugenge: 'Kigali City',
+  Nyaruguru: 'Southern Province',
+  Rubavu: 'Western Province',
+  Ruhango: 'Southern Province',
+  Rulindo: 'Northern Province',
+  Rusizi: 'Western Province',
+  Rutsiro: 'Western Province',
+  Rwamagana: 'Eastern Province',
+};
+
+const inferProvinceFromDistrict = (district) => RWANDA_PROVINCE_BY_DISTRICT[district] || '';
+
 const makeId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 const normalizeTableForForm = (table) => {
@@ -86,14 +121,20 @@ const normalizeTableForForm = (table) => {
 };
 
 const normalizeLocationForForm = (service) => {
-  if (service.locationDetails?.district) return service.locationDetails;
+  if (service.locationDetails?.district) {
+    return {
+      ...service.locationDetails,
+      province: service.locationDetails.province || service.serviceLocation?.province || inferProvinceFromDistrict(service.locationDetails.district),
+    };
+  }
   const parts = String(service.location || '').split(',').map((part) => part.trim()).filter(Boolean);
+  const district = parts.at(-1) === 'Rwanda' ? parts.at(-2) || '' : parts.at(-1) || '';
   return {
-    province: service.serviceLocation?.province || service.locationDetails?.province || '',
+    province: service.serviceLocation?.province || service.locationDetails?.province || inferProvinceFromDistrict(district),
     village: parts.length >= 4 ? parts.at(-4) : '',
     cell: parts.length >= 3 ? parts.at(-3) : '',
     sector: parts.length >= 2 ? parts.at(-2) : '',
-    district: parts.at(-1) === 'Rwanda' ? parts.at(-2) || '' : parts.at(-1) || '',
+    district,
   };
 };
 
@@ -650,9 +691,12 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setServiceLocation = (serviceLocation) => setForm((prev) => ({
     ...prev,
-    serviceLocation,
+    serviceLocation: {
+      ...serviceLocation,
+      province: serviceLocation.province || inferProvinceFromDistrict(serviceLocation.district),
+    },
     locationDetails: {
-      province: serviceLocation.province || '',
+      province: serviceLocation.province || inferProvinceFromDistrict(serviceLocation.district),
       district: serviceLocation.district || '',
       sector: serviceLocation.sector || '',
       cell: serviceLocation.cell || '',
@@ -787,7 +831,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
         <p className="mt-2 text-sm text-slate-500">The required customer fields above always stay in place. Open this section only when your service needs extra questions.</p>
         <div className="mt-4"><BookingFormBuilder bookingForm={form.bookingForm} setBookingForm={(bookingForm) => set('bookingForm', bookingForm)} /></div>
       </details>
-      <button disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Business' : 'Create Business'}</button>
+      <button type="submit" disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Business' : 'Create Business'}</button>
     </form>
   );
 }
