@@ -4,16 +4,30 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
-import { bookingApi, getAuthData, hotelApi, publicApi } from '../lib/api';
+import { getAuthData, hotelApi, publicApi } from '../lib/api';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { formatRwf } from '../lib/currency';
 import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES } from '../data/serviceCategories';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
+import ServiceLocationPicker from '../components/ServiceLocationPicker';
 
 const EMPTY_FORM = {
   title: '',
   description: '',
-  locationDetails: { district: '', sector: '', cell: '', village: '' },
+  serviceLocation: {
+    country: 'Rwanda',
+    province: '',
+    district: '',
+    sector: '',
+    cell: '',
+    village: '',
+    fullAddress: '',
+    latitude: null,
+    longitude: null,
+    locationSource: 'map_click',
+    isExactLocationVerified: false,
+  },
+  locationDetails: { province: '', district: '', sector: '', cell: '', village: '' },
   category: 'hotel-rooms',
   payoutDetails: { method: 'mobile-money', accountName: '', accountNumber: '', instructions: '' },
   contactDetails: { phone: '', whatsapp: '' },
@@ -75,10 +89,29 @@ const normalizeLocationForForm = (service) => {
   if (service.locationDetails?.district) return service.locationDetails;
   const parts = String(service.location || '').split(',').map((part) => part.trim()).filter(Boolean);
   return {
+    province: service.serviceLocation?.province || service.locationDetails?.province || '',
     village: parts.length >= 4 ? parts.at(-4) : '',
     cell: parts.length >= 3 ? parts.at(-3) : '',
     sector: parts.length >= 2 ? parts.at(-2) : '',
     district: parts.at(-1) === 'Rwanda' ? parts.at(-2) || '' : parts.at(-1) || '',
+  };
+};
+
+const normalizeServiceLocationForForm = (service) => {
+  const legacy = normalizeLocationForForm(service);
+  const source = service.serviceLocation || {};
+  return {
+    country: 'Rwanda',
+    province: source.province || legacy.province || '',
+    district: source.district || legacy.district || '',
+    sector: source.sector || legacy.sector || '',
+    cell: source.cell || legacy.cell || '',
+    village: source.village || legacy.village || '',
+    fullAddress: source.fullAddress || service.contactDetails?.exactAddress || service.location || '',
+    latitude: source.latitude ?? service.contactDetails?.latitude ?? null,
+    longitude: source.longitude ?? service.contactDetails?.longitude ?? null,
+    locationSource: source.locationSource || 'map_click',
+    isExactLocationVerified: Boolean(source.isExactLocationVerified),
   };
 };
 
@@ -309,6 +342,7 @@ export default function HotelDashboard() {
     setForm({
       title: service.title || service.name || '',
       description: service.description || '',
+      serviceLocation: normalizeServiceLocationForForm(service),
       locationDetails: normalizeLocationForForm(service),
       category: service.category || service.serviceType || 'hotel-rooms',
       payoutDetails: {
@@ -372,10 +406,18 @@ export default function HotelDashboard() {
     const normalizedStatus = form.status === 'unavailable' ? 'unavailable' : 'available';
     const availabilityText = form.status === 'custom' ? form.customAvailability : form.remainingQuantity;
     const quantityMatch = String(form.remainingQuantity || form.customAvailability || '').replace(/,/g, '').match(/\d+(\.\d+)?/);
+    const locationDetails = {
+      province: form.serviceLocation.province,
+      district: form.serviceLocation.district,
+      sector: form.serviceLocation.sector,
+      cell: form.serviceLocation.cell,
+      village: form.serviceLocation.village,
+    };
     const payload = {
       title: form.title,
       description: form.description,
-      locationDetails: form.locationDetails,
+      serviceLocation: form.serviceLocation,
+      locationDetails,
       payoutDetails: form.payoutDetails,
       contactDetails: form.contactDetails,
       serviceType: 'rental',
@@ -409,7 +451,8 @@ export default function HotelDashboard() {
 
   const updateStatus = async (service, status) => {
     const structuredLocation = normalizeLocationForForm(service);
-    const hasLocation = Object.values(structuredLocation).every(Boolean);
+    const serviceLocation = normalizeServiceLocationForForm(service);
+    const hasLocation = serviceLocation.province && serviceLocation.district && serviceLocation.sector && serviceLocation.latitude && serviceLocation.longitude;
     const hasPayout = service.payoutDetails?.accountName && service.payoutDetails?.accountNumber;
     const hasPriceRows = service.availabilityTable?.rows?.some((row) => row.cells?.service && row.cells?.price);
     if (!hasLocation || !hasPayout || !hasPriceRows) {
@@ -422,6 +465,7 @@ export default function HotelDashboard() {
       title: service.title || service.name,
       description: service.description,
       locationDetails: structuredLocation,
+      serviceLocation,
       payoutDetails: service.payoutDetails,
       contactDetails: service.contactDetails || EMPTY_FORM.contactDetails,
       serviceType: service.serviceType || 'rental',
@@ -604,7 +648,17 @@ function Analytics({ stats, services }) {
 
 function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMode }) {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-  const setLocation = (key, value) => setForm((prev) => ({ ...prev, locationDetails: { ...prev.locationDetails, [key]: value } }));
+  const setServiceLocation = (serviceLocation) => setForm((prev) => ({
+    ...prev,
+    serviceLocation,
+    locationDetails: {
+      province: serviceLocation.province || '',
+      district: serviceLocation.district || '',
+      sector: serviceLocation.sector || '',
+      cell: serviceLocation.cell || '',
+      village: serviceLocation.village || '',
+    },
+  }));
   const setPayout = (key, value) => setForm((prev) => ({ ...prev, payoutDetails: { ...prev.payoutDetails, [key]: value } }));
   const setContact = (key, value) => setForm((prev) => ({ ...prev, contactDetails: { ...prev.contactDetails, [key]: value } }));
   const setPromotion = (key, value) => setForm((prev) => ({ ...prev, promotion: { ...prev.promotion, [key]: value } }));
@@ -618,10 +672,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
         <p className="text-sm font-black text-blue-950">Booking mode: <span className="capitalize">{globalBookingMode === 'service-level' ? form.bookingMode : globalBookingMode}</span></p>
         <p className="mt-1 text-xs leading-5 text-blue-800">Booking mode is controlled by the administrator. Sellers can update service information, prices, availability, and customer questions, but cannot change this setting.</p>
       </div>
-      <Select label="District" value={form.locationDetails.district} onChange={(value) => setLocation('district', value)} options={[['', 'Select district'], ...RWANDA_DISTRICTS.map((district) => [district, district])]} required />
-      <Input label="Sector" value={form.locationDetails.sector} onChange={(value) => setLocation('sector', value)} placeholder="Enter sector" required />
-      <Input label="Cell" value={form.locationDetails.cell} onChange={(value) => setLocation('cell', value)} placeholder="Enter cell" required />
-      <Input label="Village" value={form.locationDetails.village} onChange={(value) => setLocation('village', value)} placeholder="Enter village" required />
+      <ServiceLocationPicker value={form.serviceLocation} onChange={setServiceLocation} districts={RWANDA_DISTRICTS} />
       <Select label="Availability" value={form.status} onChange={(value) => set('status', value)} options={[['available', 'Available'], ['unavailable', 'Not Available'], ['custom', 'Custom']]} />
       {form.status === 'custom' ? (
         <Input label="Custom Availability" value={form.customAvailability} onChange={(value) => set('customAvailability', value)} placeholder="Example: Weekends only" required />

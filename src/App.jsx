@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { InstallProvider } from './context/InstallContext';
 import { useTheme } from './context/ThemeContext';
-import { useEffect } from 'react';
+import { Component, useEffect } from 'react';
 import { pingBackend } from './lib/api';
 import HomePage from './pages/HomePage';
 import HotelsPage from './pages/HotelsPage';
@@ -21,6 +21,37 @@ import InstallBanner from './components/InstallBanner';
 import InstallModal from './components/InstallModal';
 import MobileFloatingInstall from './components/MobileFloatingInstall';
 import { ANALYTICS_EVENTS, trackAnalytics } from './lib/analytics';
+
+class DashboardErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error('Customer dashboard failed to render:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gray-50 px-4 py-16">
+          <div className="mx-auto max-w-lg rounded-2xl bg-white p-6 text-center shadow-sm">
+            <h1 className="text-xl font-black text-slate-950">Bookings could not load</h1>
+            <p className="mt-2 text-sm text-slate-600">Refresh the page to load your booking dashboard again.</p>
+            <button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">Refresh dashboard</button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function AppContent() {
   const { darkMode } = useTheme();
@@ -53,7 +84,7 @@ function AppContent() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/provider-register" element={<ProviderCompleteRegistrationPage />} />
             <Route path="/business-register" element={<BusinessRegisterPage />} />
-            <Route path="/dashboard" element={<UserDashboard />} />
+            <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />
             <Route path="/dashboard/seller" element={<SellerDashboard />} />
             <Route path="/hotel-dashboard" element={<HotelDashboard />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />

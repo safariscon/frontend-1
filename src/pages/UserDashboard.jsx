@@ -11,14 +11,21 @@ import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import CustomerChangeRequestCard from '../components/rebook/CustomerChangeRequestCard';
 import CustomerChangeRequests from '../components/rebook/CustomerChangeRequests';
+import UnlockedServiceMap from '../components/UnlockedServiceMap';
 
 const statusStyle = {
   confirmed: 'bg-green-100 text-green-800',
   pending: 'bg-yellow-100 text-yellow-800',
+  'waiting-for-payment': 'bg-blue-100 text-blue-800',
+  'provider-details-unlocked': 'bg-emerald-100 text-emerald-800',
   completed: 'bg-gray-100 text-gray-800',
   cancelled: 'bg-red-100 text-red-800',
   rejected: 'bg-red-100 text-red-800',
 };
+
+const DEPOSIT_PAID_STATUSES = ['deposit_paid', 'deposit-paid', 'paid'];
+const PAYABLE_BOOKING_STATUSES = ['confirmed', 'waiting-for-payment'];
+const RETRYABLE_PAYMENT_STATUSES = ['unpaid', 'pending', 'failed', ''];
 
 export default function UserDashboard() {
   const { user } = useAuth();
@@ -27,6 +34,7 @@ export default function UserDashboard() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [paymentBooking, setPaymentBooking] = useState(null);
+  const [selectedBooking, setSelectedBooking] = useState(null);
   const [changeBookingId, setChangeBookingId] = useState('');
   const [changeRequestsVersion, setChangeRequestsVersion] = useState(0);
   const { language } = useLanguage();
@@ -77,7 +85,7 @@ export default function UserDashboard() {
     if (!authData?.token) return;
     setMessage('');
     try {
-      await bookingApi.payBooking(authData.token, bookingId, {
+      const paymentResponse = await bookingApi.payBooking(authData.token, bookingId, {
         paymentMethod: paymentDetails.paymentMethod || 'simulation-mobile-money',
         senderAccount: paymentDetails.senderAccount || user?.email,
       });
@@ -85,6 +93,10 @@ export default function UserDashboard() {
       setPaymentBooking(null);
       const response = await bookingApi.getMyBookings(authData.token);
       setBookings(response.bookings || []);
+      setSelectedBooking((current) => {
+        if (current?._id !== bookingId) return current;
+        return response.bookings?.find((booking) => booking._id === bookingId) || paymentResponse.booking || current;
+      });
     } catch (error) {
       setMessage(error.message);
       throw error;
@@ -134,56 +146,70 @@ export default function UserDashboard() {
                   const businessToShow = assignedBusiness || preferredBusiness;
                   const serviceToShow = booking.serviceId;
                   const waiting = booking.status === 'pending' && !assignedBusiness;
-                  const depositPaid = ['deposit-paid', 'paid'].includes(booking.paymentStatus);
+                  const depositPaid = hasDepositPaid(booking);
+                  const canPay = canPayDeposit(booking);
+                  const providerUnlocked = Boolean(booking.providerDetailsUnlocked || booking.detailsUnlocked || depositPaid);
+                  const title = serviceToShow?.title || serviceToShow?.name || businessToShow?.businessName || businessToShow?.name || booking.destinationPlace || t('serviceProviderPendingAssignment', language);
+                  const remainingBalance = Math.max(0, Number(booking.remainingBalance ?? Number(booking.totalPrice || 0) - Number(booking.amountPaid || 0)));
+                  const selected = selectedBooking?._id === booking._id;
+                  const showInlineDetails = false;
 
                   return (
-                    <details key={booking._id} className="group border-b border-slate-200 bg-white transition open:bg-slate-50">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 [&::-webkit-details-marker]:hidden">
+                    <article key={booking._id} className={`border-b border-slate-200 bg-white transition ${selected ? 'opacity-70 ring-2 ring-blue-300' : 'hover:bg-slate-50'}`}>
+                      <div className="flex items-center justify-between gap-4 p-5">
                         <div className="min-w-0">
                           <p className="text-xs font-bold uppercase tracking-wide text-primary">Booked {formatCreatedDate(booking.createdAt)}</p>
-                          <h3 className="mt-1 truncate font-black text-slate-900">{serviceToShow?.title || serviceToShow?.name || businessToShow?.businessName || businessToShow?.name || booking.destinationPlace}</h3>
+                          <h3 className="mt-1 truncate font-black text-slate-900">{title}</h3>
                           <p className="mt-1 text-xs text-slate-500">{booking.bookingCode || booking._id}</p>
                           {booking.promotionSnapshot?.title && <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black uppercase text-amber-700">Promotion applied</span>}
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
+                          {canPay && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPaymentBooking(booking); }} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Pay 30% Deposit</button>}
                           {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setChangeBookingId(booking._id); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700">Request change</button>}
                           <span className={`rounded-full px-3 py-1 text-xs font-bold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>{booking.status}</span>
-                          <span className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white group-open:bg-slate-700">View</span>
+                          <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedBooking(booking); }} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">View</button>
                         </div>
-                      </summary>
-                      <div className="border-t border-slate-200 p-5 md:p-6">
-                      <div className="flex flex-col md:flex-row justify-between gap-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900">
-                            {serviceToShow?.title || serviceToShow?.name || businessToShow?.businessName || businessToShow?.name || t('serviceProviderPendingAssignment', language)}
-                          </h3>
-                          <p className="text-sm text-gray-700 mt-1">
-                            {t('destination', language)} {booking.destinationPlace} ({booking.destinationLocation})
-                          </p>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {formatBookingSchedule(booking, language)}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {getBookingQuantityLabel(booking, language)} {booking.bookingDetails?.quantity || booking.guests || booking.quantity || 1}
-                          </p>
-                          <p className="text-sm text-gray-500 mt-1">{t('bookingId', language)} {booking._id}</p>
+                      </div>
+                      {showInlineDetails && (
+                      <div className="hidden border-t border-blue-100 p-4 md:p-6">
+                      <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm md:p-5">
+                      <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
+                        <div className="min-w-0">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wide text-blue-600">Booking information</p>
+                              <h3 className="mt-1 text-lg font-black text-slate-950">{title}</h3>
+                              <p className="mt-1 text-xs font-semibold text-slate-500">{booking.bookingCode || booking._id}</p>
+                            </div>
+                            {providerUnlocked ? (
+                              <span className="w-fit rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase text-emerald-700">Details unlocked</span>
+                            ) : (
+                              <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase text-amber-700">Locked until deposit</span>
+                            )}
+                          </div>
+                          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                            <Detail label="Destination" value={formatDestination(booking)} tone="blue" />
+                            <Detail label="Schedule" value={formatBookingSchedule(booking, language)} tone="slate" />
+                            <Detail label={getBookingQuantityLabel(booking, language)} value={booking.bookingDetails?.quantity || booking.guests || booking.quantity || 1} tone="slate" />
+                            <Detail label="Booking ID" value={booking._id} tone="blue" />
+                          </div>
                           {waiting && (
-                            <p className="text-sm text-yellow-700 mt-2">
+                            <p className="mt-3 rounded-lg bg-yellow-50 p-3 text-sm font-semibold text-yellow-800">
                               {t('pleaseWaitForAdmin', language)}
                             </p>
                           )}
                           {booking.isAcknowledgedByAdmin && booking.status === 'pending' && (
-                            <p className="text-sm text-blue-700 mt-2">
+                            <p className="mt-3 rounded-lg bg-blue-50 p-3 text-sm font-semibold text-blue-800">
                               {t('adminConfirmedReceipt', language)}
                             </p>
                           )}
                           {booking.adminResponseMessage && (
-                            <p className="text-sm text-green-700 mt-2">
+                            <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
                               {booking.adminResponseMessage}
                             </p>
                           )}
                           {assignedBusiness && (
-                            <p className="text-sm text-gray-700 mt-2">
+                            <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm font-semibold text-slate-700">
                               {t('assignedProvider', language)} {assignedBusiness.businessName || assignedBusiness.name} - {assignedBusiness.location}
                             </p>
                           )}
@@ -195,15 +221,13 @@ export default function UserDashboard() {
                               <p className="mt-2 text-xs font-semibold text-orange-600">Valid {formatCreatedDate(booking.promotionSnapshot.startAt)} – {formatCreatedDate(booking.promotionSnapshot.endAt)}</p>
                             </div>
                           )}
-                          <div className="mt-4 grid gap-2 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm sm:grid-cols-2">
-                            <Detail label="Booking ID" value={booking._id} />
-                            <Detail label="Booking code" value={booking.bookingCode || booking._id} />
-                            <Detail label="Payment status" value={booking.paymentStatus || 'unpaid'} />
-                            <Detail label="Amount paid" value={formatRwf(booking.amountPaid || 0)} />
-                            <Detail label="Remaining balance" value={formatRwf(Math.max(0, Number(booking.totalPrice || 0) - Number(booking.amountPaid || 0)))} />
-                            <Detail label="Quantity" value={booking.quantity || booking.guests || 1} />
-                            <Detail label="Booking status" value={booking.status} />
-                            <Detail label="Payment purpose" value={booking.paymentReason} />
+                          <div className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-2">
+                            <Detail label="Booking code" value={booking.bookingCode || booking._id} tone="blue" />
+                            <Detail label="Payment status" value={formatStatus(booking.paymentStatus || 'unpaid')} tone={depositPaid ? 'green' : 'amber'} />
+                            <Detail label="Amount paid" value={formatRwf(booking.amountPaid || 0)} tone="green" />
+                            <Detail label="Remaining balance" value={formatRwf(remainingBalance)} tone="amber" />
+                            <Detail label="Booking status" value={formatStatus(booking.status)} tone="blue" />
+                            <Detail label="Payment purpose" value={booking.paymentReason} tone="slate" />
                           </div>
                           {depositPaid && booking.bookingCode && (
                             <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">
@@ -212,18 +236,30 @@ export default function UserDashboard() {
                           )}
                           {depositPaid && <CustomerChangeRequestCard booking={booking} open={changeBookingId === booking._id} onClose={() => setChangeBookingId('')} onSubmitted={() => { setChangeRequestsVersion((value) => value + 1); setMessage('Booking change request submitted successfully.'); }} />}
                           <BookingRequestDetails details={booking.bookingDetails} />
-                          {booking.providerDetailsUnlocked && businessToShow && (
+                          {providerUnlocked && businessToShow ? (
                             <UnlockedProvider business={businessToShow} />
+                          ) : (
+                            <LockedProviderNotice booking={booking} />
                           )}
                         </div>
-                        <div className="text-right">
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>
-                            {t(`${booking.status}Status`, language)}
-                          </span>
-                          <p className="text-xl font-bold text-primary mt-2">{formatRwf(booking.totalPrice || 0)}</p>
+                        <aside className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-left">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Payment summary</p>
+                              <p className="mt-1 text-2xl font-black text-primary">{formatRwf(booking.totalPrice || 0)}</p>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>
+                              {formatStatus(booking.status)}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid gap-2">
+                            <SummaryRow label="Deposit" value={formatRwf(booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3))} />
+                            <SummaryRow label="Paid" value={formatRwf(booking.amountPaid || 0)} strong={depositPaid} />
+                            <SummaryRow label="Balance" value={formatRwf(remainingBalance)} />
+                          </div>
                           <div className="mt-3 flex flex-col gap-2">
                             {['confirmed', 'waiting-for-payment'].includes(booking.status) && !depositPaid && (
-                              <div className="min-w-64 rounded-xl border border-blue-200 bg-blue-50 p-4 text-left">
+                              <div className="rounded-xl border border-blue-200 bg-white p-4">
                                 <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Payment required before documents</p>
                                 <p className="mt-1 text-sm text-blue-950">Pay the simulated 30% deposit to receive the QR code and booking PDF.</p>
                                 <p className="mt-2 text-lg font-black text-primary">{formatRwf(booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3))}</p>
@@ -238,9 +274,9 @@ export default function UserDashboard() {
                                 <img
                                   src={bookingApi.getQrImageUrl(booking.verificationToken)}
                                   alt="Booking QR code"
-                                  className="ml-auto h-28 w-28 rounded-lg border border-gray-200 bg-white p-2"
+                                  className="mx-auto h-28 w-28 rounded-lg border border-gray-200 bg-white p-2"
                                 />
-                                <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-semibold text-gray-700">
+                                <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-primary px-4 py-2 text-center text-sm font-bold text-white">
                                   Download PDF
                                 </a>
                                 <a href={bookingApi.getPrintableReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg border border-gray-200 px-4 py-2 text-center text-sm font-semibold text-gray-700">
@@ -263,10 +299,12 @@ export default function UserDashboard() {
                               <span className="rounded-lg bg-gray-100 px-3 py-2 text-xs font-mono text-gray-700">{booking.verificationCode}</span>
                             )}
                           </div>
-                        </div>
+                        </aside>
                       </div>
                       </div>
-                    </details>
+                      </div>
+                      )}
+                    </article>
                   );
                 })}
               </div>
@@ -293,13 +331,209 @@ export default function UserDashboard() {
         />
       )}
 
+      {selectedBooking && (
+        <BookingDetailModal
+          booking={selectedBooking}
+          language={language}
+          changeOpen={changeBookingId === selectedBooking._id}
+          onClose={() => setSelectedBooking(null)}
+          onPay={() => setPaymentBooking(selectedBooking)}
+          onRequestChange={() => setChangeBookingId(selectedBooking._id)}
+          onCloseChange={() => setChangeBookingId('')}
+          onChangeSubmitted={() => {
+            setChangeRequestsVersion((value) => value + 1);
+            setMessage('Booking change request submitted successfully.');
+          }}
+        />
+      )}
+
       <Footer />
     </div>
   );
 }
 
-function Detail({ label, value }) {
-  return <p className="rounded-lg border border-blue-100 bg-white p-2.5 shadow-sm"><span className="block text-[10px] font-bold uppercase tracking-wide text-blue-600">{label}</span><span className="mt-0.5 block font-bold capitalize text-slate-900">{value || '-'}</span></p>;
+function Detail({ label, value, tone = 'blue' }) {
+  const toneStyle = {
+    blue: 'border-blue-100 text-blue-600',
+    green: 'border-emerald-100 text-emerald-600',
+    amber: 'border-amber-100 text-amber-600',
+    slate: 'border-slate-200 text-slate-500',
+  }[tone] || 'border-blue-100 text-blue-600';
+  return <p className={`rounded-lg border bg-white p-2.5 shadow-sm ${toneStyle}`}><span className="block text-[10px] font-bold uppercase tracking-wide">{label}</span><span className="mt-0.5 block break-words font-bold capitalize text-slate-900">{value || '-'}</span></p>;
+}
+
+function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onRequestChange, onCloseChange, onChangeSubmitted }) {
+  const assignedBusiness = booking.businessId || booking.hotelId;
+  const preferredBusiness = booking.preferredBusinessId || booking.preferredHotelId;
+  const business = assignedBusiness || preferredBusiness;
+  const service = booking.serviceId;
+  const depositPaid = hasDepositPaid(booking);
+  const canPay = canPayDeposit(booking);
+  const providerUnlocked = Boolean(booking.providerDetailsUnlocked || booking.detailsUnlocked || depositPaid);
+  const locationUnlocked = booking.locationUnlocked === true && booking.depositPaid === true;
+  const title = service?.title || service?.name || business?.businessName || business?.name || booking.destinationPlace || 'Booking';
+  const remainingBalance = Math.max(0, Number(booking.remainingBalance ?? Number(booking.totalPrice || 0) - Number(booking.amountPaid || 0)));
+  const depositAmount = booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3);
+  const contacts = providerUnlocked ? business?.contactDetails || {} : {};
+  const serviceLocation = business?.serviceLocation || business?.publicLocation || {};
+  const address = locationUnlocked ? serviceLocation.fullAddress || formatFullLocation(business?.locationDetails, contacts.exactAddress || business?.location) : 'Pay 30% deposit to unlock exact location and directions.';
+  const submittedRows = getBookingDetailRows(booking.bookingDetails);
+  const summaryLocation = locationUnlocked
+    ? address
+    : [serviceLocation.province, serviceLocation.district, serviceLocation.sector].filter(Boolean).join(', ') || formatDestination(booking);
+
+  return (
+    <Modal title="Booking Details" onClose={onClose}>
+      <DetailGrid data={{
+        Name: title,
+        Type: formatStatus(booking.bookingModel || booking.bookingDetails?.bookingType || business?.type || 'service'),
+        Location: summaryLocation,
+        Status: formatStatus(booking.status),
+        'Payment status': formatStatus(booking.paymentStatus || 'unpaid'),
+        'Booking code': booking.bookingCode || booking._id,
+        'Total price': formatRwf(booking.totalPrice || 0),
+        '30% deposit': formatRwf(depositAmount),
+        'Amount paid': formatRwf(booking.amountPaid || 0),
+        'Remaining balance': formatRwf(remainingBalance),
+        Schedule: formatBookingSchedule(booking, language),
+        [getBookingQuantityLabel(booking, language)]: booking.bookingDetails?.quantity || booking.guests || booking.quantity || 1,
+      }} />
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className={`rounded-xl p-3 ${providerUnlocked ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+          <p className={`text-xs font-semibold uppercase ${providerUnlocked ? 'text-emerald-700' : 'text-amber-700'}`}>{providerUnlocked ? 'Unlocked details' : 'Locked details'}</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{providerUnlocked ? 'Provider details, QR, and PDF are available.' : canPay ? `Use simulated payment to pay ${formatRwf(depositAmount)} and unlock provider contacts and documents.` : `Pay ${formatRwf(depositAmount)} after this booking is approved for payment.`}</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 p-3">
+          <p className="text-xs font-semibold uppercase text-gray-500">Payment purpose</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{booking.paymentReason || '-'}</p>
+        </div>
+      </div>
+
+      {booking.adminResponseMessage && <div className="mt-4 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-900">{booking.adminResponseMessage}</div>}
+
+      {booking.promotionSnapshot?.title && (
+        <div className="mt-4 rounded-xl bg-amber-50 p-3">
+          <p className="text-xs font-semibold uppercase text-amber-700">Promotion</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{booking.promotionSnapshot.title}</p>
+          {booking.promotionSnapshot.description && <p className="mt-1 text-sm text-gray-700">{booking.promotionSnapshot.description}</p>}
+        </div>
+      )}
+
+      <h3 className="mt-5 font-bold text-gray-900">Provider Information</h3>
+      <DetailGrid data={{
+        Business: providerUnlocked ? business?.businessName || business?.name || '-' : business?.anonymousName || booking.anonymousBusinessName || 'Hidden until deposit',
+        Province: serviceLocation.province || business?.locationDetails?.province || '-',
+        District: serviceLocation.district || business?.locationDetails?.district || '-',
+        Sector: serviceLocation.sector || business?.locationDetails?.sector || '-',
+        ...(locationUnlocked ? {
+          'Full address / place name': address,
+          Village: serviceLocation.village || business?.locationDetails?.village || '-',
+        } : {
+          Message: 'Pay 30% deposit to unlock exact location and directions.',
+        }),
+        'Phone / WhatsApp': providerUnlocked ? [contacts.phone, contacts.whatsapp].filter(Boolean).join(' / ') || '-' : 'Locked',
+        Email: providerUnlocked ? contacts.email || business?.sellerContactEmail || business?.ownerEmail || '-' : 'Locked',
+        Approval: providerUnlocked ? business?.approvalStatus || business?.verificationStatus || business?.status || '-' : 'Locked',
+      }} />
+
+      {locationUnlocked && <UnlockedServiceMap location={serviceLocation} />}
+
+      {providerUnlocked && business?.images?.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+          {business.images.slice(0, 3).map((image, index) => <img key={`${image}-${index}`} src={image} alt={`${business.name || title} ${index + 1}`} className="h-28 w-full rounded-xl object-cover" />)}
+        </div>
+      )}
+
+      {submittedRows.length > 0 && (
+        <>
+          <h3 className="mt-5 font-bold text-gray-900">Submitted Booking Details</h3>
+          <DetailGrid data={Object.fromEntries(submittedRows)} />
+        </>
+      )}
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {canPay && <button type="button" onClick={onPay} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Pay 30% Deposit (Simulation)</button>}
+        {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={onRequestChange} className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700">Request change</button>}
+        {depositPaid && booking.verificationToken && <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Download PDF</a>}
+        {depositPaid && booking.verificationToken && <a href={bookingApi.getPrintableReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Print PDF</a>}
+        {depositPaid && booking.verificationToken && <Link to={`/verify/${booking.verificationToken}`} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Verify Booking</Link>}
+      </div>
+
+      {depositPaid && booking.verificationToken && <img src={bookingApi.getQrImageUrl(booking.verificationToken)} alt="Booking QR code" className="mt-4 h-32 w-32 rounded-xl border border-gray-200 bg-white p-2" />}
+      {depositPaid && booking.bookingCode && <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">Give this Booking Code to the seller only when you arrive and pay the remaining 70%.</p>}
+      {depositPaid && <CustomerChangeRequestCard booking={booking} open={changeOpen} onClose={onCloseChange} onSubmitted={onChangeSubmitted} />}
+    </Modal>
+  );
+}
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-8" role="dialog" aria-modal="true">
+      <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">Close</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DetailGrid({ data }) {
+  return (
+    <dl className="grid gap-3 md:grid-cols-2">
+      {Object.entries(data).map(([label, value]) => (
+        <div key={label} className="rounded-xl bg-gray-50 p-3">
+          <dt className="text-xs font-semibold uppercase text-gray-500">{label}</dt>
+          <dd className="mt-1 break-words text-sm font-semibold text-gray-900">{String(value || '-')}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function SummaryRow({ label, value, strong = false }) {
+  return <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"><span className="font-semibold text-slate-600">{label}</span><span className={strong ? 'font-black text-emerald-700' : 'font-black text-slate-950'}>{value}</span></div>;
+}
+
+function hasDepositPaid(booking) {
+  return Boolean(booking?.detailsUnlocked) || DEPOSIT_PAID_STATUSES.includes(booking?.paymentStatus);
+}
+
+function canPayDeposit(booking) {
+  if (!booking || hasDepositPaid(booking)) return false;
+  const paymentStatus = booking.paymentStatus || 'unpaid';
+  return (
+    PAYABLE_BOOKING_STATUSES.includes(booking.status) &&
+    RETRYABLE_PAYMENT_STATUSES.includes(paymentStatus) &&
+    Number(booking.totalPrice || 0) > 0
+  );
+}
+
+function formatStatus(value) {
+  return String(value || '-').replace(/[_-]/g, ' ');
+}
+
+function formatDestination(booking) {
+  return [booking.destinationPlace, booking.destinationLocation].filter(Boolean).join(' - ') || '-';
+}
+
+function getBookingDetailRows(details) {
+  if (!details || typeof details !== 'object') return [];
+  return Object.entries(details).flatMap(([key, value]) => {
+    if (['totalPrice', 'providerRules'].includes(key) || value === undefined || value === null || value === '') return [];
+    if (key === 'customResponses' && Array.isArray(value)) {
+      return value.flatMap((item) => {
+        const answer = item.value ?? item.answer;
+        return answer === undefined || answer === null || answer === '' ? [] : [[item.label || item.name || 'Response', answer]];
+      });
+    }
+    if (typeof value === 'object' && !Array.isArray(value)) return [];
+    const display = Array.isArray(value) ? value.filter((item) => typeof item !== 'object').join(', ') : String(value);
+    return display ? [[key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()), display]] : [];
+  });
 }
 
 function formatCreatedDate(value) {
@@ -324,9 +558,19 @@ function BookingRequestDetails({ details }) {
     <details className="mt-3 rounded-xl border border-gray-200 p-4 text-sm">
       <summary className="cursor-pointer font-bold text-gray-800">View submitted booking details</summary>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {rows.map(([label, value], index) => <Detail key={`${label}-${index}`} label={label} value={value} />)}
+        {rows.map(([label, value], index) => <Detail key={`${label}-${index}`} label={label} value={value} tone="slate" />)}
       </div>
     </details>
+  );
+}
+
+function LockedProviderNotice({ booking }) {
+  const required = booking.lockedDetails?.visible?.depositAmountRequired || booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3);
+  return (
+    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+      <p className="font-black">Provider details are locked</p>
+      <p className="mt-1 leading-6">Pay the 30% deposit ({formatRwf(required)}) to unlock phone, exact address, map, QR verification, and booking PDF.</p>
+    </div>
   );
 }
 
