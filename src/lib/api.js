@@ -267,6 +267,18 @@ export const hotelApi = {
       token,
       body: payload,
     }),
+  verifyBookingCode: (token, code) =>
+    apiRequest("/api/seller/bookings/verify-code", {
+      method: "POST",
+      token,
+      body: { code },
+    }),
+  completeVerifiedBooking: (token, payload) =>
+    apiRequest("/api/seller/bookings/complete-verified", {
+      method: "POST",
+      token,
+      body: payload,
+    }),
   getMyServices: (token) => apiRequest("/api/hotel/services", { token }),
   uploadServiceImages: (token, files = []) => {
     const formData = new FormData();

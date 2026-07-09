@@ -196,6 +196,7 @@ export default function UserDashboard() {
                             </div>
                           )}
                           <div className="mt-4 grid gap-2 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm sm:grid-cols-2">
+                            <Detail label="Booking ID" value={booking._id} />
                             <Detail label="Booking code" value={booking.bookingCode || booking._id} />
                             <Detail label="Payment status" value={booking.paymentStatus || 'unpaid'} />
                             <Detail label="Amount paid" value={formatRwf(booking.amountPaid || 0)} />
@@ -204,6 +205,11 @@ export default function UserDashboard() {
                             <Detail label="Booking status" value={booking.status} />
                             <Detail label="Payment purpose" value={booking.paymentReason} />
                           </div>
+                          {depositPaid && booking.bookingCode && (
+                            <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">
+                              Give this Booking Code to the seller only when you arrive and pay the remaining 70%.
+                            </p>
+                          )}
                           {depositPaid && <CustomerChangeRequestCard booking={booking} open={changeBookingId === booking._id} onClose={() => setChangeBookingId('')} onSubmitted={() => { setChangeRequestsVersion((value) => value + 1); setMessage('Booking change request submitted successfully.'); }} />}
                           <BookingRequestDetails details={booking.bookingDetails} />
                           {booking.providerDetailsUnlocked && businessToShow && (

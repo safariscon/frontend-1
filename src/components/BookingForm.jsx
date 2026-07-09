@@ -171,6 +171,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   );
   const offers = business?.availabilityTable?.rows || [];
   const selectedOfferRow = offers.find((row) => row.cells?.service === selectedOffer);
+  const activePromotion = getVisiblePromotion(business?.promotion);
   const effectiveMode = marketplaceSettings.bookingMode === 'service-level'
     ? business?.bookingMode || service?.bookingMode || 'manual'
     : marketplaceSettings.bookingMode || 'manual';
@@ -366,6 +367,14 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         </div>
       )}
 
+      {activePromotion && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-black">{activePromotion.title}: Save {activePromotion.percent}% on this service.</p>
+          <p className="mt-1">Valid from {formatDate(activePromotion.startAt)} to {formatDate(activePromotion.endAt)}.</p>
+          {activePromotion.note && <p className="mt-1 text-amber-800">{activePromotion.note}</p>}
+        </div>
+      )}
+
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FixedInput label="Full name" value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
         <FixedInput label="Phone number" type="tel" value={values.phone} onChange={(value) => updateValue('phone', value)} required />
@@ -446,7 +455,8 @@ function QuoteCard({ result, paymentMethod, onPaid }) {
     onPaid(response.booking);
   };
   const { quote } = result;
-  return <><aside className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-blue-700">Automatic quote preview</p><h3 className="mt-1 text-xl font-black">{result.booking.priceSnapshot?.name}</h3><dl className="mt-4 grid gap-2 text-sm"><div className="flex justify-between"><dt>Price type</dt><dd className="capitalize">{String(result.booking.priceSnapshot?.priceType || '').replace(/-/g, ' ')}</dd></div><div className="flex justify-between"><dt>Number of people</dt><dd>{quote.people}</dd></div><div className="flex justify-between"><dt>Quantity / units</dt><dd>{quote.quantity}</dd></div><div className="flex justify-between"><dt>Booking duration</dt><dd>{quote.duration} {result.booking.priceSnapshot?.durationUnit}</dd></div><div className="flex justify-between"><dt>Total price</dt><dd className="font-black">{formatRwf(quote.total)}</dd></div><div className="flex justify-between"><dt>Deposit required (30%)</dt><dd className="font-black text-primary">{formatRwf(quote.deposit)}</dd></div><div className="flex justify-between"><dt>Remaining balance</dt><dd className="font-bold">{formatRwf(quote.remaining)}</dd></div></dl><p className="mt-4 rounded-xl bg-white p-3 text-sm">{quote.reason}</p><button type="button" onClick={() => setPaymentOpen(true)} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black text-white">Pay deposit</button></aside>{paymentOpen && <DepositPaymentModal booking={result.booking} customer={getAuthData()?.user} onClose={() => setPaymentOpen(false)} onConfirm={pay} />}</>;
+  const snapshot = result.booking.priceSnapshot || {};
+  return <><aside className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-blue-700">Automatic quote preview</p><h3 className="mt-1 text-xl font-black">{snapshot.name}</h3><dl className="mt-4 grid gap-2 text-sm"><div className="flex justify-between"><dt>Price type</dt><dd className="capitalize">{String(snapshot.priceType || '').replace(/-/g, ' ')}</dd></div><div className="flex justify-between"><dt>Number of people</dt><dd>{quote.people}</dd></div><div className="flex justify-between"><dt>Quantity / units</dt><dd>{quote.quantity}</dd></div><div className="flex justify-between"><dt>Booking duration</dt><dd>{quote.duration} {snapshot.durationUnit}</dd></div>{snapshot.promotionApplied && <><div className="flex justify-between"><dt>Original price</dt><dd className="font-bold">{formatRwf(snapshot.originalPrice)}</dd></div><div className="flex justify-between"><dt>{snapshot.promotionTitle} ({snapshot.promotionPercent}% off)</dt><dd className="font-bold text-emerald-700">-{formatRwf(snapshot.discountAmount)}</dd></div><div className="flex justify-between"><dt>Final price after promotion</dt><dd className="font-black">{formatRwf(snapshot.finalPrice)}</dd></div></>}<div className="flex justify-between"><dt>{snapshot.promotionApplied ? 'Final total' : 'Total price'}</dt><dd className="font-black">{formatRwf(quote.total)}</dd></div><div className="flex justify-between"><dt>Deposit required (30%)</dt><dd className="font-black text-primary">{formatRwf(quote.deposit)}</dd></div><div className="flex justify-between"><dt>Remaining balance</dt><dd className="font-bold">{formatRwf(quote.remaining)}</dd></div></dl><p className="mt-4 rounded-xl bg-white p-3 text-sm">{quote.reason}</p><button type="button" onClick={() => setPaymentOpen(true)} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black text-white">Pay deposit</button></aside>{paymentOpen && <DepositPaymentModal booking={result.booking} customer={getAuthData()?.user} onClose={() => setPaymentOpen(false)} onConfirm={pay} />}</>;
 }
 
 function DetailsModal({ row, onClose }) {
@@ -456,6 +466,22 @@ function DetailsModal({ row, onClose }) {
 function getReservableQuantity(configData, values) {
   if (['transport', 'accommodation', 'appointment', 'event'].includes(configData.type)) return 1;
   return Math.max(1, Number(values.quantity) || 1);
+}
+
+function getVisiblePromotion(promotion) {
+  if (!promotion?.enabled || !promotion.title) return null;
+  const percent = Number(promotion.percent || promotion.promotionPercent || 0);
+  const startAt = new Date(promotion.startAt);
+  const endAt = new Date(promotion.endAt);
+  const now = new Date();
+  if (!Number.isFinite(percent) || percent <= 0 || percent > 100) return null;
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || startAt >= endAt || startAt > now || endAt < now) return null;
+  return { title: promotion.title, percent, note: promotion.note || promotion.description || '', startAt, endAt };
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
 }
 
 

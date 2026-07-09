@@ -167,7 +167,8 @@ export default function HotelDetailsPage() {
                     <div className="bg-amber-400 px-4 py-2 text-xs font-black uppercase tracking-wider text-amber-950">★ Promotion</div>
                     <div className="p-4">
                       <h3 className="text-lg font-black text-amber-700">{promotion.title}</h3>
-                      <p className="mt-1 text-sm text-slate-800">{promotion.description}</p>
+                      <p className="mt-1 text-sm text-slate-800">Save {promotion.percent}% on this service.</p>
+                      {promotion.note && <p className="mt-1 text-sm text-slate-700">{promotion.note}</p>}
                       <p className="mt-2 text-xs font-bold text-orange-600">Valid {formatPromotionDate(promotion.startAt)} – {formatPromotionDate(promotion.endAt)}</p>
                     </div>
                   </div>
@@ -263,12 +264,14 @@ function InfoTile({ label, value }) {
 }
 
 function getVisiblePromotion(promotion) {
-  if (!promotion?.enabled || !promotion.title || !promotion.description) return null;
+  if (!promotion?.enabled || !promotion.title) return null;
+  const percent = Number(promotion.percent || promotion.promotionPercent || 0);
   const start = new Date(promotion.startAt);
   const end = new Date(promotion.endAt);
   const now = new Date();
-  if (!Number.isNaN(start.getTime()) && start > now) return null;
-  return Number.isNaN(end.getTime()) || end >= now ? promotion : null;
+  if (!Number.isFinite(percent) || percent <= 0 || percent > 100) return null;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end || start > now || end < now) return null;
+  return { ...promotion, percent, note: promotion.note || promotion.description || '' };
 }
 
 function formatPromotionDate(value) {

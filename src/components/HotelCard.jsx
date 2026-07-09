@@ -73,7 +73,8 @@ export default function HotelCard({ hotel, compact = false }) {
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-xl text-white">☆</span>
               <div>
                 <h4 className="font-black text-amber-700">{promotion.title}</h4>
-                <p className="mt-1 text-sm text-slate-800">{promotion.description}</p>
+                <p className="mt-1 text-sm text-slate-800">Save {promotion.percent}% on this service.</p>
+                {promotion.note && <p className="mt-1 text-sm text-slate-700">{promotion.note}</p>}
                 <p className="mt-2 text-xs font-semibold text-orange-600">Valid {formatPromotionDate(promotion.startAt)} – {formatPromotionDate(promotion.endAt)}</p>
               </div>
             </div>
@@ -108,12 +109,14 @@ export default function HotelCard({ hotel, compact = false }) {
 }
 
 function getVisiblePromotion(promotion) {
-  if (!promotion?.enabled || !promotion.title || !promotion.description) return null;
+  if (!promotion?.enabled || !promotion.title) return null;
+  const percent = Number(promotion.percent || promotion.promotionPercent || 0);
   const start = new Date(promotion.startAt);
   const end = new Date(promotion.endAt);
   const now = new Date();
-  if (!Number.isNaN(start.getTime()) && start > now) return null;
-  return Number.isNaN(end.getTime()) || end >= now ? promotion : null;
+  if (!Number.isFinite(percent) || percent <= 0 || percent > 100) return null;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end || start > now || end < now) return null;
+  return { ...promotion, percent, note: promotion.note || promotion.description || '' };
 }
 
 function formatPromotionDate(value) {

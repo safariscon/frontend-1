@@ -22,7 +22,8 @@ const EMPTY_FORM = {
   remainingQuantity: '',
   existingImages: [],
   imageFiles: [],
-  promotion: { enabled: false, title: '', description: '', startAt: '', endAt: '' },
+  promotion: { enabled: false, title: '', percent: '', note: '', startAt: '', endAt: '' },
+  rebookSettings: { requestDeadlineHours: 24, rebookIdValidityHours: 72 },
   promotionHistory: [],
   availabilityTable: {
     columns: [
@@ -328,9 +329,14 @@ export default function HotelDashboard() {
       promotion: {
         enabled: service.promotion?.enabled === true,
         title: service.promotion?.title || '',
-        description: service.promotion?.description || '',
+        percent: service.promotion?.percent || service.promotion?.promotionPercent || '',
+        note: service.promotion?.note || service.promotion?.description || '',
         startAt: toDateTimeInput(service.promotion?.startAt),
         endAt: toDateTimeInput(service.promotion?.endAt),
+      },
+      rebookSettings: {
+        requestDeadlineHours: Number(service.rebookSettings?.requestDeadlineHours ?? 24),
+        rebookIdValidityHours: Number(service.rebookSettings?.rebookIdValidityHours ?? 72),
       },
       promotionHistory: Array.isArray(service.promotionHistory) ? service.promotionHistory : [],
       availabilityTable: normalizeTableForForm(service.availabilityTable),
@@ -381,6 +387,7 @@ export default function HotelDashboard() {
       status: normalizedStatus,
       images: [...(form.existingImages || []), ...uploadedImageUrls].slice(0, 3),
       promotion: form.promotion,
+      rebookSettings: form.rebookSettings,
       availabilityTable: form.availabilityTable,
       bookingForm: form.bookingForm,
       isActive: true,
@@ -426,6 +433,7 @@ export default function HotelDashboard() {
       status,
       images: service.images || [],
       promotion: service.promotion || EMPTY_FORM.promotion,
+      rebookSettings: service.rebookSettings || EMPTY_FORM.rebookSettings,
       availabilityTable: service.availabilityTable || EMPTY_FORM.availabilityTable,
       bookingForm: service.bookingForm || EMPTY_FORM.bookingForm,
       isActive: true,
@@ -500,7 +508,7 @@ export default function HotelDashboard() {
           <section className="seller-dashboard-content bg-white rounded-2xl shadow-sm p-4">
             {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
             {!loading && activeTab === 'services' && <ServiceGrid services={services} onEdit={startEdit} onDelete={deleteService} onStatus={updateStatus} />}
-            {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} />}
+            {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onCompleted={() => loadData({ silent: true })} />}
             {!loading && activeTab === 'rebook-requests' && <SellerRebookRequests />}
             {!loading && activeTab === 'verification' && <SellerBookingVerification token={token} />}
             {!loading && activeTab === 'analytics' && <Analytics stats={stats} services={services} />}
@@ -534,8 +542,13 @@ function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
           <p className="mt-3 text-sm font-semibold text-primary">Prices are managed in the Service / Price table.</p>
           {Array.isArray(service.images) && service.images.length > 0 && (
             <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
-              {service.images.slice(0, 3).map((image) => (
-                <img key={image} src={image} alt={service.title || service.name} className="h-20 w-full rounded-lg object-cover" />
+              {service.images.slice(0, 3).map((image, index) => (
+                <div key={image} className="relative">
+                  <img src={image} alt={service.title || service.name} className="h-20 w-full rounded-lg object-cover" />
+                  {index === 0 && service.promotion?.enabled && Number(service.promotion?.percent || 0) > 0 && (
+                    <span className="absolute left-1 top-1 rounded bg-amber-400 px-2 py-1 text-[10px] font-black text-amber-950">-{Number(service.promotion.percent)}%</span>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -555,26 +568,27 @@ function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
   );
 }
 
-function BookingList({ bookings, onStatus }) {
+function BookingList({ bookings, onStatus, onCompleted }) {
   const [selectedBooking, setSelectedBooking] = useState(null);
   if (!bookings.length) return <p className="p-4 text-gray-600">No bookings yet.</p>;
   return (
     <>
+      <CompleteBookingPanel onCompleted={onCompleted} />
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Code</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Booking</th><th className="py-3 px-2 text-left">Payment</th><th className="py-3 px-2 text-left">Paid</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
-          <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2">{booking.bookingCode}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td><td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td><td className="py-3 px-2 text-right space-x-2"><button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>{booking.status === 'confirmed' && ['completed', 'cancelled'].map((status) => <button key={status} onClick={() => onStatus(booking._id, status)} className="text-primary hover:underline">{status}</button>)}</td></tr>)}</tbody>
+          <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Booking ID</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Booking</th><th className="py-3 px-2 text-left">Payment</th><th className="py-3 px-2 text-left">Paid</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
+          <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2 font-mono text-xs text-slate-600">{booking._id}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td><td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td><td className="py-3 px-2 text-right space-x-2"><button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="text-primary hover:underline">cancelled</button>}</td></tr>)}</tbody>
         </table>
       </div>
       <div className="grid gap-3 md:hidden">
         {bookings.map((booking) => (
           <article key={booking._id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-primary">{booking.bookingCode || 'Booking'}</p><h3 className="mt-1 truncate font-black text-slate-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</h3><p className="mt-1 text-sm text-slate-500">{booking.touristId?.name || 'Customer'}</p></div>
+              <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-primary">Booking ID {String(booking._id || '').slice(-8) || '-'}</p><h3 className="mt-1 truncate font-black text-slate-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</h3><p className="mt-1 text-sm text-slate-500">{booking.touristId?.name || 'Customer'}</p></div>
               <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700">{booking.status}</span>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Payment</span><strong>{booking.paymentStatus || 'unpaid'}</strong></p><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Paid</span><strong>{formatRwf(booking.amountPaid || 0)}</strong></p></div>
-            <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">View</button>{booking.status === 'confirmed' && ['completed', 'cancelled'].map((status) => <button key={status} onClick={() => onStatus(booking._id, status)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">{status}</button>)}</div>
+            <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">View</button>{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">cancelled</button>}</div>
           </article>
         ))}
       </div>
@@ -594,6 +608,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
   const setPayout = (key, value) => setForm((prev) => ({ ...prev, payoutDetails: { ...prev.payoutDetails, [key]: value } }));
   const setContact = (key, value) => setForm((prev) => ({ ...prev, contactDetails: { ...prev.contactDetails, [key]: value } }));
   const setPromotion = (key, value) => setForm((prev) => ({ ...prev, promotion: { ...prev.promotion, [key]: value } }));
+  const setRebookSetting = (key, value) => setForm((prev) => ({ ...prev, rebookSettings: { ...prev.rebookSettings, [key]: value } }));
   const updateTable = (updater) => setForm((prev) => ({ ...prev, availabilityTable: updater(prev.availabilityTable) }));
   return (
     <form onSubmit={onSubmit} className="seller-service-form grid gap-4 md:grid-cols-2">
@@ -627,12 +642,13 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
           <input type="checkbox" checked={form.promotion.enabled} onChange={(event) => setPromotion('enabled', event.target.checked)} />
           Add a promotion to this service
         </label>
-        <p className="mt-1 text-sm text-amber-800">Enable this only when customers should see a special offer such as Happy Hour or Buy 3, Get 1 Free.</p>
+        <p className="mt-1 text-sm text-amber-800">Enable this only when customers should receive a percentage discount on this service.</p>
         {form.promotion.enabled && (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Input label="Promotion title" value={form.promotion.title} onChange={(value) => setPromotion('title', value)} placeholder="Example: Happy Hours!" required />
+            <Input label="Promotion percent" type="number" value={form.promotion.percent} onChange={(value) => setPromotion('percent', value)} placeholder="Example: 25" required />
             <div className="md:col-span-2">
-              <TextArea label="Promotion description and how it is given" value={form.promotion.description} onChange={(value) => setPromotion('description', value)} required />
+              <TextArea label="Promotion note" value={form.promotion.note} onChange={(value) => setPromotion('note', value)} />
             </div>
             <Input label="Promotion starts" type="datetime-local" value={form.promotion.startAt} onChange={(value) => setPromotion('startAt', value)} required />
             <Input label="Promotion ends" type="datetime-local" value={form.promotion.endAt} onChange={(value) => setPromotion('endAt', value)} required />
@@ -648,13 +664,21 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
                     <strong className="text-amber-800">{item.title}</strong>
                     <span className="text-xs font-semibold text-slate-500">Recorded {formatDashboardDate(item.recordedAt)}</span>
                   </div>
-                  <p className="mt-1 text-slate-700">{item.description}</p>
+                  <p className="mt-1 text-slate-700">{Number(item.percent || 0)}% discount{item.note || item.description ? ` · ${item.note || item.description}` : ''}</p>
                   <p className="mt-1 text-xs font-semibold text-orange-600">{formatDashboardDate(item.startAt)} – {formatDashboardDate(item.endAt)}</p>
                 </div>
               ))}
             </div>
           </details>
         )}
+      </div>
+      <div className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <h3 className="font-bold text-blue-950">Re-book deadlines for this business</h3>
+        <p className="mt-1 text-sm text-blue-800">These values apply only to this service when customers request a re-book or cancellation.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Input label="Request cutoff (hours before booking)" type="number" value={form.rebookSettings.requestDeadlineHours} onChange={(value) => setRebookSetting('requestDeadlineHours', Number(value))} required />
+          <Input label="Re-book ID validity (hours)" type="number" value={form.rebookSettings.rebookIdValidityHours} onChange={(value) => setRebookSetting('rebookIdValidityHours', Number(value))} required />
+        </div>
       </div>
       <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-4">
         <h3 className="font-bold text-blue-950">Where SafarisCon should send your money</h3>
@@ -1024,6 +1048,83 @@ function AvailabilityTableBuilder({ table, updateTable }) {
   );
 }
 
+function CompleteBookingPanel({ onCompleted }) {
+  const [code, setCode] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const token = getAuthData()?.token;
+
+  const verify = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setMessage('');
+    setSummary(null);
+    try {
+      const response = await hotelApi.verifyBookingCode(token, code.trim());
+      setSummary(response.booking);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const complete = async () => {
+    if (!summary?.bookingId) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await hotelApi.completeVerifiedBooking(token, {
+        bookingId: summary.bookingId,
+        code: code.trim(),
+        confirmRemainingPaid: true,
+      });
+      setMessage(response.message);
+      setCode('');
+      setSummary(null);
+      onCompleted?.();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+      <h3 className="font-black text-blue-950">Complete Booking</h3>
+      <p className="mt-1 text-sm text-blue-800">Enter the customer's Booking Code to verify it before confirming the remaining 70% payment.</p>
+      <form onSubmit={verify} className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="Enter Booking Code only" className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono uppercase" />
+        <button disabled={busy || !code.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Checking...' : 'Verify Code'}</button>
+      </form>
+      {error && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {message && <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
+      {summary && (
+        <div className="mt-4 rounded-xl bg-white p-4 text-sm">
+          <dl className="grid gap-3 md:grid-cols-3">
+            <Detail label="Booking ID" value={summary.bookingId} />
+            <Detail label="Customer" value={summary.customerName} />
+            <Detail label="Service" value={summary.serviceName} />
+            <Detail label="Booking date" value={summary.bookingDate ? new Date(summary.bookingDate).toLocaleString() : '-'} />
+            <Detail label="Deposit paid" value={formatRwf(summary.depositAmount || 0)} />
+            <Detail label="Remaining 70%" value={formatRwf(summary.remainingAmount || 0)} />
+          </dl>
+          <button type="button" disabled={busy} onClick={complete} className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">Confirm Remaining 70% Paid & Complete Booking</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Detail({ label, value }) {
+  return <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</dt><dd className="mt-1 break-all font-semibold text-slate-800">{value || '-'}</dd></div>;
+}
+
 function calculatePreviewTotal(priceType, price, people, quantity, duration) {
   if (priceType === 'per-person') return price * people;
   if (['per-night', 'per-day', 'per-hour'].includes(priceType)) return price * quantity * duration;
@@ -1085,7 +1186,6 @@ function formatStatus(status) {
 }
 
 function BookingDetailModal({ booking, onClose }) {
-  const qrToken = booking.verificationToken;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
@@ -1095,7 +1195,6 @@ function BookingDetailModal({ booking, onClose }) {
         </div>
         <DetailGrid data={{
           'Booking ID': booking._id,
-          Code: booking.bookingCode,
           Customer: booking.touristId?.name || booking.userId?.name || 'Customer',
           Email: booking.touristId?.email || booking.userId?.email || '-',
           Business: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
@@ -1107,7 +1206,6 @@ function BookingDetailModal({ booking, onClose }) {
           Date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
         }} />
         <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
-        {qrToken && <img src={bookingApi.getQrImageUrl(qrToken)} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
         <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
       </div>
     </div>
@@ -1133,10 +1231,10 @@ function SellerBookingVerification({ token }) {
   return (
     <div className="space-y-4">
       <form onSubmit={submit} className="flex flex-col gap-3 md:flex-row">
-        <input value={lookup} onChange={(event) => setLookup(event.target.value)} placeholder="Enter Booking ID, code, or QR verification token" className="flex-1 rounded-xl border border-gray-300 px-4 py-3" />
+        <input value={lookup} onChange={(event) => setLookup(event.target.value)} placeholder="Enter Booking ID or QR verification token" className="flex-1 rounded-xl border border-gray-300 px-4 py-3" />
         <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">Verify Booking</button>
       </form>
-      <p className="text-sm text-gray-500">Staff can paste a scanned QR verification URL or enter the booking ID/code.</p>
+      <p className="text-sm text-gray-500">Staff can paste a scanned QR verification URL or enter the booking ID.</p>
       {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {booking && <div className="rounded-xl border border-gray-200 p-4"><BookingDetailBody booking={booking} /></div>}
     </div>
@@ -1144,12 +1242,10 @@ function SellerBookingVerification({ token }) {
 }
 
 function BookingDetailBody({ booking }) {
-  const qrToken = booking.verificationToken;
   return (
     <>
       <DetailGrid data={{
         'Booking ID': booking._id,
-        Code: booking.bookingCode,
         Customer: booking.touristId?.name || booking.userId?.name || 'Customer',
         Email: booking.touristId?.email || booking.userId?.email || '-',
         Business: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
@@ -1161,7 +1257,6 @@ function BookingDetailBody({ booking }) {
         Date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
       }} />
       <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
-      {qrToken && <img src={bookingApi.getQrImageUrl(qrToken)} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
       <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
     </>
   );
@@ -1173,7 +1268,8 @@ function BookingPromotionSnapshot({ promotion }) {
     <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
       <p className="text-xs font-black uppercase tracking-wide text-amber-700">Promotion applied at booking</p>
       <h3 className="mt-1 font-black text-amber-900">{promotion.title}</h3>
-      <p className="mt-1 text-sm text-slate-700">{promotion.description}</p>
+      <p className="mt-1 text-sm text-slate-700">Saved {promotion.percent || promotion.promotionPercent || 0}% on this service.</p>
+      {(promotion.note || promotion.description) && <p className="mt-1 text-sm text-slate-700">{promotion.note || promotion.description}</p>}
       <p className="mt-2 text-xs font-semibold text-orange-600">Valid {formatDashboardDate(promotion.startAt)} – {formatDashboardDate(promotion.endAt)}</p>
     </div>
   );

@@ -9,7 +9,6 @@ export default function AdminRebookRequests() {
   const token = getAuthData()?.token;
   const [requests, setRequests] = useState([]);
   const [overview, setOverview] = useState({});
-  const [settings, setSettings] = useState({ requestDeadlineHours: 24, rebookIdValidityHours: 72 });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
@@ -19,10 +18,9 @@ export default function AdminRebookRequests() {
     setLoading(true);
     setError('');
     try {
-      const [requestResponse, settingsResponse] = await Promise.all([rebookApi.getAdminRequests(token), rebookApi.getSettings(token)]);
+      const requestResponse = await rebookApi.getAdminRequests(token);
       setRequests(requestResponse.requests || []);
       setOverview(requestResponse.overview || {});
-      setSettings(settingsResponse.settings || settings);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -53,19 +51,8 @@ export default function AdminRebookRequests() {
     if (reason?.trim()) run(request._id, () => rebookApi.reject(token, request._id, reason));
   };
 
-  const saveSettings = async (event) => {
-    event.preventDefault();
-    try {
-      const response = await rebookApi.updateSettings(token, settings);
-      setSettings(response.settings);
-      setMessage(response.message);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
   return <div>
-    <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start"><div><h2 className="text-xl font-black text-slate-950">Manage Re-book Requests</h2><p className="mt-1 text-sm text-slate-500">Review eligibility, one-time IDs, cancellations, refunds, and audit history.</p></div><form onSubmit={saveSettings} className="grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-[1fr_1fr_auto]"><NumberField label="Request cutoff (hours before booking)" value={settings.requestDeadlineHours} onChange={(value) => setSettings((old) => ({ ...old, requestDeadlineHours: value }))} /><NumberField label="Re-book ID validity (hours)" value={settings.rebookIdValidityHours} onChange={(value) => setSettings((old) => ({ ...old, rebookIdValidityHours: value }))} /><button className="self-end rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">Save deadlines</button></form></div>
+    <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start"><div><h2 className="text-xl font-black text-slate-950">Manage Re-book Requests</h2><p className="mt-1 text-sm text-slate-500">Review eligibility, one-time IDs, cancellations, refunds, and audit history.</p></div></div>
     <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-6">{[['Pending review', overview.pending], ['Approved Re-book', overview.approvedRebook], ['Used', overview.used], ['Cancelled', overview.cancelled], ['Expired', overview.expired], ['Refunded', overview.refunded]].map(([label, value]) => <div key={label} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-bold text-slate-500">{label}</p><p className="mt-1 text-2xl font-black text-primary">{value || 0}</p></div>)}</div>
     {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {message && <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
@@ -95,4 +82,3 @@ export default function AdminRebookRequests() {
 }
 
 function Field({ label, value, wide = false }) { return <div className={wide ? 'md:col-span-2' : ''}><p className="text-xs font-bold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-slate-700">{value || '-'}</p></div>; }
-function NumberField({ label, value, onChange }) { return <label className="text-xs font-bold text-slate-600">{label}<input type="number" min="0" max="2160" value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal" /></label>; }

@@ -529,14 +529,15 @@ function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelect
 }
 
 function BookingTable({ bookings, onView }) {
-  return <SimpleTable rows={bookings} columns={['Code', 'Customer', 'Service', 'Business', 'Status', 'Paid', 'Total', 'Actions']} map={(booking) => [
+  return <SimpleTable rows={bookings} columns={['Booking ID', 'Code', 'Customer', 'Service', 'Business', 'Status', 'Payment', 'Completed', 'Actions']} map={(booking) => [
+    booking._id,
     booking.bookingCode || booking._id?.slice(-8),
     booking.userId?.name || booking.touristId?.name || booking.userId?.email || booking.touristId?.email || 'Customer',
     booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace,
     booking.businessId?.businessName || booking.businessId?.name || booking.hotelId?.name || booking.preferredHotelId?.name || '-',
     booking.status,
     booking.paymentStatus || 'unpaid',
-    `${Number(booking.totalPrice || 0).toLocaleString()} RWF`,
+    booking.completedAt ? new Date(booking.completedAt).toLocaleString() : '-',
     <div className="flex flex-wrap gap-2">
       <button type="button" onClick={() => onView(booking)} className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">View</button>
     </div>,
@@ -922,6 +923,10 @@ function InlineBookingDetails({ booking }) {
         Status: booking.status,
         Payment: booking.paymentStatus || 'unpaid',
         'Amount paid': `${Number(booking.amountPaid || 0).toLocaleString()} RWF`,
+        'Remaining paid to seller': `${Number(booking.remainingAmount || 0).toLocaleString()} RWF`,
+        'Completed at': booking.completedAt ? new Date(booking.completedAt).toLocaleString() : '-',
+        'Completed by seller': booking.completedBySeller?.name || booking.completedBySeller?.email || '-',
+        'Booking code used': booking.bookingCodeUsed ? 'Yes' : 'No',
         'Payment purpose': booking.paymentReason || '-',
       }} />
       {token && <img src={bookingApi.getQrImageUrl(token)} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
