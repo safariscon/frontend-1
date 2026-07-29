@@ -55,10 +55,15 @@ export default function RegisterPage() {
 
      if (!result.success) {
        setError(result.error);
-     } else {
-       navigate('/login', {
-         state: { message: 'Account created successfully. Please login.' },
+     } else if (result.user?.emailVerified === false || result.emailVerification?.required) {
+       navigate('/verify-email', {
+         state: {
+           email: result.user?.email || formData.email,
+           message: 'Account created. Enter the verification code sent to your email.',
+         },
        });
+     } else {
+       navigate(result.user ? getDashboardRoute(result.user) : '/login');
      }
      setLoading(false);
    };

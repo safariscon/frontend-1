@@ -10,6 +10,10 @@ import HotelDetailsPage from './pages/HotelDetailsPage';
 import BookingPage from './pages/BookingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import EmailVerificationPage from './pages/EmailVerificationPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import SettingsPage from './pages/SettingsPage';
 import ProviderCompleteRegistrationPage from './pages/ProviderCompleteRegistrationPage';
 import BusinessRegisterPage from './pages/BusinessRegisterPage';
 import UserDashboard from './pages/UserDashboard';
@@ -82,6 +86,10 @@ function AppContent() {
             <Route path="/booking/:hotelId" element={<BookingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/verify-email" element={<EmailVerificationPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/provider-register" element={<ProviderCompleteRegistrationPage />} />
             <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />

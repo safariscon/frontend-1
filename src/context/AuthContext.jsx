@@ -11,9 +11,16 @@ import { getDashboardRoute, isCustomerRole, isSellerRole } from '../lib/dashboar
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const initialAuthData = getAuthData();
-  const [user, setUser] = useState(initialAuthData?.user || null);
+  const [initialAuthData] = useState(() => getAuthData());
+  const initialUser = initialAuthData?.user?.emailVerified === false ? null : initialAuthData?.user || null;
+  const [user, setUser] = useState(initialUser);
   const [loading] = useState(false);
+
+  useEffect(() => {
+    if (initialAuthData?.user?.emailVerified === false) {
+      clearAuthData();
+    }
+  }, [initialAuthData]);
 
   useEffect(() => {
     const handleExpiredAuth = () => setUser(null);
@@ -29,19 +36,51 @@ export function AuthProvider({ children }) {
       saveAuthData(authData);
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+        code: error.code,
+        status: error.status,
+        payload: error.payload,
+      };
     }
   };
 
   const register = async (userData) => {
     try {
-      await authApi.register(userData);
-      // Registration succeeds, but user must login explicitly afterwards.
-      clearAuthData();
-      setUser(null);
-      return { success: true };
+      const result = await authApi.register(userData);
+      if (result.user?.emailVerified) {
+        const authData = { user: result.user, token: result.token };
+        setUser(result.user);
+        saveAuthData(authData);
+      } else {
+        clearAuthData();
+        setUser(null);
+      }
+      return { success: true, ...result };
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  };
+
+  const verifyEmailOtp = async (email, otp) => {
+    try {
+      const result = await authApi.verifyEmailOtp(email, otp);
+      const authData = { user: result.user, token: result.token };
+      setUser(result.user);
+      saveAuthData(authData);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, error: error.message, status: error.status };
+    }
+  };
+
+  const resendEmailVerificationOtp = async (email) => {
+    try {
+      const result = await authApi.resendEmailVerificationOtp(email);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, error: error.message, status: error.status };
     }
   };
 
@@ -55,6 +94,8 @@ export function AuthProvider({ children }) {
     loading,
     login,
     register,
+    verifyEmailOtp,
+    resendEmailVerificationOtp,
     logout,
     isAuthenticated: !!user,
     isTourist: user?.role === 'tourist',

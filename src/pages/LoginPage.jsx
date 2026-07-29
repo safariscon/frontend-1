@@ -33,7 +33,16 @@ export default function LoginPage() {
 
     const result = await login(email, password);
     if (!result.success) {
-      setError(result.error);
+      if (result.status === 403 && result.code === 'EMAIL_NOT_VERIFIED') {
+        navigate('/verify-email', {
+          state: {
+            email: result.payload?.email || email,
+            message: result.error || 'Please verify your email before logging in.',
+          },
+        });
+      } else {
+        setError(result.error);
+      }
     }
     setLoading(false);
   };
@@ -74,7 +83,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('password', language)}</label>
                 <div className="relative">
                   <input
@@ -102,6 +111,12 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
+              </div>
+
+              <div className="mb-6 text-right">
+                <Link to="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+                  Forgot password?
+                </Link>
               </div>
 
 <button

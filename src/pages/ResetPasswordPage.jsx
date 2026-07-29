@@ -1,0 +1,115 @@
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
+import { authApi } from '../lib/api';
+
+export default function ResetPasswordPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState(location.state?.email || '');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [message] = useState(location.state?.message || '');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await authApi.resetPassword(email.trim(), otp.trim(), newPassword);
+      navigate('/login', {
+        replace: true,
+        state: {
+          email: email.trim(),
+          message: result.message || 'Password reset successfully. You can now login with the new password.',
+        },
+      });
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Navbar />
+      <main className="flex-1 flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Reset password</h1>
+            <p className="text-gray-600">Enter the code from your email and choose a new password.</p>
+          </div>
+
+          {message && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">{message}</div>}
+          {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+              placeholder="your@email.com"
+            />
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={otp}
+              onChange={(event) => setOtp(event.target.value)}
+              required
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-center text-2xl font-bold tracking-widest focus:ring-2 focus:ring-primary focus:border-primary transition"
+              placeholder="123456"
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              required
+              minLength={8}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+              placeholder="New password"
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+              minLength={8}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+              placeholder="Confirm new password"
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50"
+            >
+              {loading ? 'Resetting...' : 'Reset password'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-gray-600">
+            Need a new code?{' '}
+            <Link to="/forgot-password" className="font-semibold text-primary hover:underline">
+              Request another
+            </Link>
+          </p>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}

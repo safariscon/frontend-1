@@ -114,8 +114,12 @@ export default function Navbar() {
             <Link to="/services" className={`nav-link ${['/services', '/hotels'].includes(location.pathname) ? 'nav-link-active' : ''}`}>
               {t('services', language)}
             </Link>
-            <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel />
-            <LanguageSelect language={language} onChange={setLanguage} id="desktop-language-select" />
+            {!isAuthenticated && (
+              <>
+                <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel />
+                <LanguageSelect language={language} onChange={setLanguage} id="desktop-language-select" />
+              </>
+            )}
 
             {isAuthenticated ? (
               <>
@@ -155,7 +159,7 @@ export default function Navbar() {
               </>
             )}
 
-            {!isMobile && !isInstalled && <InstallButton variant="desktop" />}
+            {!isAuthenticated && !isMobile && !isInstalled && <InstallButton variant="desktop" />}
           </div>
 
           <div className="md:hidden">
@@ -190,8 +194,12 @@ export default function Navbar() {
               >
                 {t('services', language)}
               </Link>
-              <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel fullWidth />
-              <LanguageSelect language={language} onChange={setLanguage} id="mobile-language-select" fullWidth />
+              {!isAuthenticated && (
+                <>
+                  <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel fullWidth />
+                  <LanguageSelect language={language} onChange={setLanguage} id="mobile-language-select" fullWidth />
+                </>
+              )}
 
               {isAuthenticated ? (
                 <>
@@ -244,7 +252,7 @@ export default function Navbar() {
                 </>
               )}
 
-              {isMobile && !isInstalled && (
+              {!isAuthenticated && isMobile && !isInstalled && (
                 <div className="pt-2 border-t border-gray-100 mt-2">
                   <InstallButton variant="compact" />
                 </div>
@@ -257,12 +265,16 @@ export default function Navbar() {
         <MobileBottomLink to="/" label="Home" icon="home" active={location.pathname === '/'} />
         <MobileBottomLink to="/services" label="Services" icon="grid" active={['/services', '/hotels'].includes(location.pathname)} />
         <MobileBottomLink to={isAuthenticated ? dashboardRoute : '/login'} label="Dashboard" icon="calendar" active={location.pathname.includes('dashboard')} />
-        <button type="button" onClick={() => setSettingsOpen(true)} className={`flex flex-col items-center gap-1 text-[11px] font-semibold ${settingsOpen ? 'text-primary' : 'text-slate-500'}`}>
-          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm7-3.5l2-1-2-3-2 .5a8 8 0 00-2-1L14.5 5h-5L9 7.5a8 8 0 00-2 1L5 8l-2 3 2 1a8 8 0 000 2l-2 1 2 3 2-.5a8 8 0 002 1l.5 2.5h5l.5-2.5a8 8 0 002-1l2 .5 2-3-2-1a8 8 0 000-2z" /></svg>
-          Settings
-        </button>
+        {isAuthenticated ? (
+          <MobileBottomLink to="/settings" label="Settings" icon="user" active={location.pathname === '/settings'} />
+        ) : (
+          <button type="button" onClick={() => setSettingsOpen(true)} className={`flex flex-col items-center gap-1 text-[11px] font-semibold ${settingsOpen ? 'text-primary' : 'text-slate-500'}`}>
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm7-3.5l2-1-2-3-2 .5a8 8 0 00-2-1L14.5 5h-5L9 7.5a8 8 0 00-2 1L5 8l-2 3 2 1a8 8 0 000 2l-2 1 2 3 2-.5a8 8 0 002 1l.5 2.5h5l.5-2.5a8 8 0 002-1l2 .5 2-3-2-1a8 8 0 000-2z" /></svg>
+            Settings
+          </button>
+        )}
       </div>
-      {settingsOpen && (
+      {!isAuthenticated && settingsOpen && (
         <div className="fixed inset-0 z-[70] bg-slate-950/45 md:hidden" onClick={() => setSettingsOpen(false)}>
           <div className="absolute inset-x-3 bottom-20 rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">

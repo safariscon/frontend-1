@@ -1,13 +1,14 @@
 import { useInstall } from '../context/InstallContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { t } from '../lib/translations';
-import InstallButton from './InstallButton';
 
 export default function InstallBanner() {
   const { showBanner, dismissBanner, triggerInstall } = useInstall();
   const { language } = useLanguage();
+  const { isAuthenticated } = useAuth();
 
-  if (!showBanner) return null;
+  if (!showBanner || isAuthenticated) return null;
 
   const handleInstallClick = async () => {
     const installed = await triggerInstall();

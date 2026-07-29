@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
+import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { bookingApi, getAuthData } from '../lib/api';
 import { formatRwf } from '../lib/currency';
@@ -104,10 +103,8 @@ export default function UserDashboard() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
-
-      <main className="flex-1 py-8">
+    <DashboardLayout>
+      <main className="py-6 sm:py-8">
         <div className="max-w-7xl mx-auto px-4">
           <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
@@ -347,8 +344,7 @@ export default function UserDashboard() {
         />
       )}
 
-      <Footer />
-    </div>
+    </DashboardLayout>
   );
 }
 

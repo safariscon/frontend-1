@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
+import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
 import { getAuthData, hotelApi, publicApi } from '../lib/api';
@@ -557,9 +556,8 @@ export default function HotelDashboard() {
   if (!user || !isSellerRole(user.role)) return null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
-      <main className="seller-dashboard-main flex-1 py-8">
+    <DashboardLayout>
+      <main className="seller-dashboard-main py-6 sm:py-8">
         <div className="seller-dashboard-shell max-w-7xl mx-auto px-4">
           <div className="seller-dashboard-header mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -601,8 +599,7 @@ export default function HotelDashboard() {
           </section>
         </div>
       </main>
-      <Footer />
-    </div>
+    </DashboardLayout>
   );
 }
 

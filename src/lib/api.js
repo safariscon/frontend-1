@@ -4,6 +4,16 @@ const API_BASE_URL = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || DEFA
 const AUTH_STORAGE_KEY = "tourconnect_auth";
 const LEGACY_USER_KEY = "toorconnect_user";
 
+export class ApiError extends Error {
+  constructor(message, { status, payload } = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload || {};
+    this.code = payload?.code;
+  }
+}
+
 export const getAuthData = () => {
   const raw = localStorage.getItem(AUTH_STORAGE_KEY);
   if (raw) {
@@ -75,7 +85,10 @@ export const apiRequest = async (path, { method = "GET", body, token, headers } 
   }
 
   if (!response.ok) {
-    throw new Error(payload.message || "Request failed.");
+    throw new ApiError(payload.message || "Request failed.", {
+      status: response.status,
+      payload,
+    });
   }
 
   return payload;
@@ -129,6 +142,26 @@ export const authApi = {
     apiRequest("/api/auth/register", {
       method: "POST",
       body: userData,
+    }),
+  resendEmailVerificationOtp: (email) =>
+    apiRequest("/api/auth/email/resend-verification-otp", {
+      method: "POST",
+      body: { email },
+    }),
+  verifyEmailOtp: (email, otp) =>
+    apiRequest("/api/auth/email/verify-otp", {
+      method: "POST",
+      body: { email, otp },
+    }),
+  forgotPassword: (email) =>
+    apiRequest("/api/auth/forgot-password", {
+      method: "POST",
+      body: { email },
+    }),
+  resetPassword: (email, otp, newPassword) =>
+    apiRequest("/api/auth/reset-password", {
+      method: "POST",
+      body: { email, otp, newPassword },
     }),
   completeProviderRegistration: (payload) =>
     apiRequest("/api/auth/provider/complete-registration", {

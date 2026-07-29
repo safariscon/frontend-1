@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
+import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { adminApi, bookingApi, getAuthData, publicApi } from '../lib/api';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
@@ -325,9 +324,8 @@ export default function AdminDashboard() {
   if (!user || user.role !== 'admin') return null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
-      <main className="flex-1 py-8">
+    <DashboardLayout>
+      <main className="py-6 sm:py-8">
         <div className="max-w-7xl mx-auto px-4">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -412,8 +410,7 @@ export default function AdminDashboard() {
       </main>
       {selectedBusiness && <BusinessDetailModal business={selectedBusiness} onClose={() => setSelectedBusiness(null)} />}
       {selectedBooking && <AdminBookingDetailModal booking={selectedBooking} defaultCommission={marketplaceSettings.defaultCommissionPercentage} onApprove={approveBooking} onReject={rejectBooking} onClose={() => setSelectedBooking(null)} />}
-      <Footer />
-    </div>
+    </DashboardLayout>
   );
 }
 
