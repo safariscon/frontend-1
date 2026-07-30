@@ -15,93 +15,95 @@ export default function HotelCard({ hotel, compact = false }) {
   return (
     <Link
       to={`/business/${hotelId}`}
-      className="service-card group bg-white overflow-hidden transition-all duration-300 block"
+      className="service-card group block overflow-hidden bg-white transition-all duration-300 dark:bg-slate-900"
     >
-      <div className="relative overflow-hidden h-48 bg-gray-50 md:h-52">
+      <div className="relative h-48 overflow-hidden bg-slate-100 dark:bg-slate-800 md:h-52">
         {hotel.image ? (
           <img
             src={hotel.image}
             alt={hotel.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-gray-400">
+          <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-slate-400">
             No seller image uploaded
           </div>
         )}
         {hotel.isFeatured && (
-          <div className="absolute top-3 left-3 bg-secondary text-white text-xs font-bold px-3 py-1 rounded-full">
+          <div className="absolute left-3 top-3 rounded-full bg-secondary px-3 py-1 text-xs font-bold text-white">
             {t('featured', language)}
           </div>
         )}
         {isNotAvailable && (
-          <div className="absolute top-3 left-3 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
+          <div className="absolute left-3 top-3 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
             Not Available
           </div>
         )}
         {promotion && (
-          <div className="service-promotion-badge absolute right-3 top-3 rounded-full border border-amber-400 bg-amber-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-amber-700 shadow-lg">
-            ★ Promotion
+          <div className="service-promotion-badge absolute right-3 top-3 rounded-full border border-amber-400 bg-amber-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-amber-700 shadow-lg dark:border-amber-500/70 dark:bg-amber-950 dark:text-amber-200">
+            Promotion
           </div>
         )}
       </div>
 
       <div className="p-5 md:p-6">
-        <div className="flex items-start justify-between mb-2">
-          <h3 className="text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-primary transition">
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <h3 className="line-clamp-1 text-lg font-black text-slate-950 transition group-hover:text-primary dark:text-white dark:group-hover:text-blue-300">
             {hotel.name}
           </h3>
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <span className="text-right text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {formatBusinessType(hotel.type)}
           </span>
         </div>
 
-        <div className="flex items-center text-gray-600 text-sm mb-2">
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+        <div className="mb-2 flex items-center text-sm text-slate-600 dark:text-slate-400">
+          <svg className="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           {hotel.location}
         </div>
 
-        <p className={`text-gray-600 mb-4 ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>
+        <p className={`mb-4 text-slate-600 dark:text-slate-300 ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>
           {hotel.description}
         </p>
+
         {promotion && (
-          <div className="service-promotion-panel mb-4 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-100 p-4 text-left">
+          <div className="service-promotion-panel mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-left dark:border-amber-700 dark:bg-amber-950/40">
             <div className="grid grid-cols-[2.5rem_1fr] gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-xl text-white">☆</span>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-400 text-white">
+                <StarIcon />
+              </span>
               <div>
-                <h4 className="font-black text-amber-700">{promotion.title}</h4>
-                <p className="mt-1 text-sm text-slate-800">Save {promotion.percent}% on this service.</p>
-                {promotion.note && <p className="mt-1 text-sm text-slate-700">{promotion.note}</p>}
-                <p className="mt-2 text-xs font-semibold text-orange-600">Valid {formatPromotionDate(promotion.startAt)} – {formatPromotionDate(promotion.endAt)}</p>
+                <h4 className="font-black text-amber-700 dark:text-amber-200">{promotion.title}</h4>
+                <p className="mt-1 text-sm text-slate-800 dark:text-amber-50">Save {promotion.percent}% on this service.</p>
+                {promotion.note && <p className="mt-1 text-sm text-slate-700 dark:text-amber-100">{promotion.note}</p>}
+                <p className="mt-2 text-xs font-semibold text-orange-600 dark:text-amber-300">Valid {formatPromotionDate(promotion.startAt)} to {formatPromotionDate(promotion.endAt)}</p>
               </div>
             </div>
           </div>
         )}
-        {availabilityText && (
-          <p className="mb-3 text-sm font-semibold text-primary">{availabilityText}</p>
-        )}
 
-        <div className="flex flex-wrap gap-2 mb-4">
+        {availabilityText && <p className="mb-3 text-sm font-bold text-primary dark:text-blue-300">{availabilityText}</p>}
+
+        <div className="mb-4 flex flex-wrap gap-2">
           {amenities.slice(0, 3).map((amenity) => (
-            <span key={amenity} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-md">
+            <span key={amenity} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
               {amenity}
             </span>
           ))}
           {amenities.length > 3 && (
-            <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-md">
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
               +{amenities.length - 3} {t('more', language)}
             </span>
           )}
         </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {formatBusinessType(hotel.serviceCategory)} / {formatBusinessType(hotel.bookingModel)}
           </span>
-          <span className="card-action text-primary font-bold">View services -&gt;</span>
+          <span className="card-action font-bold text-primary dark:text-blue-300">View services -&gt;</span>
         </div>
       </div>
     </Link>
@@ -133,3 +135,6 @@ function formatBusinessType(value) {
     .join(' ');
 }
 
+function StarIcon() {
+  return <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1.8l2.3 4.7 5.2.8-3.8 3.7.9 5.2L10 13.7l-4.6 2.5.9-5.2-3.8-3.7 5.2-.8L10 1.8z" /></svg>;
+}

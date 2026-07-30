@@ -67,7 +67,7 @@ h1,
 h2,
 h3,
 h4 {
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
@@ -87,7 +87,7 @@ p {
   font-size: clamp(1.8rem, 3vw, 2.7rem);
   line-height: 1.15;
   font-weight: 800;
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
   color: var(--color-ink);
 }
 
@@ -108,7 +108,7 @@ p {
   border-radius: 0.7rem;
   color: #344469;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 800;
 }
 
 .nav-link:hover {
@@ -119,6 +119,24 @@ p {
 .nav-link-active {
   color: var(--color-primary);
   background: #edf3ff;
+}
+
+.mobile-nav-link-active {
+  color: var(--color-primary);
+  background: #edf3ff;
+}
+
+.dark .nav-link,
+.dark .mobile-nav-link {
+  color: #cbd5e1;
+}
+
+.dark .nav-link:hover,
+.dark .mobile-nav-link:hover,
+.dark .nav-link-active,
+.dark .mobile-nav-link-active {
+  color: #bfdbfe;
+  background: #1e293b;
 }
 
 .nav-link-active::after {
@@ -159,39 +177,8 @@ p {
 }
 
 /* Hero and search */
-.home-hero {
-  height: 300px !important;
-  min-height: 300px !important;
-  max-height: 300px !important;
-}
-
-.home-hero .relative.z-10 {
-  height: 100%;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-}
-
-.home-hero .relative.z-10 > .grid {
-  height: 100%;
-}
-
-.home-hero h1 {
-  margin-top: 0.25rem !important;
-  max-width: 32rem;
-  font-size: 2rem !important;
-  line-height: 1.08 !important;
-  font-weight: 800;
-  color: #fff;
-}
-
-.home-hero .hero-eyebrow {
-  padding: 0.2rem 0.55rem !important;
-  font-size: 0.6rem !important;
-  letter-spacing: 0.1em !important;
-}
-
-.home-hero .hero-actions {
-  margin-top: 0.8rem !important;
+.public-hero {
+  min-height: min(760px, calc(100vh - 5rem));
 }
 
 .hero-primary-action {
@@ -222,11 +209,11 @@ p {
 }
 
 .search-shell {
-  padding: 0.45rem !important;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 0.75rem;
+  padding: 0.55rem !important;
+  border: 1px solid rgba(216, 226, 243, 0.95);
+  border-radius: 0.9rem;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   backdrop-filter: blur(18px);
 }
 
@@ -236,27 +223,27 @@ p {
 }
 
 .search-panel {
-  padding: 0.8rem !important;
-  gap: 0.6rem !important;
+  padding: 0 !important;
+  gap: 0.75rem !important;
   border-radius: 0.9rem;
 }
 
 .search-label {
   display: block;
-  margin-bottom: 0.15rem !important;
+  margin-bottom: 0.45rem !important;
   color: var(--color-ink);
-  font-size: 0.7rem !important;
+  font-size: 0.78rem !important;
   line-height: 1.2;
   font-weight: 700;
 }
 
 .search-control {
-  min-height: 2.5rem !important;
-  padding-block: 0.4rem !important;
+  min-height: 3rem !important;
+  padding-block: 0.65rem !important;
   border: 1px solid #d6e0f1;
-  border-radius: 0.55rem;
+  border-radius: 0.75rem;
   box-shadow: inset 0 1px 2px rgba(7, 27, 79, 0.025);
-  font-size: 0.75rem !important;
+  font-size: 0.875rem !important;
 }
 
 .search-control:hover {
@@ -269,10 +256,20 @@ p {
 }
 
 .search-button {
-  min-height: 2.5rem !important;
-  padding-block: 0.4rem !important;
+  min-height: 3rem !important;
+  padding-block: 0.65rem !important;
   box-shadow: 0 8px 20px rgba(7, 84, 215, 0.22);
-  font-size: 0.75rem !important;
+  font-size: 0.875rem !important;
+}
+
+.dark .search-shell {
+  border-color: #334155;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.24);
+}
+
+.dark .search-label {
+  color: #cbd5e1;
 }
 
 .search-button:hover {
@@ -610,52 +607,93 @@ main > .container {
 }
 
 .dark body {
-  background-color: #111827;
-  color: #f9fafb;
+  background-color: #0d1424;
+  color: #f8fafc;
 }
 
 .dark .bg-white {
-  background-color: #1f2937;
-}
-
-.dark .bg-gray-50 {
   background-color: #111827;
 }
 
+.dark .bg-white\/95 {
+  background-color: rgba(15, 23, 42, 0.94);
+}
+
+.dark .bg-gray-50 {
+  background-color: #0d1424;
+}
+
 .dark .bg-gray-100 {
-  background-color: #374151;
+  background-color: #1e293b;
 }
 
 .dark .bg-gray-200 {
-  background-color: #4b5563;
+  background-color: #334155;
+}
+
+.dark .bg-slate-50 {
+  background-color: #0f172a;
+}
+
+.dark .bg-slate-100 {
+  background-color: #1e293b;
+}
+
+.dark .bg-slate-200 {
+  background-color: #334155;
 }
 
 .dark .text-gray-900 {
-  color: #f9fafb;
+  color: #f8fafc;
 }
 
 .dark .text-gray-700 {
-  color: #d1d5db;
+  color: #cbd5e1;
 }
 
 .dark .text-gray-600 {
-  color: #9ca3af;
+  color: #94a3b8;
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900 {
+  color: #f8fafc;
+}
+
+.dark .text-slate-800,
+.dark .text-slate-700 {
+  color: #cbd5e1;
+}
+
+.dark .text-slate-600,
+.dark .text-slate-500 {
+  color: #94a3b8;
 }
 
 .dark .border-gray-300 {
-  border-color: #4b5563;
+  border-color: #475569;
 }
 
 .dark .border-gray-100 {
-  border-color: #374151;
+  border-color: #334155;
+}
+
+.dark .border-slate-300,
+.dark .border-slate-200 {
+  border-color: #334155;
 }
 
 .dark .hover\:bg-gray-100:hover {
-  background-color: #374151;
+  background-color: #1e293b;
 }
 
 .dark .hover\:bg-gray-200:hover {
-  background-color: #4b5563;
+  background-color: #334155;
+}
+
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-200:hover {
+  background-color: #1e293b;
 }
 
 .dark .shadow-md {
@@ -665,15 +703,42 @@ main > .container {
 .dark input,
 .dark select,
 .dark textarea {
-  background-color: #1f2937;
-  border-color: #4b5563;
-  color: #f9fafb;
+  background-color: #0f172a !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.dark input:not([type='checkbox']):not([type='radio']):hover,
+.dark select:hover,
+.dark textarea:hover {
+  border-color: #64748b !important;
+}
+
+.dark input:not([type='checkbox']):not([type='radio']):focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.24) !important;
 }
 
 .dark input::placeholder,
 .dark select::placeholder,
 .dark textarea::placeholder {
-  color: #9ca3af;
+  color: #94a3b8;
+}
+
+.dark option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+.dark input:disabled,
+.dark select:disabled,
+.dark textarea:disabled {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+  border-color: #334155 !important;
 }
 
 @media (max-width: 767px) {
@@ -743,7 +808,7 @@ main > .container {
     line-height: 1.1 !important;
     font-weight: 800;
     color: #fff;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
   }
 
   .hero-eyebrow {

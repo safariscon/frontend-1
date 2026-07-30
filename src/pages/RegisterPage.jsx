@@ -80,7 +80,7 @@ export default function RegisterPage() {
                 <p className="text-gray-600">{t('joinToday', language)}</p>
               </div>
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} autoComplete="off">
                 {error && (
                   <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
                     {error}
@@ -109,6 +109,7 @@ export default function RegisterPage() {
                   <input
                     type="text"
                     name="name"
+                    autoComplete="off"
                     value={formData.name}
                     onChange={handleChange}
                     required
@@ -124,6 +125,10 @@ export default function RegisterPage() {
                   <input
                     type="email"
                     name="email"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck="false"
                     value={formData.email}
                     onChange={handleChange}
                     required
@@ -139,6 +144,7 @@ export default function RegisterPage() {
                   <input
                     type="password"
                     name="password"
+                    autoComplete="new-password"
                     value={formData.password}
                     onChange={handleChange}
                     required
@@ -154,6 +160,7 @@ export default function RegisterPage() {
                   <input
                     type="password"
                     name="confirmPassword"
+                    autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     required

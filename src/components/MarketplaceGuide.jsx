@@ -5,9 +5,9 @@ const SERVICE_CATEGORIES = [
   { label: 'Accommodation', query: 'accommodation', icon: 'bed' },
   { label: 'Transport', query: 'transport', icon: 'bus' },
   { label: 'Events & Venues', query: 'events', icon: 'calendar' },
-  { label: 'Travel & Experience', query: 'travel experience', icon: 'mountain' },
+  { label: 'Travel Experiences', query: 'travel experience', icon: 'mountain' },
   { label: 'Tours & Activities', query: 'tours activities', icon: 'compass' },
-  { label: 'Shopping & Markets', query: 'shopping markets', icon: 'bag' },
+  { label: 'Food & Cafes', query: 'cafe restaurant food', icon: 'bag' },
   { label: 'Wellness', query: 'wellness', icon: 'wellness' },
   { label: 'More', query: '', icon: 'more' },
 ];
@@ -15,9 +15,9 @@ const SERVICE_CATEGORIES = [
 const WORKFLOW_STEPS = [
   ['Choose a Service', 'Browse verified options'],
   ['Book Instantly', 'Send your request'],
-  ['Pay Securely', 'Use the payment simulation'],
-  ['Details Unlocked', 'Get full provider contacts'],
-  ['Enjoy the Service', 'Use your PDF and QR'],
+  ['Pay Securely', 'Use available payment flows'],
+  ['Details Unlocked', 'Get provider contacts'],
+  ['Enjoy the Service', 'Use your confirmation'],
 ];
 
 export default function MarketplaceGuide() {
@@ -28,45 +28,47 @@ export default function MarketplaceGuide() {
   };
 
   return (
-    <section className="border-b border-blue-100 bg-white py-7">
+    <section className="border-b border-slate-200 bg-white py-7 dark:border-slate-800 dark:bg-slate-950">
       <div className="mx-auto max-w-7xl px-4">
         <div className="relative">
           <ScrollButton direction="left" label="Previous service categories" onClick={() => scrollTrack(categoryTrack, -1)} />
-          <div ref={categoryTrack} className="marketplace-scroll-track overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
-            <div className="flex min-w-max items-stretch divide-x divide-slate-200">
-            {SERVICE_CATEGORIES.map((category) => (
-              <Link
-                key={category.label}
-                to={category.query ? `/services?service=${encodeURIComponent(category.query)}` : '/services'}
-                aria-label={category.label}
-                className="flex min-w-32 flex-1 flex-col items-center justify-center gap-2 px-4 py-4 text-center hover:bg-blue-50"
-              >
-                <CategoryIcon name={category.icon} />
-                {category.icon !== 'more' && <span className="max-w-24 text-[11px] font-bold leading-tight text-blue-950">{category.label}</span>}
-              </Link>
-            ))}
+          <div ref={categoryTrack} className="marketplace-scroll-track overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex min-w-max items-stretch divide-x divide-slate-200 dark:divide-slate-700">
+              {SERVICE_CATEGORIES.map((category) => (
+                <Link
+                  key={category.label}
+                  to={category.query ? `/services?service=${encodeURIComponent(category.query)}` : '/services'}
+                  aria-label={category.label}
+                  className="flex min-w-32 flex-1 flex-col items-center justify-center gap-2 px-4 py-4 text-center hover:bg-blue-50 dark:hover:bg-slate-800"
+                >
+                  <CategoryIcon name={category.icon} />
+                  {category.icon !== 'more' && <span className="max-w-24 text-[11px] font-bold leading-tight text-blue-950 dark:text-slate-100">{category.label}</span>}
+                </Link>
+              ))}
             </div>
           </div>
           <ScrollButton direction="right" label="Next service categories" onClick={() => scrollTrack(categoryTrack, 1)} />
         </div>
-        <p className="mt-3 text-center text-xs font-semibold text-primary md:hidden">← Scroll left or right to explore more services →</p>
+        <p className="mt-3 text-center text-xs font-semibold text-primary md:hidden">Scroll to explore more services</p>
 
         <div className="mt-7 text-center">
-          <h2 className="text-xl font-black text-blue-900">How SafarisCon Works</h2>
+          <h2 className="text-xl font-black text-blue-900 dark:text-blue-200">How SafarisCon Works</h2>
           <div className="relative mt-5">
             <ScrollButton direction="left" label="Previous booking steps" onClick={() => scrollTrack(workflowTrack, -1)} mobileOnly />
             <div ref={workflowTrack} className="marketplace-scroll-track flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 lg:grid lg:grid-cols-5 lg:overflow-visible">
-            {WORKFLOW_STEPS.map(([title, description], index) => (
-              <div key={title} className="marketplace-step relative flex min-w-[12rem] snap-start flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm lg:min-w-0">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-primary"><WorkflowIcon index={index} /></span>
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white">{index + 1}</span>
-                <span><strong className="block text-xs text-slate-900">{title}</strong><small className="mt-1 block text-[11px] text-slate-500">{description}</small></span>
-              </div>
-            ))}
+              {WORKFLOW_STEPS.map(([title, description], index) => (
+                <div key={title} className="marketplace-step relative flex min-w-[12rem] snap-start flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:min-w-0">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-primary dark:bg-blue-950/70 dark:text-blue-200"><WorkflowIcon index={index} /></span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white">{index + 1}</span>
+                  <span>
+                    <strong className="block text-xs text-slate-900 dark:text-white">{title}</strong>
+                    <small className="mt-1 block text-[11px] text-slate-500 dark:text-slate-400">{description}</small>
+                  </span>
+                </div>
+              ))}
             </div>
             <ScrollButton direction="right" label="Next booking steps" onClick={() => scrollTrack(workflowTrack, 1)} mobileOnly />
           </div>
-          <div className="mt-3 flex justify-center gap-2 lg:hidden">{WORKFLOW_STEPS.map((step, index) => <span key={step[0]} className={`h-1.5 w-1.5 rounded-full ${index === 0 ? 'bg-primary' : 'bg-slate-300'}`} />)}</div>
         </div>
       </div>
     </section>
@@ -74,7 +76,11 @@ export default function MarketplaceGuide() {
 }
 
 function ScrollButton({ direction, label, onClick, mobileOnly = false }) {
-  return <button type="button" aria-label={label} onClick={onClick} className={`absolute ${direction === 'left' ? '-left-3' : '-right-3'} top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-bold text-primary shadow-lg hover:bg-blue-50 ${mobileOnly ? 'lg:hidden' : ''}`}>{direction === 'left' ? '‹' : '›'}</button>;
+  return (
+    <button type="button" aria-label={label} onClick={onClick} className={`absolute ${direction === 'left' ? '-left-3' : '-right-3'} top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-bold text-primary shadow-lg hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-200 dark:hover:bg-slate-800 ${mobileOnly ? 'lg:hidden' : ''}`}>
+      {direction === 'left' ? '<' : '>'}
+    </button>
+  );
 }
 
 function WorkflowIcon({ index }) {
@@ -90,7 +96,7 @@ function WorkflowIcon({ index }) {
 
 function CategoryIcon({ name }) {
   const common = {
-    className: 'h-8 w-8 text-primary',
+    className: 'h-8 w-8 text-primary dark:text-blue-300',
     fill: 'none',
     stroke: 'currentColor',
     strokeWidth: 1.8,

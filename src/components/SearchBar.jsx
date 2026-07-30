@@ -27,7 +27,7 @@ export default function SearchBar({ variant = 'compact', serviceOptions = [], lo
       }
     >
       <div>
-        <label className={variant === 'hero' ? 'search-label text-lg' : 'sr-only'} htmlFor="service-input">
+        <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="service-input">
           {variant === 'hero' ? 'Book travel experiences and related services' : t('serviceName', language)}
         </label>
         {serviceOptions.length > 0 ? (
@@ -35,7 +35,7 @@ export default function SearchBar({ variant = 'compact', serviceOptions = [], lo
             id="service-input"
             value={serviceName}
             onChange={(event) => setServiceName(event.target.value)}
-            className="search-control w-full bg-white px-4 py-3 text-sm text-slate-900 outline-none transition"
+            className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
           >
             <option value="">All services</option>
             {serviceOptions.map((option) => (
@@ -50,20 +50,20 @@ export default function SearchBar({ variant = 'compact', serviceOptions = [], lo
             value={serviceName}
             onChange={(event) => setServiceName(event.target.value)}
             placeholder={t('serviceNamePlaceholder', language) === 'serviceNamePlaceholder' ? 'e.g. Car rental, Tour guide, Hotel...' : t('serviceNamePlaceholder', language)}
-            className="search-control w-full bg-white px-4 py-3 text-sm text-slate-900 outline-none transition"
+            className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
           />
         )}
       </div>
 
       <div>
-        <label className={variant === 'hero' ? 'search-label text-lg' : 'sr-only'} htmlFor="location-input">
+        <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="location-input">
           {variant === 'hero' ? 'Where?' : t('location', language)}
         </label>
         <select
           id="location-input"
           value={location}
           onChange={(event) => setLocation(event.target.value)}
-          className="search-control w-full bg-white px-4 py-3 text-sm text-slate-900 outline-none transition"
+          className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
         >
           <option value="">Select District</option>
           {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}

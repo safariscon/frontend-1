@@ -9,7 +9,7 @@ import { t } from '../lib/translations';
 
 export default function LoginPage() {
   const location = useLocation();
-  const [email, setEmail] = useState(location.state?.email || '');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -59,7 +59,7 @@ export default function LoginPage() {
               <p className="text-gray-600">{t('signInAccount', language)}</p>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} autoComplete="off">
               {error && (
                 <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
                   {error}
@@ -75,6 +75,11 @@ export default function LoginPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('email', language)}</label>
                 <input
                   type="email"
+                  name="login-email"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck="false"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -88,6 +93,8 @@ export default function LoginPage() {
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
+                    name="login-password"
+                    autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required

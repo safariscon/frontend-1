@@ -45,8 +45,8 @@ export default function DashboardLayout({ children }) {
   const activeLabel = navItems.find((item) => isActivePath(location.pathname, item))?.label || 'Dashboard';
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <aside className={`fixed inset-y-0 left-0 z-50 hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-200 lg:flex lg:flex-col ${collapsed ? 'w-20' : 'w-72'}`}>
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100">
+      <aside className={`fixed inset-y-0 left-0 z-50 hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-200 dark:border-slate-800 dark:bg-slate-900 lg:flex lg:flex-col ${collapsed ? 'w-20' : 'w-72'}`}>
         <SidebarContent
           collapsed={collapsed}
           navItems={navItems}
@@ -59,7 +59,7 @@ export default function DashboardLayout({ children }) {
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/45 lg:hidden" onClick={() => setMobileOpen(false)}>
-          <aside className="h-full w-80 max-w-[86vw] bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <aside className="h-full w-80 max-w-[86vw] bg-white shadow-2xl dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
             <SidebarContent
               collapsed={false}
               navItems={navItems}
@@ -74,20 +74,20 @@ export default function DashboardLayout({ children }) {
       )}
 
       <div className={`min-h-screen transition-all duration-200 ${collapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
-              <button type="button" onClick={() => setMobileOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden" aria-label="Open sidebar">
+              <button type="button" onClick={() => setMobileOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 lg:hidden" aria-label="Open sidebar">
                 <Icon name="menu" />
               </button>
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-wide text-primary">{activeLabel}</p>
-                <h1 className="truncate text-lg font-black text-slate-950 sm:text-xl">{getGreeting(user)}</h1>
+                <h1 className="truncate text-lg font-black text-slate-950 dark:text-slate-50 sm:text-xl">{getGreeting(user)}</h1>
               </div>
             </div>
             <div className="hidden items-center gap-3 sm:flex">
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-primary">{formatRole(user?.role)}</span>
-              <Link to="/settings" className={`rounded-xl border px-4 py-2 text-sm font-bold ${location.pathname === '/settings' ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-700 hover:text-primary'}`}>
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-primary dark:bg-blue-950/60 dark:text-blue-200">{formatRole(user?.role)}</span>
+              <Link to="/settings" className={`rounded-xl border px-4 py-2 text-sm font-bold ${location.pathname === '/settings' ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-700 hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:text-blue-300'}`}>
                 Settings
               </Link>
             </div>
@@ -102,17 +102,17 @@ export default function DashboardLayout({ children }) {
 function SidebarContent({ collapsed, navItems, pathname, user, onToggle, onLogout, mobile = false }) {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 items-center justify-between gap-3 border-b border-slate-200 px-4">
+      <div className="flex h-16 items-center justify-between gap-3 border-b border-slate-200 px-4 dark:border-slate-800">
         <Link to="/" className="flex min-w-0 items-center gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-lg font-black text-white shadow-sm">S</div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-lg font-black tracking-tight text-slate-950">safariscon</p>
-              <p className="truncate text-xs font-semibold text-slate-500">Professional dashboard</p>
+              <p className="truncate text-lg font-black tracking-tight text-slate-950 dark:text-slate-50">safariscon</p>
+              <p className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">Professional dashboard</p>
             </div>
           )}
         </Link>
-        <button type="button" onClick={onToggle} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-primary" aria-label={mobile ? 'Close sidebar' : 'Toggle sidebar'}>
+        <button type="button" onClick={onToggle} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-blue-300" aria-label={mobile ? 'Close sidebar' : 'Toggle sidebar'}>
           <Icon name={mobile ? 'close' : collapsed ? 'panelOpen' : 'panelClose'} />
         </button>
       </div>
@@ -124,7 +124,7 @@ function SidebarContent({ collapsed, navItems, pathname, user, onToggle, onLogou
             <Link
               key={item.label}
               to={item.to}
-              className={`group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition ${active ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:bg-blue-50 hover:text-primary'}`}
+              className={`group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition ${active ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-blue-50 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300'}`}
               title={collapsed ? item.label : undefined}
             >
               <span className="grid h-6 w-6 shrink-0 place-items-center"><Icon name={item.icon} /></span>
@@ -134,19 +134,19 @@ function SidebarContent({ collapsed, navItems, pathname, user, onToggle, onLogou
         })}
       </nav>
 
-      <div className="border-t border-slate-200 p-3">
-        <div className={`mb-3 rounded-xl bg-slate-50 p-3 ${collapsed ? 'text-center' : ''}`}>
+      <div className="border-t border-slate-200 p-3 dark:border-slate-800">
+        <div className={`mb-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/80 ${collapsed ? 'text-center' : ''}`}>
           <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-black text-white">
             {getInitials(user?.name || user?.email)}
           </div>
           {!collapsed && (
             <div className="mt-2 min-w-0 text-center">
-              <p className="truncate text-sm font-black text-slate-900">{user?.name || 'User'}</p>
-              <p className="truncate text-xs font-semibold text-slate-500">{user?.email}</p>
+              <p className="truncate text-sm font-black text-slate-900 dark:text-slate-100">{user?.name || 'User'}</p>
+              <p className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{user?.email}</p>
             </div>
           )}
         </div>
-        <button type="button" onClick={onLogout} className={`flex w-full items-center justify-center gap-3 rounded-xl bg-slate-100 px-3 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 ${collapsed ? '' : 'justify-start'}`}>
+        <button type="button" onClick={onLogout} className={`flex w-full items-center justify-center gap-3 rounded-xl bg-slate-100 px-3 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 ${collapsed ? '' : 'justify-start'}`}>
           <Icon name="logout" />
           {!collapsed && <span>Logout</span>}
         </button>

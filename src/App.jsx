@@ -5,6 +5,8 @@ import { useTheme } from './context/ThemeContext';
 import { Component, useEffect } from 'react';
 import { pingBackend } from './lib/api';
 import HomePage from './pages/HomePage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
 import HotelsPage from './pages/HotelsPage';
 import HotelDetailsPage from './pages/HotelDetailsPage';
 import BookingPage from './pages/BookingPage';
@@ -79,6 +81,8 @@ function AppContent() {
         <Router>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/services" element={<HotelsPage />} />
             <Route path="/hotels" element={<HotelsPage />} />
             <Route path="/hotel/:id" element={<HotelDetailsPage />} />
