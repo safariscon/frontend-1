@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import AnnouncementBar from './AnnouncementBar';
 
 const storageKey = 'safariscon_sidebar_collapsed';
 
@@ -46,7 +47,8 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100">
-      <aside className={`fixed inset-y-0 left-0 z-50 hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-200 dark:border-slate-800 dark:bg-slate-900 lg:flex lg:flex-col ${collapsed ? 'w-20' : 'w-72'}`}>
+      <AnnouncementBar />
+      <aside className={`fixed bottom-0 left-0 top-8 z-50 hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-200 dark:border-slate-800 dark:bg-slate-900 lg:flex lg:flex-col ${collapsed ? 'w-20' : 'w-72'}`}>
         <SidebarContent
           collapsed={collapsed}
           navItems={navItems}
@@ -58,7 +60,7 @@ export default function DashboardLayout({ children }) {
       </aside>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/45 lg:hidden" onClick={() => setMobileOpen(false)}>
+        <div className="fixed inset-x-0 bottom-0 top-8 z-50 bg-slate-950/45 lg:hidden" onClick={() => setMobileOpen(false)}>
           <aside className="h-full w-80 max-w-[86vw] bg-white shadow-2xl dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
             <SidebarContent
               collapsed={false}
@@ -73,7 +75,7 @@ export default function DashboardLayout({ children }) {
         </div>
       )}
 
-      <div className={`min-h-screen transition-all duration-200 ${collapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
+      <div className={`min-h-[calc(100vh-2rem)] transition-all duration-200 ${collapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">

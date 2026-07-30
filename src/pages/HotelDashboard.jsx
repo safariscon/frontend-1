@@ -304,6 +304,7 @@ export default function HotelDashboard() {
   const [bookings, setBookings] = useState([]);
   const [activeTab, setActiveTab] = useState('services');
   const [editingService, setEditingService] = useState(null);
+  const [approvalBooking, setApprovalBooking] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -543,10 +544,12 @@ export default function HotelDashboard() {
     }
   };
 
-  const updateBookingStatus = async (bookingId, status) => {
+  const updateBookingStatus = async (bookingId, statusOrPayload) => {
     try {
-      const response = await hotelApi.updateBookingStatus(token, bookingId, { status });
+      const payload = typeof statusOrPayload === 'string' ? { status: statusOrPayload } : statusOrPayload;
+      const response = await hotelApi.updateBookingStatus(token, bookingId, payload);
       setInfo(response.message);
+      setApprovalBooking(null);
       await loadData({ silent: true });
     } catch (requestError) {
       setError(requestError.message);
@@ -579,6 +582,7 @@ export default function HotelDashboard() {
             <Metric label="Revenue" value={formatRwf(stats.revenue)} />
             <Metric label="Listings" value={stats.availableQuantity} />
           </div>
+          <CommissionTermsCard item={overview?.business || overview} />
 
           <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
             {['services', 'bookings', 'rebook-requests', 'verification', 'analytics', 'edit'].map((tab) => (
@@ -591,7 +595,7 @@ export default function HotelDashboard() {
           <section className="seller-dashboard-content bg-white rounded-2xl shadow-sm p-4">
             {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
             {!loading && activeTab === 'services' && <ServiceGrid services={services} onEdit={startEdit} onDelete={deleteService} onStatus={updateStatus} />}
-            {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onCompleted={() => loadData({ silent: true })} />}
+            {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onApproveBooking={setApprovalBooking} onCompleted={() => loadData({ silent: true })} />}
             {!loading && activeTab === 'rebook-requests' && <SellerRebookRequests />}
             {!loading && activeTab === 'verification' && <SellerBookingVerification token={token} />}
             {!loading && activeTab === 'analytics' && <Analytics stats={stats} services={services} />}
@@ -599,12 +603,30 @@ export default function HotelDashboard() {
           </section>
         </div>
       </main>
+      {approvalBooking && <SellerBookingApprovalModal booking={approvalBooking} onClose={() => setApprovalBooking(null)} onSubmit={(payload) => updateBookingStatus(approvalBooking._id || approvalBooking.id, payload)} />}
     </DashboardLayout>
   );
 }
 
 function Metric({ label, value }) {
   return <div className="seller-metric rounded-xl bg-white p-4 shadow-sm"><p className="text-sm text-gray-500">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{value}</p></div>;
+}
+
+function CommissionTermsCard({ item }) {
+  const terms = item?.commissionTerms;
+  const percentage = item?.commissionPercentage ?? terms?.percentage;
+  if (!terms && (percentage === undefined || percentage === null)) return null;
+  return (
+    <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
+      <p className="text-xs font-black uppercase tracking-wide text-blue-700">Platform commission terms</p>
+      <h2 className="mt-1 font-black">{terms?.label || `${Number(percentage || 0).toLocaleString()}% platform commission`}</h2>
+      <p className="mt-1 text-sm text-blue-800">{terms?.description || 'SafarisCon takes this commission from paid bookings for this business.'}</p>
+    </div>
+  );
+}
+
+function canSellerReviewBooking(booking) {
+  return ['pending', 'reviewing', 'requested'].includes(String(booking.status || '').toLowerCase());
 }
 
 function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
@@ -622,6 +644,7 @@ function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
           </div>
           <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
           <p className="mt-3 text-sm font-semibold text-primary">Prices are managed in the Service / Price table.</p>
+          <CommissionTermsCard item={service} />
           {Array.isArray(service.images) && service.images.length > 0 && (
             <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
               {service.images.slice(0, 3).map((image, index) => (
@@ -650,7 +673,82 @@ function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
   );
 }
 
-function BookingList({ bookings, onStatus, onCompleted }) {
+function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
+  const [decision, setDecision] = useState({
+    totalPrice: booking.totalPrice || booking.bookingDetails?.listedPriceRwf || '',
+    paymentDeadlineHours: booking.paymentDeadlineHours || 24,
+    paymentReason: booking.paymentReason || 'Approved service payment',
+    note: '',
+  });
+  const [rejectReason, setRejectReason] = useState('');
+  const set = (key, value) => setDecision((prev) => ({ ...prev, [key]: value }));
+  const canApprove = Number(decision.totalPrice) > 0 && Number(decision.paymentDeadlineHours) > 0 && decision.paymentReason.trim();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-primary">Manual booking approval</p>
+            <h2 className="text-xl font-bold text-gray-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || 'Booking request'}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">Close</button>
+        </div>
+        <DetailGrid data={{
+          Customer: booking.touristId?.name || booking.userId?.name || 'Customer',
+          Email: booking.touristId?.email || booking.userId?.email || '-',
+          Quantity: booking.quantity || booking.guests || 1,
+          Status: booking.status,
+        }} />
+        <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
+          <h3 className="font-bold text-green-950">Approve and send payment request</h3>
+          <p className="mt-1 text-sm text-green-800">Set the final service price and how long the customer has to pay after approval.</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-semibold text-gray-700">Final service price (RWF)</span>
+              <input type="number" min="1" value={decision.totalPrice} onChange={(event) => set('totalPrice', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-gray-700">Payment deadline hours</span>
+              <input type="number" min="1" value={decision.paymentDeadlineHours} onChange={(event) => set('paymentDeadlineHours', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
+            </label>
+          </div>
+          <label className="mt-4 block">
+            <span className="text-sm font-semibold text-gray-700">Payment reason</span>
+            <input value={decision.paymentReason} onChange={(event) => set('paymentReason', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-sm font-semibold text-gray-700">Optional note</span>
+            <textarea rows={3} value={decision.note} onChange={(event) => set('note', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
+          </label>
+          <button
+            type="button"
+            disabled={!canApprove}
+            onClick={() => onSubmit({
+              status: 'confirmed',
+              totalPrice: Number(decision.totalPrice),
+              paymentDeadlineHours: Number(decision.paymentDeadlineHours),
+              paymentReason: decision.paymentReason.trim(),
+              note: decision.note.trim(),
+            })}
+            className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Approve and email customer
+          </button>
+        </div>
+        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
+          <h3 className="font-bold text-red-950">Reject request</h3>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reason for cancellation" className="min-w-0 flex-1 rounded-xl border border-red-200 bg-white px-4 py-3" />
+            <button type="button" disabled={!rejectReason.trim()} onClick={() => onSubmit({ status: 'cancelled', reason: rejectReason.trim() })} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Reject booking</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
   const [selectedBooking, setSelectedBooking] = useState(null);
   if (!bookings.length) return <p className="p-4 text-gray-600">No bookings yet.</p>;
   return (
@@ -659,7 +757,7 @@ function BookingList({ bookings, onStatus, onCompleted }) {
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Booking ID</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Booking</th><th className="py-3 px-2 text-left">Payment</th><th className="py-3 px-2 text-left">Paid</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
-          <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2 font-mono text-xs text-slate-600">{booking._id}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td><td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td><td className="py-3 px-2 text-right space-x-2"><button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="text-primary hover:underline">cancelled</button>}</td></tr>)}</tbody>
+          <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2 font-mono text-xs text-slate-600">{booking._id}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td><td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td><td className="py-3 px-2 text-right space-x-2"><button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>{canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="text-green-700 hover:underline">Review</button>}{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="text-primary hover:underline">cancelled</button>}</td></tr>)}</tbody>
         </table>
       </div>
       <div className="grid gap-3 md:hidden">
@@ -670,7 +768,7 @@ function BookingList({ bookings, onStatus, onCompleted }) {
               <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700">{booking.status}</span>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Payment</span><strong>{booking.paymentStatus || 'unpaid'}</strong></p><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Paid</span><strong>{formatRwf(booking.amountPaid || 0)}</strong></p></div>
-            <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">View</button>{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">cancelled</button>}</div>
+            <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">View</button>{canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white">Review</button>}{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">cancelled</button>}</div>
           </article>
         ))}
       </div>

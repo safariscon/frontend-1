@@ -95,36 +95,37 @@ export default function HomePage() {
           alt="SafarisCon service booking across hotels, transport, cafes, and travel experiences"
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-white/96 via-white/88 to-white/35 dark:from-slate-950/96 dark:via-slate-950/86 dark:to-slate-950/35" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-950/62 to-slate-950/18" />
+        <div className="absolute inset-y-0 left-0 w-[58%] bg-slate-950/20" />
         <div className="relative z-10 mx-auto grid min-h-[620px] max-w-7xl items-center gap-8 px-4 py-12 lg:grid-cols-[minmax(0,0.92fr)_minmax(22rem,0.58fr)]">
           <div className="max-w-3xl">
-            <p className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-primary dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+            <p className="inline-flex rounded-full border border-white/30 bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-wide text-blue-50 shadow-sm backdrop-blur">
               Rwanda service marketplace
             </p>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight text-slate-950 dark:text-white md:text-6xl">
+            <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-6xl">
               SafarisCon service marketplace
             </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-700 dark:text-slate-300 md:text-lg">
+            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-lg">
               Find trusted hotels, cafes, car rentals, venues, tours, and destination services from verified providers. Browse publicly, then create an account when you are ready to book and manage your service.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link to="/services" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-primary-dark">
                 Browse available services
               </Link>
-              <Link to="/register" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-blue-500 dark:hover:text-blue-300">
+              <Link to="/register" className="rounded-xl border border-slate-900 bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-blue-500 dark:hover:text-blue-300">
                 Create account
               </Link>
-              <Link to="/provider-register" className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-black text-primary hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
+              <Link to="/provider-register" className="rounded-xl border border-white/35 bg-white/18 px-5 py-3 text-sm font-black text-white shadow-sm backdrop-blur hover:bg-white/25">
                 Register as provider
               </Link>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white/92 p-4 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/92">
+          <div className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 md:p-8">
             <p className="mb-3 text-sm font-black text-slate-900 dark:text-white">Search available providers</p>
             <SearchBar variant="hero" serviceOptions={serviceOptions} locationOptions={locationOptions} />
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950">
-              <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Accepted payment methods</p>
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
+              <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Accepted payment methods</p>
               <PaymentMethods compact />
             </div>
           </div>

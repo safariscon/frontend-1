@@ -8,6 +8,7 @@ import { normalizeHotels } from '../lib/hotelMapper';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
+import { formatRwf } from '../lib/currency';
 
 export default function HotelDetailsPage() {
   const { id } = useParams();
@@ -290,45 +291,72 @@ function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortCo
     );
   }
 
+  const visibleSortColumns = columns.filter((column) => !['details'].includes(column.id));
+
   return (
-    <div className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
+    <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Availability</h2>
           {updatedAt && <p className="mt-1 text-sm text-gray-500">Updated {new Date(updatedAt).toLocaleString()}</p>}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search table" className="rounded-xl border border-gray-300 px-4 py-2 text-sm" />
-          <select value={sortColumn} onChange={(event) => setSortColumn(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-2 text-sm">
+        <div className="grid gap-2 sm:grid-cols-2 md:min-w-[380px]">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search options" className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
+          <select value={sortColumn} onChange={(event) => setSortColumn(event.target.value)} className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
             <option value="">Original order</option>
-            {columns.map((column) => <option key={column.id} value={column.id}>Sort by {column.label}</option>)}
+            {visibleSortColumns.map((column) => <option key={column.id} value={column.id}>Sort by {column.label}</option>)}
           </select>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column.id} className="border-b border-gray-200 bg-gray-50 px-4 py-3 text-left font-bold text-gray-800">
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-b border-gray-100">
-                {columns.map((column) => (
-                  <td key={column.id} className="px-4 py-3 text-gray-700">{row.cells?.[column.id] || '-'}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div className="grid gap-3">
+        {rows.map((row, index) => (
+          <AvailabilityOptionCard key={row.id || index} row={row} columns={columns} />
+        ))}
       </div>
       {!rows.length && <p className="mt-3 text-sm text-gray-500">No matching availability rows.</p>}
     </div>
+  );
+}
+
+function AvailabilityOptionCard({ row, columns }) {
+  const cells = row.cells || {};
+  const optionName = cells.service || cells.name || cells.option || 'Service option';
+  const price = Number(cells.price || 0);
+  const priceType = String(cells.priceType || '').replace(/-/g, ' ');
+  const details = cells.details || cells.amenities || '';
+  const metaColumns = columns.filter((column) => !['service', 'name', 'option', 'price', 'details', 'amenities'].includes(column.id));
+
+  return (
+    <article className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-wide text-primary">Option {row.sortOrder ? row.sortOrder : ''}</p>
+          <h3 className="mt-1 break-words text-lg font-black text-gray-950">{optionName}</h3>
+        </div>
+        <div className="rounded-xl bg-white px-4 py-3 text-left shadow-sm sm:min-w-36 sm:text-right">
+          <p className="text-xs font-bold uppercase text-gray-500">Price</p>
+          <p className="mt-1 text-lg font-black text-primary">{price ? formatRwf(price) : '-'}</p>
+          {priceType && <p className="text-xs font-semibold capitalize text-gray-500">{priceType}</p>}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {metaColumns.map((column) => (
+          <div key={column.id} className="rounded-xl bg-white px-3 py-2">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{column.label}</p>
+            <p className="mt-1 break-words text-sm font-semibold text-gray-900">{cells[column.id] || '-'}</p>
+          </div>
+        ))}
+      </div>
+
+      {details && (
+        <div className="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Details / amenities</p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-gray-700">{details}</p>
+        </div>
+      )}
+    </article>
   );
 }
 

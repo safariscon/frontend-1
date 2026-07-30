@@ -15,89 +15,36 @@ const TODAY = new Date().toISOString().split('T')[0];
 const BASE_VALUES = {
   destinationPlace: '',
   destinationLocation: '',
-  pickupLocation: '',
-  returnLocation: '',
-  startDate: '',
-  endDate: '',
-  reservationTime: '',
   vehicleType: '',
-  driverRequired: 'no',
   phone: '',
   fullName: '',
   email: '',
   bookingDate: '',
+  endBookingDate: '',
   startTime: '',
   endTime: '',
   numberOfPeople: '1',
   customerLocation: '',
+  customerLocationDetails: {
+    province: '',
+    district: '',
+    sector: '',
+    cell: '',
+    village: '',
+  },
   paymentMethod: 'mobile-money',
   agreeToTerms: false,
   packageType: '',
-  durationHours: '1',
-  durationDays: '1',
   quantity: '1',
-  specialRequests: '',
 };
 
-const FIELD_SETS = {
-  transport: [
-    field('pickupLocation', 'Pickup Location', 'select', '', true, '', ['Kigali', 'Gisenyi', 'Musanze', 'Huye', 'Rubavu', 'Rusizi', 'Nyagatare', 'Other']),
-    field('returnLocation', 'Return Location', 'select', '', true, '', ['Kigali', 'Gisenyi', 'Musanze', 'Huye', 'Rubavu', 'Rusizi', 'Nyagatare', 'Other']),
-    field('startDate', 'Pickup Date', 'date', '', true),
-    field('endDate', 'Return Date', 'date', '', true),
-    field('vehicleType', 'Vehicle Type', 'text', 'Toyota Rav4, Prado, Coaster', false),
-    field('quantity', 'Number of Passengers', 'number', '', true),
-    field('driverRequired', 'Driver Needed?', 'select', '', true, '', ['No', 'Yes']),
-    field('phone', 'Phone Number', 'tel', '078xxxxxxx', true),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-  accommodation: [
-    field('startDate', 'Check-in date', 'date', '', true),
-    field('endDate', 'Check-out date', 'date', '', true),
-    field('quantity', 'Guests', 'number', '', true, 'col-span-2'),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-  food: [
-    field('startDate', 'Reservation date', 'date', '', true),
-    field('reservationTime', 'Reservation time', 'time', '', false),
-    field('quantity', 'Guests / table size', 'number', '', true, 'col-span-2'),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-  event: [
-    field('startDate', 'Event date', 'date', '', true),
-    field('durationHours', 'Duration hours', 'number', '', false),
-    field('quantity', 'Attendees', 'number', '', true, 'col-span-2'),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-  activity: [
-    field('destinationPlace', 'Activity / Experience', 'text', 'e.g. Nyungwe Canopy Walk', true, 'col-span-2'),
-    field('destinationLocation', 'Activity Location', 'text', '', true, 'col-span-2'),
-    field('startDate', 'Activity date', 'date', '', true),
-    field('packageType', 'Package type', 'text', '', false),
-    field('quantity', 'Participants', 'number', '', true, 'col-span-2'),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-  appointment: [
-    field('startDate', 'Appointment date', 'date', '', true),
-    field('reservationTime', 'Appointment time', 'time', '', false),
-    field('durationHours', 'Duration hours', 'number', '', false),
-    field('quantity', 'People', 'number', '', true),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-  shopping: [
-    field('quantity', 'Quantity', 'number', '', true),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-  general: [
-    field('startDate', 'Date', 'date', '', true),
-    field('quantity', 'Quantity', 'number', '', true),
-    field('specialRequests', 'Special requests', 'textarea', '', false, 'col-span-2'),
-  ],
-};
+const RWANDA_PROVINCES = ['Kigali City', 'Northern Province', 'Southern Province', 'Eastern Province', 'Western Province'];
 
-function field(name, label, type, placeholder = '', required = false, className = '', options = []) {
-  return { name, label, type, placeholder, required, className, options };
-}
+const RWANDA_DISTRICTS = [
+  'Bugesera', 'Burera', 'Gakenke', 'Gasabo', 'Gatsibo', 'Gicumbi', 'Gisagara', 'Huye', 'Kamonyi', 'Karongi',
+  'Kayonza', 'Kicukiro', 'Kirehe', 'Muhanga', 'Musanze', 'Ngoma', 'Ngororero', 'Nyabihu', 'Nyagatare', 'Nyamagabe',
+  'Nyamasheke', 'Nyanza', 'Nyarugenge', 'Nyaruguru', 'Rubavu', 'Ruhango', 'Rulindo', 'Rusizi', 'Rutsiro', 'Rwamagana',
+];
 
 export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [searchParams] = useSearchParams();
@@ -181,6 +128,16 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     setValues((prev) => ({ ...prev, [key]: value }));
   };
 
+  const updateCustomerLocation = (key, value) => {
+    setValues((prev) => ({
+      ...prev,
+      customerLocationDetails: {
+        ...prev.customerLocationDetails,
+        [key]: value,
+      },
+    }));
+  };
+
   const validate = () => {
     if (!service?._id) return 'This service is not available for booking yet.';
     if (isUnavailable) return 'This service is currently not available.';
@@ -189,14 +146,26 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (!/^\+?[0-9][0-9\s-]{7,18}$/.test(values.phone)) return 'Please enter a valid phone number.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return 'Please enter a valid email address.';
     if (!values.bookingDate) return 'Please choose a booking date.';
+    if (!values.endBookingDate) return 'Please choose an end booking date.';
+    if (new Date(values.endBookingDate) < new Date(values.bookingDate)) return 'End booking date cannot be before the booking date.';
+    if (!values.startTime) return 'Please choose a start time.';
+    if (!values.endTime) return 'Please choose an end time.';
+    if (Number(values.numberOfPeople) < 1) return 'Number of people must be at least 1.';
+    if (Number(values.quantity) < 1) return 'Quantity / units must be at least 1.';
+    const customerLocationFields = [
+      ['province', 'Province'],
+      ['district', 'District'],
+      ['sector', 'Sector'],
+      ['cell', 'Cell'],
+      ['village', 'Village'],
+    ];
+    const missingLocation = customerLocationFields.find(([key]) => !String(values.customerLocationDetails?.[key] || '').trim());
+    if (missingLocation) return `Please complete customer ${missingLocation[1]}.`;
     if (!values.agreeToTerms) return 'Please agree to the terms and conditions.';
     if (useRebook && !rebookId.trim()) return 'Enter your Re-book ID.';
     if (useRebook && verifiedRebookId !== rebookId.trim().toUpperCase()) return 'Verify the Re-book ID before submitting.';
     const missingCustom = customFields.find((item) => item.required && (Array.isArray(customValues[item.id]) ? customValues[item.id].length === 0 : !String(customValues[item.id] || '').trim()));
     if (missingCustom) return `Please complete ${missingCustom.label}.`;
-    if (values.endDate && values.startDate && new Date(values.endDate) <= new Date(values.startDate)) {
-      return 'End date must be after start date.';
-    }
     return '';
   };
 
@@ -236,27 +205,43 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
     setLoading(true);
     try {
+      const customerLocationDetails = {
+        province: values.customerLocationDetails.province.trim(),
+        district: values.customerLocationDetails.district.trim(),
+        sector: values.customerLocationDetails.sector.trim(),
+        cell: values.customerLocationDetails.cell.trim(),
+        village: values.customerLocationDetails.village.trim(),
+      };
+      const customerLocationText = [
+        customerLocationDetails.village,
+        customerLocationDetails.cell,
+        customerLocationDetails.sector,
+        customerLocationDetails.district,
+        customerLocationDetails.province,
+        'Rwanda',
+      ].filter(Boolean).join(', ');
+      const numberOfPeople = Math.max(1, Number(values.numberOfPeople) || 1);
+      const quantity = Math.max(1, Number(values.quantity) || 1);
       const response = await bookingApi.bookService(authData.token, {
         serviceId: service._id,
         rebookId: useRebook ? verifiedRebookId : undefined,
-        quantity: getReservableQuantity(bookingConfig, values),
+        numberOfPeople,
+        quantity,
+        totalConsumptionUnits: numberOfPeople * quantity,
         totalPrice: 0,
-        startDate: values.startDate || null,
-        endDate: values.endDate || values.startDate || null,
-        durationHours: Number(values.durationHours) || 0,
-        durationDays: Number(values.durationDays) || 0,
-        reservationTime: values.reservationTime,
+        startDate: values.bookingDate,
+        endDate: values.endBookingDate,
+        endBookingDate: values.endBookingDate,
+        startTime: values.startTime,
+        endTime: values.endTime,
         destinationPlace: values.destinationPlace,
-        destinationLocation: bookingConfig.type === 'transport'
-          ? values.returnLocation || values.pickupLocation
-          : values.destinationLocation,
-        pickupLocation: values.pickupLocation,
-        returnLocation: values.returnLocation,
+        destinationLocation: values.destinationLocation,
         vehicleType: values.vehicleType,
         packageType: values.packageType,
-        specialRequests: values.specialRequests,
+        customerLocation: customerLocationText,
+        customerLocationDetails,
         bookingDetails: {
-          ...values,
+          customerLocationDetails,
           serviceName: service.title || service.name,
           requestedService: selectedOffer,
           selectedOptionId: selectedOfferRow?.id,
@@ -265,16 +250,14 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           email: values.email,
           phone: values.phone,
           bookingDate: values.bookingDate,
+          endBookingDate: values.endBookingDate,
           startTime: values.startTime,
           endTime: values.endTime,
-          endDate: values.endDate || values.bookingDate,
-          numberOfPeople: Number(values.numberOfPeople) || 1,
-          quantity: Number(values.quantity) || 1,
-          customerLocation: values.customerLocation,
+          numberOfPeople,
+          quantity,
+          totalConsumptionUnits: numberOfPeople * quantity,
+          customerLocation: customerLocationText,
           paymentMethod: values.paymentMethod,
-          passengers: bookingConfig.type === 'transport' ? values.quantity : undefined,
-          driverRequired: bookingConfig.type === 'transport' ? values.driverRequired : undefined,
-          guests: bookingConfig.type === 'accommodation' ? values.quantity : undefined,
           serviceCategory: service.category || business?.serviceCategory,
           bookingType: bookingConfig.type,
           providerRules: Array.isArray(service.rules) ? service.rules : [],
@@ -380,14 +363,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         <FixedInput label="Phone number" type="tel" value={values.phone} onChange={(value) => updateValue('phone', value)} required />
         <FixedInput label="Email" type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
         <FixedInput label="Booking date" type="date" min={TODAY} value={values.bookingDate} onChange={(value) => updateValue('bookingDate', value)} required />
-        <FixedInput label="End date (when needed)" type="date" min={values.bookingDate || TODAY} value={values.endDate} onChange={(value) => updateValue('endDate', value)} />
-        <FixedInput label="Start time" type="time" value={values.startTime} onChange={(value) => updateValue('startTime', value)} />
-        <FixedInput label="End time / completion time" type="time" value={values.endTime} onChange={(value) => updateValue('endTime', value)} />
+        <FixedInput label="End booking date" type="date" min={values.bookingDate || TODAY} value={values.endBookingDate} onChange={(value) => updateValue('endBookingDate', value)} required />
+        <FixedInput label="Start time" type="time" value={values.startTime} onChange={(value) => updateValue('startTime', value)} required />
+        <FixedInput label="End time" type="time" value={values.endTime} onChange={(value) => updateValue('endTime', value)} required />
         <FixedInput label="Number of people" type="number" min="1" value={values.numberOfPeople} onChange={(value) => updateValue('numberOfPeople', value)} required />
         <FixedInput label="Quantity / units" type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
-        <FixedInput label="Customer location / pickup location" value={values.customerLocation} onChange={(value) => updateValue('customerLocation', value)} />
+        <CustomerLocationFields location={values.customerLocationDetails} onChange={updateCustomerLocation} />
         <label className="block"><span className="mb-1 block text-sm font-medium text-gray-700">Payment method</span><select value={values.paymentMethod} onChange={(event) => updateValue('paymentMethod', event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3"><option value="mobile-money">Mobile Money</option><option value="bank">Bank</option></select></label>
-        <label className="block sm:col-span-2"><span className="mb-1 block text-sm font-medium text-gray-700">Special request</span><textarea value={values.specialRequests} onChange={(event) => updateValue('specialRequests', event.target.value)} rows={3} className="w-full rounded-xl border border-gray-300 px-4 py-3" /></label>
       </div>
 
       {customFields.length > 0 && <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
@@ -447,6 +429,34 @@ function FixedInput({ label, value, onChange, type = 'text', min, required = fal
   return <label className="block"><span className="mb-1 block text-sm font-medium text-gray-700">{label}</span><input type={type} min={min} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
 }
 
+function CustomerLocationFields({ location, onChange }) {
+  return (
+    <fieldset className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:col-span-2">
+      <legend className="px-1 text-sm font-black text-blue-950">Customer location</legend>
+      <p className="mt-1 text-xs font-semibold text-blue-800">Enter the customer address so the provider can know the exact service location before confirming the booking.</p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Province *</span>
+          <select required value={location.province} onChange={(event) => onChange('province', event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3">
+            <option value="">Select province</option>
+            {RWANDA_PROVINCES.map((province) => <option key={province} value={province}>{province}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">District *</span>
+          <select required value={location.district} onChange={(event) => onChange('district', event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3">
+            <option value="">Select district</option>
+            {RWANDA_DISTRICTS.map((district) => <option key={district} value={district}>{district}</option>)}
+          </select>
+        </label>
+        <FixedInput label="Sector" value={location.sector} onChange={(value) => onChange('sector', value)} required />
+        <FixedInput label="Cell" value={location.cell} onChange={(value) => onChange('cell', value)} required />
+        <FixedInput label="Village" value={location.village} onChange={(value) => onChange('village', value)} required />
+      </div>
+    </fieldset>
+  );
+}
+
 function QuoteCard({ result, paymentMethod, onPaid }) {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const pay = async (paymentDetails) => {
@@ -456,16 +466,14 @@ function QuoteCard({ result, paymentMethod, onPaid }) {
   };
   const { quote } = result;
   const snapshot = result.booking.priceSnapshot || {};
-  return <><aside className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-blue-700">Automatic quote preview</p><h3 className="mt-1 text-xl font-black">{snapshot.name}</h3><dl className="mt-4 grid gap-2 text-sm"><div className="flex justify-between"><dt>Price type</dt><dd className="capitalize">{String(snapshot.priceType || '').replace(/-/g, ' ')}</dd></div><div className="flex justify-between"><dt>Number of people</dt><dd>{quote.people}</dd></div><div className="flex justify-between"><dt>Quantity / units</dt><dd>{quote.quantity}</dd></div><div className="flex justify-between"><dt>Booking duration</dt><dd>{quote.duration} {snapshot.durationUnit}</dd></div>{snapshot.promotionApplied && <><div className="flex justify-between"><dt>Original price</dt><dd className="font-bold">{formatRwf(snapshot.originalPrice)}</dd></div><div className="flex justify-between"><dt>{snapshot.promotionTitle} ({snapshot.promotionPercent}% off)</dt><dd className="font-bold text-emerald-700">-{formatRwf(snapshot.discountAmount)}</dd></div><div className="flex justify-between"><dt>Final price after promotion</dt><dd className="font-black">{formatRwf(snapshot.finalPrice)}</dd></div></>}<div className="flex justify-between"><dt>{snapshot.promotionApplied ? 'Final total' : 'Total price'}</dt><dd className="font-black">{formatRwf(quote.total)}</dd></div><div className="flex justify-between"><dt>Deposit required (30%)</dt><dd className="font-black text-primary">{formatRwf(quote.deposit)}</dd></div><div className="flex justify-between"><dt>Remaining balance</dt><dd className="font-bold">{formatRwf(quote.remaining)}</dd></div></dl><p className="mt-4 rounded-xl bg-white p-3 text-sm">{quote.reason}</p><button type="button" onClick={() => setPaymentOpen(true)} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black text-white">Pay deposit</button></aside>{paymentOpen && <DepositPaymentModal booking={result.booking} customer={getAuthData()?.user} onClose={() => setPaymentOpen(false)} onConfirm={pay} />}</>;
+  const people = quote.people ?? quote.numberOfPeople ?? result.booking.bookingDetails?.numberOfPeople ?? 1;
+  const quantity = quote.quantity ?? result.booking.quantity ?? result.booking.bookingDetails?.quantity ?? 1;
+  const totalUnits = quote.totalConsumptionUnits ?? result.booking.totalConsumptionUnits ?? Number(people || 1) * Number(quantity || 1);
+  return <><aside className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-blue-700">Automatic quote preview</p><h3 className="mt-1 text-xl font-black">{snapshot.name}</h3><dl className="mt-4 grid gap-2 text-sm"><div className="flex justify-between"><dt>Price type</dt><dd className="capitalize">{String(snapshot.priceType || '').replace(/-/g, ' ')}</dd></div><div className="flex justify-between"><dt>Number of people</dt><dd>{people}</dd></div><div className="flex justify-between"><dt>Quantity / units</dt><dd>{quantity}</dd></div><div className="flex justify-between"><dt>Total consumption units</dt><dd>{totalUnits}</dd></div>{quote.duration && <div className="flex justify-between"><dt>Booking duration</dt><dd>{quote.duration} {snapshot.durationUnit}</dd></div>}{snapshot.promotionApplied && <><div className="flex justify-between"><dt>Original price</dt><dd className="font-bold">{formatRwf(snapshot.originalPrice)}</dd></div><div className="flex justify-between"><dt>{snapshot.promotionTitle} ({snapshot.promotionPercent}% off)</dt><dd className="font-bold text-emerald-700">-{formatRwf(snapshot.discountAmount)}</dd></div><div className="flex justify-between"><dt>Final price after promotion</dt><dd className="font-black">{formatRwf(snapshot.finalPrice)}</dd></div></>}<div className="flex justify-between"><dt>{snapshot.promotionApplied ? 'Final total' : 'Total price'}</dt><dd className="font-black">{formatRwf(quote.total)}</dd></div><div className="flex justify-between"><dt>Deposit required (30%)</dt><dd className="font-black text-primary">{formatRwf(quote.deposit)}</dd></div><div className="flex justify-between"><dt>Remaining balance</dt><dd className="font-bold">{formatRwf(quote.remaining)}</dd></div></dl><p className="mt-4 rounded-xl bg-white p-3 text-sm">{quote.reason}</p><button type="button" onClick={() => setPaymentOpen(true)} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black text-white">Pay deposit</button></aside>{paymentOpen && <DepositPaymentModal booking={result.booking} customer={getAuthData()?.user} onClose={() => setPaymentOpen(false)} onConfirm={pay} />}</>;
 }
 
 function DetailsModal({ row, onClose }) {
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-blue-700">Option details & amenities</p><h3 className="mt-1 text-xl font-black">{row?.cells?.service}</h3></div><button type="button" onClick={onClose} className="text-2xl text-gray-500">×</button></div><p className="mt-4 whitespace-pre-wrap text-gray-700">{row?.cells?.details || 'The seller has not added extra amenities for this option.'}</p><button type="button" onClick={onClose} className="mt-5 rounded-xl bg-primary px-4 py-2 font-bold text-white">Close</button></div></div>;
-}
-
-function getReservableQuantity(configData, values) {
-  if (['transport', 'accommodation', 'appointment', 'event'].includes(configData.type)) return 1;
-  return Math.max(1, Number(values.quantity) || 1);
 }
 
 function getVisiblePromotion(promotion) {
@@ -503,31 +511,31 @@ function getBookingConfig({ business, service }) {
   ].join(' ').toLowerCase();
 
   if (/(car|motorbike|taxi|bus|transport|charter)/.test(categoryText)) {
-    return config('transport', 'transport', 'day', FIELD_SETS.transport);
+    return config('transport', 'transport', 'day');
   }
   if (/(hotel|resort|homestay|guesthouse|camp|vacation|accommodation)/.test(categoryText)) {
-    return config('accommodation', 'accommodation', 'night', FIELD_SETS.accommodation);
+    return config('accommodation', 'accommodation', 'night');
   }
   if (/(restaurant|bar|coffee|cafe|food|beverage)/.test(categoryText)) {
-    return config('food', 'food', 'booking', FIELD_SETS.food);
+    return config('food', 'food', 'booking');
   }
   if (/(event|wedding|conference|venue|entertainment)/.test(categoryText)) {
-    return config('event', 'event', 'event', FIELD_SETS.event);
+    return config('event', 'event', 'event');
   }
   if (/(tour|activity|experience|gear)/.test(categoryText)) {
-    return config('activity', 'activity', 'person', FIELD_SETS.activity);
+    return config('activity', 'activity', 'person');
   }
   if (/(spa|wellness|childcare|appointment)/.test(categoryText)) {
-    return config('appointment', 'appointment', 'hour', FIELD_SETS.appointment);
+    return config('appointment', 'appointment', 'hour');
   }
   if (/(shopping|souvenir|craft|market)/.test(categoryText)) {
-    return config('shopping', 'shopping', 'item', FIELD_SETS.shopping);
+    return config('shopping', 'shopping', 'item');
   }
-  return config('general', 'service', 'service', FIELD_SETS.general);
+  return config('general', 'service', 'service');
 }
 
-function config(type, label, unitLabel, fields) {
-  return { type, label, unitLabel, fields };
+function config(type, label, unitLabel) {
+  return { type, label, unitLabel };
 }
 
 function DynamicField({ field: item, value, onChange }) {

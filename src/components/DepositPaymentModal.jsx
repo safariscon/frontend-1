@@ -35,6 +35,9 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
   const total = Number(booking.totalPrice || booking.priceSnapshot?.totalPrice || 0);
   const remaining = Number(booking.remainingBalance ?? Math.max(0, total - deposit));
   const serviceName = booking.priceSnapshot?.name || booking.bookingDetails?.requestedService || booking.destinationPlace || 'Selected service';
+  const people = booking.bookingDetails?.numberOfPeople ?? booking.numberOfPeople ?? booking.priceSnapshot?.people ?? 1;
+  const quantity = booking.quantity ?? booking.bookingDetails?.quantity ?? booking.priceSnapshot?.quantity ?? 1;
+  const totalUnits = booking.totalConsumptionUnits ?? booking.bookingDetails?.totalConsumptionUnits ?? Number(people || 1) * Number(quantity || 1);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -70,6 +73,11 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
               <PaymentAmount label="Full price" value={formatRwf(total)} />
               <PaymentAmount label="Pay now" value={formatRwf(deposit)} primary />
               <PaymentAmount label="Balance" value={formatRwf(remaining)} />
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+              <PaymentAmount label="People" value={people} />
+              <PaymentAmount label="Quantity" value={quantity} />
+              <PaymentAmount label="Total units" value={totalUnits} />
             </div>
           </div>
 

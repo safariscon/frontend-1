@@ -14,7 +14,6 @@ export default function ProviderCompleteRegistrationPage() {
     providerName: location.state?.providerName || searchParams.get('providerName') || '',
     providerEmail: location.state?.providerEmail || searchParams.get('providerEmail') || '',
     sellerId: location.state?.sellerId || searchParams.get('sellerId') || '',
-    generatedPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
@@ -40,13 +39,13 @@ export default function ProviderCompleteRegistrationPage() {
         providerName: form.providerName,
         providerEmail: form.providerEmail,
         sellerId: form.sellerId,
-        generatedPassword: form.generatedPassword,
         newPassword: form.newPassword,
+        confirmPassword: form.confirmPassword,
       });
-      navigate('/login', {
+      navigate('/verify-email', {
         state: {
-          message: t('providerRegistrationCompleted', language),
           email: form.providerEmail,
+          message: t('providerRegistrationCompleted', language),
         },
       });
     } catch (requestError) {
@@ -79,7 +78,6 @@ export default function ProviderCompleteRegistrationPage() {
             <input type="text" required placeholder={t('providerName', language)} value={form.providerName} onChange={updateField('providerName')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="email" required placeholder={t('providerEmail', language)} value={form.providerEmail} onChange={updateField('providerEmail')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="text" required autoCapitalize="characters" placeholder={t('providerId', language)} value={form.sellerId} onChange={updateField('sellerId')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
-            <input type="password" required placeholder={t('generatedPassword', language)} value={form.generatedPassword} onChange={updateField('generatedPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="password" required minLength={8} placeholder={t('createPassword', language)} value={form.newPassword} onChange={updateField('newPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="password" required minLength={8} placeholder={t('confirmPassword', language)} value={form.confirmPassword} onChange={updateField('confirmPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <button type="submit" disabled={loading} className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary-dark disabled:opacity-50">
