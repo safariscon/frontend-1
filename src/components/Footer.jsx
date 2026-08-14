@@ -55,9 +55,10 @@ export default function Footer() {
 
           <FooterColumn title="Support" links={[
             ['Help Center', '/contact'],
-            ['Terms and Conditions', '/#terms'],
-            ['Privacy Policy', '/#privacy'],
-            ['Refund Policy', '/#refunds'],
+            ['How it works', '/how-it-works'],
+            ['Terms of use', '/terms'],
+            ['Privacy policy', '/privacy'],
+            ['Payments & cancellations', '/payments'],
             ['Contact Support', 'mailto:info@safariscon.rw'],
           ]} />
 

@@ -15,3 +15,12 @@ export function getDashboardRoute(user) {
   if (isSellerRole(user.role)) return '/dashboard/seller';
   return '/dashboard';
 }
+
+export function needsTermsAcceptance(user) {
+  return Boolean(user) && user.role !== 'admin' && user.termsAccepted !== true;
+}
+
+export function getPostAuthRoute(user) {
+  if (needsTermsAcceptance(user)) return '/terms';
+  return getDashboardRoute(user);
+}

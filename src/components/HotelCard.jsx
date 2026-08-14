@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { t } from '../lib/translations';
+import { guestCancelCopy } from '../lib/payments';
 
 export default function HotelCard({ hotel, compact = false }) {
   const { language } = useLanguage();
@@ -85,6 +85,7 @@ export default function HotelCard({ hotel, compact = false }) {
         )}
 
         {availabilityText && <p className="mb-3 text-sm font-bold text-primary dark:text-blue-300">{availabilityText}</p>}
+        <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{guestCancelCopy(hotel)}</p>
 
         <div className="mb-4 flex flex-wrap gap-2">
           {amenities.slice(0, 3).map((amenity) => (

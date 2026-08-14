@@ -223,7 +223,7 @@ export default function HotelDetailsPage() {
                 </button>
 
                 <p className="text-xs text-gray-500 text-center mt-3">
-                  Admin confirms your exact RWF quote. Pay only the 30% deposit to unlock full provider details.
+                  Admin or the provider confirms your exact RWF quote. Pay the full amount in the app to unlock provider details. Each listing shows its own cancel window and fee.
                 </p>
               </div>
             </div>

@@ -26,8 +26,8 @@ export default function Navbar() {
   const { language, setLanguage } = useLanguage();
   const closeMenu = () => setIsOpen(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
     setIsOpen(false);
   };

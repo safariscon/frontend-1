@@ -68,6 +68,9 @@ export default function AdminDashboard() {
   const [storageOverview, setStorageOverview] = useState(null);
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageError, setStorageError] = useState('');
+  const [financeSummary, setFinanceSummary] = useState(null);
+  const [payouts, setPayouts] = useState([]);
+  const [payoutStatusFilter, setPayoutStatusFilter] = useState('pending');
   const token = getAuthData()?.token;
 
   const loadData = async ({ silent = false } = {}) => {
@@ -76,13 +79,15 @@ export default function AdminDashboard() {
     setError('');
     setInfo('');
     try {
-      const [statsResp, businessResp, serviceResp, bookingResp, userResp, transactionResp] = await Promise.all([
+      const [statsResp, businessResp, serviceResp, bookingResp, userResp, transactionResp, financeResp, payoutsResp] = await Promise.all([
         adminApi.getStats(token),
         adminApi.getBusinesses(token),
         adminApi.getServices(token),
         adminApi.getBookings(token),
         adminApi.getUsers(token),
         adminApi.getTransactions(token, buildTransactionQuery(transactionFilters)),
+        adminApi.getFinance(token).catch(() => null),
+        adminApi.getPayouts(token, `?page=1&limit=25&payoutStatus=${encodeURIComponent(payoutStatusFilter || '')}`).catch(() => ({ payouts: [] })),
       ]);
       setStats(statsResp);
       setBusinesses(businessResp.businesses || businessResp.hotels || []);
@@ -94,6 +99,8 @@ export default function AdminDashboard() {
       setTransactionDaily(transactionResp.daily || []);
       setTransactionHourly(transactionResp.hourly || []);
       setTransactionPagination(transactionResp.pagination || null);
+      setFinanceSummary(financeResp?.summary || null);
+      setPayouts(payoutsResp.payouts || payoutsResp.transactions || []);
       try {
         const [announcementResp, settingsResp] = await Promise.all([
           publicApi.getAnnouncement(),
@@ -143,7 +150,18 @@ export default function AdminDashboard() {
     if (!token || user?.role !== 'admin' || activeTab !== 'revenue') return;
     Promise.resolve().then(() => loadData({ silent: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionFilters, activeTab]);
+  }, [transactionFilters, activeTab, payoutStatusFilter]);
+
+  const syncPayout = async (transaction) => {
+    if (!token) return;
+    try {
+      const response = await adminApi.syncPayout(token, transaction._id || transaction.transactionId);
+      setInfo(response.message || 'Payout synced.');
+      await loadData({ silent: true });
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
 
   const revenueByType = useMemo(() => {
     return bookings.reduce((acc, booking) => {
@@ -450,7 +468,7 @@ export default function AdminDashboard() {
             {!loading && activeTab === 'bookings' && <BookingTable bookings={bookings} onView={setSelectedBooking} />}
             {!loading && activeTab === 'rebook-requests' && <AdminRebookRequests />}
             {!loading && activeTab === 'verification' && <BookingVerification token={token} verify={adminApi.verifyBooking} />}
-            {!loading && activeTab === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} />}
+            {!loading && activeTab === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} />}
             {!loading && activeTab === 'analytics' && <AnalyticsDashboard token={token} />}
             {!loading && activeTab === 'storage' && <StorageOverview data={storageOverview} loading={storageLoading} error={storageError} onRefresh={loadStorageOverview} />}
             {!loading && activeTab === 'activity' && <ActivityFeed bookings={bookings} services={services} businesses={businesses} />}
@@ -634,9 +652,10 @@ function BookingTable({ bookings, onView }) {
   ]} />;
 }
 
-function RevenueList({ revenueByType, transactions, summary, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect }) {
+function RevenueList({ revenueByType, transactions, summary, financeSummary, payouts = [], payoutStatusFilter, setPayoutStatusFilter, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect, onSync }) {
   const entries = Object.entries(revenueByType);
   const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value, page: key === 'page' ? value : 1 }));
+  const finance = financeSummary || {};
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 md:col-span-2">
@@ -655,18 +674,10 @@ function RevenueList({ revenueByType, transactions, summary, daily = [], hourly 
           <button type="button" onClick={onRefresh} className="rounded-xl bg-primary px-5 py-3 font-bold text-white">Refresh</button>
         </div>
       </div>
-      <div className="rounded-xl border border-gray-200 p-4">
-        <p className="font-semibold text-gray-900">Total received</p>
-        <p className="text-primary font-bold">{Number(summary?.totalReceived || 0).toLocaleString()} RWF</p>
-      </div>
-      <div className="rounded-xl border border-gray-200 p-4">
-        <p className="font-semibold text-gray-900">Commission collected</p>
-        <p className="text-primary font-bold">{Number(summary?.commissionCollected ?? summary?.commissionEarned ?? 0).toLocaleString()} RWF</p>
-      </div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <p className="font-semibold text-amber-950">Commission still due from sellers</p>
-        <p className="font-bold text-amber-800">{Number(summary?.commissionDue || 0).toLocaleString()} RWF</p>
-      </div>
+      <div className="rounded-xl border border-gray-200 p-4"><p className="font-semibold text-gray-900">Gross booking payments</p><p className="text-primary font-bold">{Number(finance.grossBookingPayments ?? summary?.totalReceived ?? 0).toLocaleString()} RWF</p></div>
+      <div className="rounded-xl border border-gray-200 p-4"><p className="font-semibold text-gray-900">Platform revenue</p><p className="text-primary font-bold">{Number(finance.platformRevenue ?? summary?.commissionCollected ?? 0).toLocaleString()} RWF</p></div>
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="font-semibold text-amber-950">Provider payables</p><p className="font-bold text-amber-800">{Number(finance.providerPayables ?? 0).toLocaleString()} RWF</p></div>
+      <div className="rounded-xl border border-gray-200 p-4"><p className="font-semibold text-gray-900">Pending payouts</p><p className="font-bold">{Number(finance.pendingPayouts ?? 0).toLocaleString()}</p></div>
       {entries.map(([type, total]) => (
         <div key={type} className="rounded-xl border border-gray-200 p-4">
           <p className="font-semibold text-gray-900">{type}</p>
@@ -675,9 +686,41 @@ function RevenueList({ revenueByType, transactions, summary, daily = [], hourly 
       ))}
       <RevenueMiniChart title="Daily revenue" data={daily} labelKey="date" valueKey="totalReceived" />
       <RevenueMiniChart title="Hourly revenue" data={hourly} labelKey="hour" valueKey="totalReceived" />
+      <div className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-black text-blue-950">Payout queue</h3>
+          <select value={payoutStatusFilter} onChange={(event) => setPayoutStatusFilter(event.target.value)} className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm">
+            <option value="held">Held</option>
+            <option value="pending">Pending OTP</option>
+            <option value="successful">Successful</option>
+            <option value="failed">Failed</option>
+            <option value="">All</option>
+          </select>
+        </div>
+        <p className="mt-1 text-sm text-blue-800">After you confirm the XentriPay merchant OTP, sync the transaction. Cancelled rows also show the guest refund payout.</p>
+        {!payouts.length ? <p className="mt-3 text-sm text-blue-900">No payouts for this filter.</p> : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-xs">
+              <thead><tr className="border-b border-blue-200"><th className="py-2 pr-2">Booking</th><th className="py-2 pr-2">Provider</th><th className="py-2 pr-2">Share</th><th className="py-2 pr-2">Status</th><th className="py-2 pr-2">Refund</th><th className="py-2">Action</th></tr></thead>
+              <tbody>
+                {payouts.map((tx) => (
+                  <tr key={tx._id || tx.transactionId} className="border-b border-blue-100">
+                    <td className="py-2 pr-2">{tx.bookingId?.bookingCode || tx.bookingId?._id || '-'}</td>
+                    <td className="py-2 pr-2">{tx.businessId?.name || tx.sellerId?.name || '-'}</td>
+                    <td className="py-2 pr-2">{Number(tx.providerAmount || 0).toLocaleString()} RWF</td>
+                    <td className="py-2 pr-2">{tx.payoutStatus || '-'}</td>
+                    <td className="py-2 pr-2">{tx.refundPayoutStatus || tx.refundPayoutReference || '-'}</td>
+                    <td className="py-2"><button type="button" onClick={() => onSync(tx)} className="rounded-lg bg-primary px-3 py-1 font-bold text-white">Sync after OTP</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
       <div className="md:col-span-2">
         {transactions.length === 0 ? <p className="rounded-xl border border-gray-200 p-4 text-gray-600">No revenue transactions for this filter.</p> : null}
-        <SimpleTable rows={transactions} columns={['Transaction', 'Booking', 'User', 'Seller', 'Seller account', 'Payment', 'Deposit', 'Commission', 'Collection']} map={(tx) => [
+        <SimpleTable rows={transactions} columns={['Transaction', 'Booking', 'User', 'Seller', 'Seller account', 'Payment', 'Amount', 'Commission', 'Collection']} map={(tx) => [
           tx.transactionId,
           tx.bookingId?.bookingCode || tx.bookingId?._id || '-',
           tx.userId?.name || tx.userId?.email || '-',
@@ -685,7 +728,7 @@ function RevenueList({ revenueByType, transactions, summary, daily = [], hourly 
           tx.businessId?.payoutDetails?.accountNumber || '-',
           tx.paymentMethod,
           `${Number(tx.amount || 0).toLocaleString()} RWF`,
-          `${Number(tx.commissionAmount || 0).toLocaleString()} RWF`,
+          `${Number(tx.commissionAmount || tx.platformAmount || 0).toLocaleString()} RWF`,
           tx.commissionStatus === 'collected'
             ? 'Collected'
             : <button type="button" onClick={() => onCollect(tx)} className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">Mark collected</button>,
@@ -998,7 +1041,7 @@ function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange }) {
   return (
     <form onSubmit={onSubmit} className="grid gap-5">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        Manual remains the safe default. Automatic booking creates the exact quote and allows the customer to pay the 30% deposit immediately when all option rules are complete.
+        Manual remains the safe default. Automatic booking creates the exact quote and allows the customer to pay the full price immediately when all option rules are complete.
       </div>
       <label className="block">
         <span className="text-sm font-semibold text-gray-700">Global booking mode</span>
@@ -1062,11 +1105,11 @@ function InlineBookingDetails({ booking }) {
         Date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
         Status: booking.status,
         Payment: booking.paymentStatus || 'unpaid',
-        'Deposit paid': booking.depositPaid ? 'Yes' : 'No',
+        'Paid in full': booking.depositPaid ? 'Yes' : 'No',
         'Location unlocked': booking.locationUnlocked ? 'Yes' : 'No',
         'Location unlocked at': booking.locationUnlockedAt ? new Date(booking.locationUnlockedAt).toLocaleString() : '-',
         'Amount paid': `${Number(booking.amountPaid || 0).toLocaleString()} RWF`,
-        'Remaining paid to seller': `${Number(booking.remainingAmount || 0).toLocaleString()} RWF`,
+        'Remaining at venue': `${Number(booking.remainingAmount || booking.remainingBalance || 0).toLocaleString()} RWF`,
         'Completed at': booking.completedAt ? new Date(booking.completedAt).toLocaleString() : '-',
         'Completed by seller': booking.completedBySeller?.name || booking.completedBySeller?.email || '-',
         'Booking code used': booking.bookingCodeUsed ? 'Yes' : 'No',
@@ -1117,7 +1160,7 @@ function AdminBookingDetailModal({ booking, defaultCommission, onApprove, onReje
       {canDecide && (
         <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
           <h3 className="font-bold text-blue-950">Admin decision</h3>
-          <p className="mt-1 text-sm text-blue-800">Enter the exact agreed price. The customer will pay 30% now; provider details unlock after confirmation.</p>
+          <p className="mt-1 text-sm text-blue-800">Enter the exact agreed price. The customer pays this full amount in the app. Provider details unlock after payment. Money is held until the cancel window ends.</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <AdminInput label="Exact service price (RWF)" type="number" value={decision.totalPrice} onChange={(value) => setDecision((prev) => ({ ...prev, totalPrice: value }))} required />
             <AdminInput label="Commission percentage" type="number" value={decision.commissionPercentage} onChange={(value) => setDecision((prev) => ({ ...prev, commissionPercentage: value }))} required />
@@ -1126,7 +1169,7 @@ function AdminBookingDetailModal({ booking, defaultCommission, onApprove, onReje
             <AdminTextArea label="Reason or purpose for customer payment" value={decision.paymentReason} onChange={(value) => setDecision((prev) => ({ ...prev, paymentReason: value }))} required maxLength={500} />
             <p className="mt-1 text-xs text-blue-800">The customer, seller, admin, and booking PDF will all see this reason.</p>
           </div>
-          {decision.totalPrice && <p className="mt-3 text-sm font-semibold text-blue-950">Customer deposit: {Math.round(Number(decision.totalPrice || 0) * 0.3).toLocaleString()} RWF</p>}
+          {decision.totalPrice && <p className="mt-3 text-sm font-semibold text-blue-950">Customer pays now: {Number(decision.totalPrice || 0).toLocaleString()} RWF</p>}
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <button type="button" disabled={!Number(decision.totalPrice) || Number(decision.commissionPercentage) < 0 || !decision.paymentReason.trim()} onClick={() => onApprove(booking, decision)} className="rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Approve and send quote</button>
             <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for rejection" className="min-w-0 flex-1 rounded-xl border border-gray-300 px-4 py-3" />

@@ -4,6 +4,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { bookingApi, getAuthData } from '../lib/api';
 import { formatRwf } from '../lib/currency';
+import { amountDueNow, canPayBooking, completeBookingPayment, formatCancelUntil, isPaid, paidSuccessCopy, paymentErrorMessage, remainingAtVenue } from '../lib/payments';
 import DepositPaymentModal from '../components/DepositPaymentModal';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
@@ -22,10 +23,6 @@ const statusStyle = {
   rejected: 'bg-red-100 text-red-800',
 };
 
-const DEPOSIT_PAID_STATUSES = ['deposit_paid', 'deposit-paid', 'paid'];
-const PAYABLE_BOOKING_STATUSES = ['confirmed', 'waiting-for-payment'];
-const RETRYABLE_PAYMENT_STATUSES = ['unpaid', 'pending', 'failed', ''];
-
 export default function UserDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -36,6 +33,7 @@ export default function UserDashboard() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [changeBookingId, setChangeBookingId] = useState('');
   const [changeRequestsVersion, setChangeRequestsVersion] = useState(0);
+  const [cancelBooking, setCancelBooking] = useState(null);
   const { language } = useLanguage();
 
   useEffect(() => {
@@ -84,11 +82,12 @@ export default function UserDashboard() {
     if (!authData?.token) return;
     setMessage('');
     try {
-      const paymentResponse = await bookingApi.payBooking(authData.token, bookingId, {
-        paymentMethod: paymentDetails.paymentMethod || 'simulation-mobile-money',
-        senderAccount: paymentDetails.senderAccount || user?.email,
+      const paymentResponse = await completeBookingPayment(authData.token, bookingId, {
+        ...paymentDetails,
+        email: paymentDetails.email || user?.email,
+        cname: paymentDetails.cname || user?.name,
       });
-      setMessage('Deposit recorded successfully. Provider details, QR verification, and Booking PDF are now unlocked.');
+      setMessage(paidSuccessCopy(paymentResponse.booking));
       setPaymentBooking(null);
       const response = await bookingApi.getMyBookings(authData.token);
       setBookings(response.bookings || []);
@@ -97,8 +96,27 @@ export default function UserDashboard() {
         return response.bookings?.find((booking) => booking._id === bookingId) || paymentResponse.booking || current;
       });
     } catch (error) {
-      setMessage(error.message);
+      setMessage(paymentErrorMessage(error));
       throw error;
+    }
+  };
+
+  const confirmCancelBooking = async (booking, reason = 'Plans changed') => {
+    const authData = getAuthData();
+    if (!authData?.token) return;
+    setMessage('');
+    try {
+      const result = await bookingApi.cancelBooking(authData.token, booking._id, reason);
+      const refund = result.split?.refundAmount ?? result.booking?.cancellationPreview?.refundAmount;
+      const fee = result.split?.penaltyAmount ?? result.booking?.cancellationPreview?.penaltyAmount;
+      setMessage(result.message || `Cancelled. ${formatRwf(refund || 0)} will be returned. ${formatRwf(fee || 0)} is kept as a cancellation fee.`);
+      setCancelBooking(null);
+      const response = await bookingApi.getMyBookings(authData.token);
+      setBookings(response.bookings || []);
+      setSelectedBooking(null);
+    } catch (error) {
+      setMessage(error.message);
+      if (error.status === 409) setCancelBooking(null);
     }
   };
 
@@ -143,11 +161,11 @@ export default function UserDashboard() {
                   const businessToShow = assignedBusiness || preferredBusiness;
                   const serviceToShow = booking.serviceId;
                   const waiting = booking.status === 'pending' && !assignedBusiness;
-                  const depositPaid = hasDepositPaid(booking);
-                  const canPay = canPayDeposit(booking);
+                  const depositPaid = isPaid(booking);
+                  const canPay = canPayBooking(booking);
                   const providerUnlocked = Boolean(booking.providerDetailsUnlocked || booking.detailsUnlocked || depositPaid);
                   const title = serviceToShow?.title || serviceToShow?.name || businessToShow?.businessName || businessToShow?.name || booking.destinationPlace || t('serviceProviderPendingAssignment', language);
-                  const remainingBalance = Math.max(0, Number(booking.remainingBalance ?? Number(booking.totalPrice || 0) - Number(booking.amountPaid || 0)));
+                  const remainingBalance = remainingAtVenue(booking);
                   const selected = selectedBooking?._id === booking._id;
                   const showInlineDetails = false;
 
@@ -162,7 +180,8 @@ export default function UserDashboard() {
                         </div>
                         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-3">
                           <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedBooking(booking); }} className="col-span-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white sm:col-span-1">View</button>
-                          {canPay && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPaymentBooking(booking); }} className="rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">Pay 30% Deposit</button>}
+                          {canPay && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPaymentBooking(booking); }} className="rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">Pay {formatRwf(amountDueNow(booking))}</button>}
+                          {booking.canCancel === true && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setCancelBooking(booking); }} className="rounded-lg border border-red-200 bg-white px-3 py-2.5 text-xs font-bold text-red-700">Cancel</button>}
                           {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setChangeBookingId(booking._id); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-700">Request change</button>}
                           <span className={`flex min-h-10 items-center justify-center rounded-full px-3 py-1 text-center text-[11px] font-bold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>{formatStatus(booking.status)}</span>
                         </div>
@@ -181,7 +200,7 @@ export default function UserDashboard() {
                             {providerUnlocked ? (
                               <span className="w-fit rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase text-emerald-700">Details unlocked</span>
                             ) : (
-                              <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase text-amber-700">Locked until deposit</span>
+                              <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase text-amber-700">Locked until paid</span>
                             )}
                           </div>
                           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
@@ -228,7 +247,7 @@ export default function UserDashboard() {
                           </div>
                           {depositPaid && booking.bookingCode && (
                             <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">
-                              Give this Booking Code to the seller only when you arrive and pay the remaining 70%.
+                              Give this Booking Code to the seller when you arrive. There is no extra payment on arrival.
                             </p>
                           )}
                           {depositPaid && <CustomerChangeRequestCard booking={booking} open={changeBookingId === booking._id} onClose={() => setChangeBookingId('')} onSubmitted={() => { setChangeRequestsVersion((value) => value + 1); setMessage('Booking change request submitted successfully.'); }} />}
@@ -250,7 +269,7 @@ export default function UserDashboard() {
                             </span>
                           </div>
                           <div className="mt-3 grid gap-2">
-                            <SummaryRow label="Deposit" value={formatRwf(booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3))} />
+                            <SummaryRow label="Amount due" value={formatRwf(amountDueNow(booking))} />
                             <SummaryRow label="Paid" value={formatRwf(booking.amountPaid || 0)} strong={depositPaid} />
                             <SummaryRow label="Balance" value={formatRwf(remainingBalance)} />
                           </div>
@@ -258,11 +277,11 @@ export default function UserDashboard() {
                             {['confirmed', 'waiting-for-payment'].includes(booking.status) && !depositPaid && (
                               <div className="rounded-xl border border-blue-200 bg-white p-4">
                                 <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Payment required before documents</p>
-                                <p className="mt-1 text-sm text-blue-950">Pay the simulated 30% deposit to receive the QR code and booking PDF.</p>
-                                <p className="mt-2 text-lg font-black text-primary">{formatRwf(booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3))}</p>
-                                <p className="mt-1 text-xs text-blue-800">{booking.paymentReason || 'Approved booking deposit'}</p>
+                                <p className="mt-1 text-sm text-blue-950">Pay the full amount now. Money is held in the SafarisCon wallet until the cancel window ends.</p>
+                                <p className="mt-2 text-lg font-black text-primary">{formatRwf(amountDueNow(booking))}</p>
+                                <p className="mt-1 text-xs text-blue-800">{booking.paymentReason || 'Full booking payment'}</p>
                                 <button onClick={() => setPaymentBooking(booking)} className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white">
-                                  Pay 30% Deposit
+                                  Pay in full
                                 </button>
                               </div>
                             )}
@@ -336,11 +355,20 @@ export default function UserDashboard() {
           onClose={() => setSelectedBooking(null)}
           onPay={() => setPaymentBooking(selectedBooking)}
           onRequestChange={() => setChangeBookingId(selectedBooking._id)}
+          onCancel={() => setCancelBooking(selectedBooking)}
           onCloseChange={() => setChangeBookingId('')}
           onChangeSubmitted={() => {
             setChangeRequestsVersion((value) => value + 1);
             setMessage('Booking change request submitted successfully.');
           }}
+        />
+      )}
+
+      {cancelBooking && (
+        <CancelBookingDialog
+          booking={cancelBooking}
+          onClose={() => setCancelBooking(null)}
+          onConfirm={(reason) => confirmCancelBooking(cancelBooking, reason)}
         />
       )}
 
@@ -358,21 +386,21 @@ function Detail({ label, value, tone = 'blue' }) {
   return <p className={`rounded-lg border bg-white p-2.5 shadow-sm ${toneStyle}`}><span className="block text-[10px] font-bold uppercase tracking-wide">{label}</span><span className="mt-0.5 block break-words font-bold capitalize text-slate-900">{value || '-'}</span></p>;
 }
 
-function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onRequestChange, onCloseChange, onChangeSubmitted }) {
+function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onRequestChange, onCancel, onCloseChange, onChangeSubmitted }) {
   const assignedBusiness = booking.businessId || booking.hotelId;
   const preferredBusiness = booking.preferredBusinessId || booking.preferredHotelId;
   const business = assignedBusiness || preferredBusiness;
   const service = booking.serviceId;
-  const depositPaid = hasDepositPaid(booking);
-  const canPay = canPayDeposit(booking);
+  const depositPaid = isPaid(booking);
+  const canPay = canPayBooking(booking);
   const providerUnlocked = Boolean(booking.providerDetailsUnlocked || booking.detailsUnlocked || depositPaid);
-  const locationUnlocked = booking.locationUnlocked === true && booking.depositPaid === true;
+  const locationUnlocked = booking.locationUnlocked === true && (booking.depositPaid === true || depositPaid);
   const title = service?.title || service?.name || business?.businessName || business?.name || booking.destinationPlace || 'Booking';
-  const remainingBalance = Math.max(0, Number(booking.remainingBalance ?? Number(booking.totalPrice || 0) - Number(booking.amountPaid || 0)));
-  const depositAmount = booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3);
+  const remainingBalance = remainingAtVenue(booking);
+  const depositAmount = amountDueNow(booking);
   const contacts = providerUnlocked ? business?.contactDetails || {} : {};
   const serviceLocation = business?.serviceLocation || business?.publicLocation || {};
-  const address = locationUnlocked ? serviceLocation.fullAddress || formatFullLocation(business?.locationDetails, contacts.exactAddress || business?.location) : 'Pay 30% deposit to unlock exact location and directions.';
+  const address = locationUnlocked ? serviceLocation.fullAddress || formatFullLocation(business?.locationDetails, contacts.exactAddress || business?.location) : 'Pay in full to unlock exact location and directions.';
   const submittedRows = getBookingDetailRows(booking.bookingDetails);
   const summaryLocation = locationUnlocked
     ? address
@@ -388,7 +416,7 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
         'Payment status': formatStatus(booking.paymentStatus || 'unpaid'),
         'Booking code': booking.bookingCode || booking._id,
         'Total price': formatRwf(booking.totalPrice || 0),
-        '30% deposit': formatRwf(depositAmount),
+        'Amount due now': formatRwf(depositAmount),
         'Amount paid': formatRwf(booking.amountPaid || 0),
         'Remaining balance': formatRwf(remainingBalance),
         Schedule: formatBookingSchedule(booking, language),
@@ -398,7 +426,7 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className={`rounded-xl p-3 ${providerUnlocked ? 'bg-emerald-50' : 'bg-amber-50'}`}>
           <p className={`text-xs font-semibold uppercase ${providerUnlocked ? 'text-emerald-700' : 'text-amber-700'}`}>{providerUnlocked ? 'Unlocked details' : 'Locked details'}</p>
-          <p className="mt-1 text-sm font-semibold text-gray-900">{providerUnlocked ? 'Provider details, QR, and PDF are available.' : canPay ? `Use simulated payment to pay ${formatRwf(depositAmount)} and unlock provider contacts and documents.` : `Pay ${formatRwf(depositAmount)} after this booking is approved for payment.`}</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{providerUnlocked ? 'Provider details, QR, and PDF are available.' : canPay ? `Pay ${formatRwf(depositAmount)} now. Money is held until the cancel window ends.` : `Pay ${formatRwf(depositAmount)} after this booking is approved for payment.`}</p>
         </div>
         <div className="rounded-xl bg-gray-50 p-3">
           <p className="text-xs font-semibold uppercase text-gray-500">Payment purpose</p>
@@ -418,7 +446,7 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
 
       <h3 className="mt-5 font-bold text-gray-900">Provider Information</h3>
       <DetailGrid data={{
-        Business: providerUnlocked ? business?.businessName || business?.name || '-' : business?.anonymousName || booking.anonymousBusinessName || 'Hidden until deposit',
+        Business: providerUnlocked ? business?.businessName || business?.name || '-' : business?.anonymousName || booking.anonymousBusinessName || 'Hidden until paid',
         Province: serviceLocation.province || business?.locationDetails?.province || '-',
         District: serviceLocation.district || business?.locationDetails?.district || '-',
         Sector: serviceLocation.sector || business?.locationDetails?.sector || '-',
@@ -426,7 +454,7 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
           'Full address / place name': address,
           Village: serviceLocation.village || business?.locationDetails?.village || '-',
         } : {
-          Message: 'Pay 30% deposit to unlock exact location and directions.',
+          Message: 'Pay in full to unlock exact location and directions.',
         }),
         'Phone / WhatsApp': providerUnlocked ? [contacts.phone, contacts.whatsapp].filter(Boolean).join(' / ') || '-' : 'Locked',
         Email: providerUnlocked ? contacts.email || business?.sellerContactEmail || business?.ownerEmail || '-' : 'Locked',
@@ -449,7 +477,8 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
       )}
 
       <div className="mt-5 flex flex-wrap gap-2">
-        {canPay && <button type="button" onClick={onPay} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Pay 30% Deposit (Simulation)</button>}
+        {canPay && <button type="button" onClick={onPay} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Pay {formatRwf(depositAmount)}</button>}
+        {booking.canCancel === true && <button type="button" onClick={onCancel} className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700">Cancel booking</button>}
         {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={onRequestChange} className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700">Request change</button>}
         {depositPaid && booking.verificationToken && <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Download PDF</a>}
         {depositPaid && booking.verificationToken && <a href={bookingApi.getPrintableReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Print PDF</a>}
@@ -457,7 +486,7 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
       </div>
 
       {depositPaid && booking.verificationToken && <img src={bookingApi.getQrImageUrl(booking.verificationToken)} alt="Booking QR code" className="mt-4 h-32 w-32 rounded-xl border border-gray-200 bg-white p-2" />}
-      {depositPaid && booking.bookingCode && <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">Give this Booking Code to the seller only when you arrive and pay the remaining 70%.</p>}
+      {depositPaid && booking.bookingCode && <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">Give this Booking Code to the seller when you arrive. There is no extra payment on arrival.{booking.cancellation?.refundableUntil ? ` You can cancel until ${formatCancelUntil(booking.cancellation.refundableUntil)}.` : ''}</p>}
       {depositPaid && <CustomerChangeRequestCard booking={booking} open={changeOpen} onClose={onCloseChange} onSubmitted={onChangeSubmitted} />}
     </Modal>
   );
@@ -495,16 +524,37 @@ function SummaryRow({ label, value, strong = false }) {
 }
 
 function hasDepositPaid(booking) {
-  return Boolean(booking?.detailsUnlocked) || DEPOSIT_PAID_STATUSES.includes(booking?.paymentStatus);
+  return isPaid(booking);
 }
 
 function canPayDeposit(booking) {
-  if (!booking || hasDepositPaid(booking)) return false;
-  const paymentStatus = booking.paymentStatus || 'unpaid';
+  return canPayBooking(booking);
+}
+
+function CancelBookingDialog({ booking, onClose, onConfirm }) {
+  const preview = booking.cancellationPreview || {};
+  const [reason, setReason] = useState('Plans changed');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    await onConfirm(reason);
+    setBusy(false);
+  };
   return (
-    PAYABLE_BOOKING_STATUSES.includes(booking.status) &&
-    RETRYABLE_PAYMENT_STATUSES.includes(paymentStatus) &&
-    Number(booking.totalPrice || 0) > 0
+    <div className="fixed inset-0 z-[130] grid place-items-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 className="text-xl font-black text-slate-950">Cancel this booking?</h2>
+        <p className="mt-3 text-sm leading-6 text-slate-700">
+          You get <strong>{formatRwf(preview.refundAmount || 0)}</strong> back. <strong>{formatRwf(preview.penaltyAmount || 0)}</strong> ({preview.penaltyPercent || booking.cancellation?.penaltyPercent || 20}%) is kept as a cancellation fee. The refund returns to the Mobile Money / method you paid with and can take a short time.
+        </p>
+        <p className="mt-2 text-xs text-slate-500">See <a href="/payments" className="font-bold text-primary">Payments & cancellations</a> for the full policy.</p>
+        <textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" rows={3} />
+        <div className="mt-4 flex gap-3">
+          <button type="button" disabled={busy} onClick={submit} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Cancelling...' : 'Confirm cancel'}</button>
+          <button type="button" disabled={busy} onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold">Keep booking</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -561,11 +611,11 @@ function BookingRequestDetails({ details }) {
 }
 
 function LockedProviderNotice({ booking }) {
-  const required = booking.lockedDetails?.visible?.depositAmountRequired || booking.depositAmount || Math.round(Number(booking.totalPrice || 0) * 0.3);
+  const required = amountDueNow(booking);
   return (
     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
       <p className="font-black">Provider details are locked</p>
-      <p className="mt-1 leading-6">Pay the 30% deposit ({formatRwf(required)}) to unlock phone, exact address, map, QR verification, and booking PDF.</p>
+      <p className="mt-1 leading-6">Pay in full ({formatRwf(required)}) to unlock phone, exact address, map, QR verification, and booking PDF.</p>
     </div>
   );
 }

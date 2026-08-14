@@ -38,8 +38,8 @@ export default function DashboardLayout({ children }) {
     return items;
   }, [dashboardRoute, isAdmin, isCustomer, isSeller]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 
