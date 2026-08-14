@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute } from '../lib/dashboard';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import PasswordInput from '../components/PasswordInput';
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({
@@ -141,14 +142,13 @@ export default function RegisterPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {t('password', language)}
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     name="password"
                     autoComplete="new-password"
                     value={formData.password}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+                    inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
                     placeholder="••••••••"
                   />
                 </div>
@@ -157,14 +157,13 @@ export default function RegisterPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {t('confirmPassword', language)}
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     name="confirmPassword"
                     autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+                    inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
                     placeholder="••••••••"
                   />
                 </div>

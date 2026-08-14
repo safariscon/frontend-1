@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi, saveAuthData } from '../lib/api';
 import { SERVICE_CATEGORY_GROUPS as SERVICE_CATEGORIES } from '../data/serviceCategories';
+import PasswordInput from '../components/PasswordInput';
 
 const initialForm = {
   businessName: '',
@@ -173,18 +174,31 @@ export default function BusinessRegisterPage() {
 }
 
 function Field({ label, name, value, onChange, type = 'text', placeholder = '' }) {
+  const inputClassName = 'mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-base text-gray-900 focus:border-primary focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-white';
+
   return (
     <label className="block">
       <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{label}</span>
-      <input
-        name={name}
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-base text-gray-900 focus:border-primary focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-        required
-      />
+      {type === 'password' ? (
+        <PasswordInput
+          name={name}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          inputClassName={inputClassName}
+          required
+        />
+      ) : (
+        <input
+          name={name}
+          type={type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={inputClassName}
+          required
+        />
+      )}
     </label>
   );
 }

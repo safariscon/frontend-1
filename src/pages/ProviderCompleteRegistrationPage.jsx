@@ -5,6 +5,7 @@ import Footer from '../components/Footer';
 import { authApi } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import PasswordInput from '../components/PasswordInput';
 
 export default function ProviderCompleteRegistrationPage() {
   const navigate = useNavigate();
@@ -78,8 +79,8 @@ export default function ProviderCompleteRegistrationPage() {
             <input type="text" required placeholder={t('providerName', language)} value={form.providerName} onChange={updateField('providerName')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="email" required placeholder={t('providerEmail', language)} value={form.providerEmail} onChange={updateField('providerEmail')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="text" required autoCapitalize="characters" placeholder={t('providerId', language)} value={form.sellerId} onChange={updateField('sellerId')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
-            <input type="password" required minLength={8} placeholder={t('createPassword', language)} value={form.newPassword} onChange={updateField('newPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
-            <input type="password" required minLength={8} placeholder={t('confirmPassword', language)} value={form.confirmPassword} onChange={updateField('confirmPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
+            <PasswordInput required minLength={8} placeholder={t('createPassword', language)} value={form.newPassword} onChange={updateField('newPassword')} inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl" />
+            <PasswordInput required minLength={8} placeholder={t('confirmPassword', language)} value={form.confirmPassword} onChange={updateField('confirmPassword')} inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <button type="submit" disabled={loading} className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary-dark disabled:opacity-50">
               {loading ? t('submitting', language) : t('completeProviderRegistration', language)}
             </button>

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi } from '../lib/api';
+import PasswordInput from '../components/PasswordInput';
 
 export default function ResetPasswordPage() {
   const location = useLocation();
@@ -73,22 +74,20 @@ export default function ResetPasswordPage() {
               className="w-full px-4 py-3 border border-gray-300 rounded-xl text-center text-2xl font-bold tracking-widest focus:ring-2 focus:ring-primary focus:border-primary transition"
               placeholder="123456"
             />
-            <input
-              type="password"
+            <PasswordInput
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               required
               minLength={8}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+              inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
               placeholder="New password"
             />
-            <input
-              type="password"
+            <PasswordInput
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               required
               minLength={8}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+              inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
               placeholder="Confirm new password"
             />
 
