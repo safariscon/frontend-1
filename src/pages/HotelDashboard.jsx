@@ -10,6 +10,8 @@ import { formatRwf } from '../lib/currency';
 import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES } from '../data/serviceCategories';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
+import OptionDetailsModal from '../components/OptionDetailsModal';
+import { DAY_OPTIONS, TIME_REQUIREMENT_OPTIONS, parseOptionAvailability, toggleAvailableDay } from '../lib/availability';
 
 const EMPTY_FORM = {
   title: '',
@@ -50,6 +52,12 @@ const EMPTY_FORM = {
       { id: 'durationUnit', label: 'Duration unit' },
       { id: 'maximumDuration', label: 'Maximum duration' },
       { id: 'availability', label: 'Availability / capacity' },
+      { id: 'availableFrom', label: 'Available from' },
+      { id: 'availableTo', label: 'Available until' },
+      { id: 'availableDays', label: 'Available days' },
+      { id: 'availableStartTime', label: 'Open time' },
+      { id: 'availableEndTime', label: 'Close time' },
+      { id: 'requiresTime', label: 'Times required' },
       { id: 'details', label: 'Details / amenities' },
     ],
     rows: [{ id: 'row_1', cells: { service: '', price: '' } }],
@@ -1149,7 +1157,7 @@ function AvailabilityTableBuilder({ table, updateTable }) {
     const id = makeId('row');
     updateTable((current) => ({
       ...current,
-      rows: [...(current.rows || []), { id, cells: { service: '', price: '', priceType: '', calculationField: '', durationUnit: '', maximumDuration: '', availability: '', details: '' } }],
+      rows: [...(current.rows || []), { id, cells: { service: '', price: '', priceType: '', calculationField: '', durationUnit: '', maximumDuration: '', availability: '', availableFrom: '', availableTo: '', availableDays: '', availableStartTime: '', availableEndTime: '', requiresTime: '', details: '' } }],
     }));
     setSelectedRowId(id);
   };
@@ -1214,6 +1222,32 @@ function AvailabilityTableBuilder({ table, updateTable }) {
               <StudioSelect label="Duration unit" value={selected.durationUnit || ''} options={PRICE_TABLE_OPTIONS.durationUnit} onChange={(value) => updateCell(selectedRow.id, 'durationUnit', value)} />
               <StudioField label="Maximum booking duration" type="number" value={selected.maximumDuration || ''} onChange={(value) => updateCell(selectedRow.id, 'maximumDuration', value)} />
               <StudioField label="Availability / capacity" type="number" value={selected.availability || ''} onChange={(value) => updateCell(selectedRow.id, 'availability', value)} />
+              <StudioField label="Available from" type="date" value={selected.availableFrom || ''} onChange={(value) => updateCell(selectedRow.id, 'availableFrom', value)} />
+              <StudioField label="Available until" type="date" value={selected.availableTo || ''} onChange={(value) => updateCell(selectedRow.id, 'availableTo', value)} />
+              <StudioField label="Open time (optional)" type="time" value={selected.availableStartTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableStartTime', value)} />
+              <StudioField label="Close time (optional)" type="time" value={selected.availableEndTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableEndTime', value)} />
+              <StudioSelect label="Clock times on booking form" value={selected.requiresTime || ''} options={TIME_REQUIREMENT_OPTIONS} onChange={(value) => updateCell(selectedRow.id, 'requiresTime', value)} />
+              <fieldset className="sm:col-span-2">
+                <span className="text-xs font-bold text-slate-600">Available days</span>
+                <p className="mt-1 text-[11px] text-slate-500">Leave all unchecked to allow every day inside the date window.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {DAY_OPTIONS.map(([key, label]) => {
+                    const selectedDays = String(selected.availableDays || '').split(',').filter(Boolean);
+                    const checked = selectedDays.includes(key);
+                    return (
+                      <label key={key} className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${checked ? 'border-primary bg-blue-50 text-primary' : 'border-slate-200 bg-white text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          className="mr-1.5 align-middle"
+                          checked={checked}
+                          onChange={() => updateCell(selectedRow.id, 'availableDays', toggleAvailableDay(selected.availableDays, key))}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
               <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600">Details / amenities</span><textarea rows={2} value={selected.details || ''} onChange={(event) => updateCell(selectedRow.id, 'details', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Wi-Fi, breakfast, private bathroom..." /></label>
             </div>
           </div>}
@@ -1230,8 +1264,9 @@ function AvailabilityTableBuilder({ table, updateTable }) {
             <PreviewInput label="Phone number" placeholder="+250 7XX XXX XXX" />
             <PreviewInput label="Email" placeholder="you@example.com" />
             <PreviewInput label="Booking date" placeholder="Select date" />
-            <PreviewInput label="Start time" placeholder="Select start time" />
-            <PreviewInput label="End time / completion time" placeholder="Select end time" />
+            {parseOptionAvailability(selectedRow).requiresEndDate && <PreviewInput label="End booking date" placeholder="Select end date" />}
+            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? 'Start time' : 'Start time (optional)'} placeholder="Select start time" />
+            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? 'End time' : 'End time (optional)'} placeholder="Select end time" />
             <PreviewInput label="Number of people" placeholder="2" />
             <PreviewInput label="Quantity / units" placeholder="1" />
             <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-700">Special request <span className="font-normal text-slate-400">(optional)</span></span><textarea disabled rows={4} placeholder="Any special request or notes..." className="mt-1 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
@@ -1255,7 +1290,7 @@ function AvailabilityTableBuilder({ table, updateTable }) {
         </aside>
       </div>
 
-      {detailsRow && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Option details & amenities</p><h3 className="mt-1 text-xl font-black text-slate-950">{detailsRow.cells?.service || 'Service option'}</h3></div><button type="button" onClick={() => setDetailsRow(null)} className="text-2xl text-slate-400">×</button></div><p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{detailsRow.cells?.details || 'No additional details added yet.'}</p><button type="button" onClick={() => setDetailsRow(null)} className="mt-5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white">Close</button></div></div>}
+      {detailsRow && <OptionDetailsModal row={detailsRow} onClose={() => setDetailsRow(null)} />}
     </section>
   );
 }
