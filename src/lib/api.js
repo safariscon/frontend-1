@@ -442,6 +442,16 @@ export const authApi = {
     }),
 };
 
+const buildQueryString = (query = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(query || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    params.set(key, String(value));
+  });
+  const text = params.toString();
+  return text ? `?${text}` : "";
+};
+
 export const adminApi = {
   getStats: (token) => apiRequest("/api/admin/dashboard-stats", { token }),
   getBusinesses: (token) => apiRequest("/api/admin/businesses", { token }),
@@ -465,7 +475,8 @@ export const adminApi = {
   updateServiceBookingMode: (token, businessId, bookingMode) =>
     apiRequest(`/api/admin/businesses/${businessId}/booking-mode`, { method: "PUT", token, body: { bookingMode } }),
   verifyBooking: (token, lookup) => apiRequest(`/api/admin/booking-verification/${encodeURIComponent(lookup)}`, { token }),
-  getServices: (token) => apiRequest("/api/admin/services", { token }),
+  getServices: (token, query = {}) =>
+    apiRequest("/api/admin/services" + (typeof query === "string" ? query : buildQueryString(query)), { token }),
   getTransactions: (token, query = "") => apiRequest("/api/admin/transactions" + query, { token }),
   getStorageOverview: (token) => apiRequest("/api/admin/storage/overview", { token }),
   getMongoStorage: (token) => apiRequest("/api/admin/storage/mongodb", { token }),
@@ -725,7 +736,7 @@ export const paymentsApi = {
 };
 
 export const publicApi = {
-  getHotels: () => apiRequest("/api/hotels"),
+  getHotels: (query = {}) => apiRequest("/api/hotels" + buildQueryString(query)),
   getAnnouncement: () => apiRequest("/api/announcement"),
   getMarketplaceSettings: () => apiRequest("/api/marketplace-settings"),
   verifyBooking: (token) => apiRequest(`/api/verify/${token}`),

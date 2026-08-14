@@ -3,17 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 
-export default function SearchBar({ variant = 'compact', serviceOptions = [], locationOptions = [], children = null }) {
+export default function SearchBar({ variant = 'compact', locationOptions = [], children = null, extraColumns }) {
   const [location, setLocation] = useState('');
   const [serviceName, setServiceName] = useState('');
   const navigate = useNavigate();
   const { language } = useLanguage();
+  const compactCols = extraColumns || (children ? 4 : 2);
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(window.location.search);
     if (location.trim()) params.set('location', location.trim());
-    if (serviceName.trim()) params.set('service', serviceName.trim());
+    else params.delete('location');
+    if (serviceName.trim()) params.set('search', serviceName.trim());
+    else {
+      params.delete('search');
+      params.delete('q');
+      params.delete('service');
+    }
     navigate(`/services?${params.toString()}`);
   };
 
@@ -23,28 +30,13 @@ export default function SearchBar({ variant = 'compact', serviceOptions = [], lo
       className={
         variant === 'hero'
           ? 'search-shell search-panel grid gap-4'
-          : `search-shell search-shell-compact grid gap-3 ${children ? 'md:grid-cols-[repeat(4,minmax(0,1fr))_auto]' : 'md:grid-cols-[1fr_1fr_auto]'}`
+          : `search-shell search-shell-compact grid gap-3 ${children ? `md:grid-cols-[repeat(${compactCols},minmax(0,1fr))_auto]` : 'md:grid-cols-[1fr_1fr_auto]'}`
       }
     >
       <div>
         <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="service-input">
           {variant === 'hero' ? 'Book travel experiences and related services' : t('serviceName', language)}
         </label>
-        {serviceOptions.length > 0 ? (
-          <select
-            id="service-input"
-            value={serviceName}
-            onChange={(event) => setServiceName(event.target.value)}
-            className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
-          >
-            <option value="">All services</option>
-            {serviceOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        ) : (
           <input
             id="service-input"
             value={serviceName}
@@ -52,7 +44,6 @@ export default function SearchBar({ variant = 'compact', serviceOptions = [], lo
             placeholder={t('serviceNamePlaceholder', language) === 'serviceNamePlaceholder' ? 'e.g. Car rental, Tour guide, Hotel...' : t('serviceNamePlaceholder', language)}
             className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
           />
-        )}
       </div>
 
       <div>
