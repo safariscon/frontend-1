@@ -352,8 +352,15 @@ export default function AdminDashboard() {
         providerEmail: providerForm.providerEmail,
       });
       const credentials = response.credentials || {};
+      const sellerId = credentials.sellerId || response.sellerId || '';
+      const registrationUrl =
+        credentials.registrationUrl ||
+        response.registrationUrl ||
+        (sellerId ? `${window.location.origin}/provider-register?sellerId=${encodeURIComponent(sellerId)}` : '');
       setOnboardingCredentials({
         ...credentials,
+        sellerId,
+        registrationUrl,
         providerName: credentials.providerName || response.serviceProviderName || response.providerName,
         providerEmail: credentials.providerEmail || response.serviceProviderEmail || response.providerEmail,
         credentialEmail: response.credentialEmail || null,
@@ -416,14 +423,15 @@ export default function AdminDashboard() {
                 <button type="button" onClick={() => setOnboardingCredentials(null)} className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-emerald-800">Hide</button>
               </div>
               <p>
-                Give the seller ID to the service provider so they can create their password and complete email verification.
-                {onboardingCredentials.credentialEmail?.sent && ' The seller ID was also sent to the provider email.'}
-                {onboardingCredentials.credentialEmail?.warning && ' Email delivery failed, so share the seller ID manually.'}
+                Share the invite link if the email is delayed. The provider only needs to confirm the seller ID, set a password, and add payout details.
+                {onboardingCredentials.credentialEmail?.sent && ' The invite was also sent to the provider email.'}
+                {onboardingCredentials.credentialEmail?.warning && ' Email delivery failed, so share the link and seller ID manually.'}
               </p>
               <dl className="mt-3 grid gap-2 md:grid-cols-2">
                 <Credential label="Provider Name" value={onboardingCredentials.providerName} />
                 <Credential label="Provider Email" value={onboardingCredentials.providerEmail} />
                 <Credential label="Seller ID" value={onboardingCredentials.sellerId} />
+                <Credential label="Registration URL" value={onboardingCredentials.registrationUrl} copyable />
               </dl>
             </div>
           )}
@@ -498,11 +506,27 @@ function Metric({ label, value }) {
   );
 }
 
-function Credential({ label, value }) {
+function Credential({ label, value, copyable = false }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
   return (
-    <div className="rounded-lg bg-white p-3">
+    <div className={`rounded-lg bg-white p-3 ${copyable ? 'md:col-span-2' : ''}`}>
       <dt className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{label}</dt>
       <dd className="mt-1 break-all font-mono text-sm text-gray-900">{value || '-'}</dd>
+      {copyable && value && (
+        <button type="button" onClick={copy} className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-900">
+          {copied ? 'Copied' : 'Copy invite link'}
+        </button>
+      )}
     </div>
   );
 }

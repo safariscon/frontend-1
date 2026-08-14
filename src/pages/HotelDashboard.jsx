@@ -593,19 +593,19 @@ export default function HotelDashboard() {
         <div className="seller-dashboard-shell max-w-7xl mx-auto px-4">
           <div className="seller-dashboard-header mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Business Dashboard</h1>
-              <p className="text-gray-600">Manage {overview?.business?.businessName || overview?.business?.name || 'your business'} listings and bookings.</p>
+              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+              <p className="text-gray-600">Manage {overview?.business?.businessName || overview?.business?.name || 'your'} services and bookings.</p>
             </div>
             <div className="seller-dashboard-actions flex gap-2">
               <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
-              <button onClick={() => { resetForm(); setActiveTab('edit'); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Add Business</button>
+              <button onClick={() => { resetForm(); setActiveTab('edit'); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Add Service</button>
             </div>
           </div>
 
           {(error || info) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
 
           <div className="seller-dashboard-metrics grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-            <Metric label="Businesses" value={stats.totalServices} />
+            <Metric label="Services" value={stats.totalServices} />
             <Metric label="Earnings" value={formatRwf(overview?.stats?.earnings ?? stats.revenue)} />
             <Metric label="Pending payout" value={formatRwf(overview?.stats?.pendingPayout ?? overview?.stats?.pendingSettlement ?? 0)} />
             <Metric label="Paid out" value={formatRwf(overview?.stats?.paidOut ?? overview?.stats?.availableForPayout ?? 0)} />
@@ -614,12 +614,11 @@ export default function HotelDashboard() {
           {!payoutDetails?.accountNumber && !payoutDetails?.msisdn && (
             <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Customers cannot pay until you save payout details. We store your MoMo or bank details only to pay you after the guest cancel window.</p>
           )}
-          <CommissionTermsCard item={overview?.business || overview} />
 
           <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
             {['services', 'bookings', 'rebook-requests', 'verification', 'finance', 'payout', 'analytics', 'edit'].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>
-                {tab === 'services' ? 'Businesses' : tab === 'rebook-requests' ? 'Re-book Requests' : tab === 'payout' ? 'Payout account' : tab === 'edit' ? (editingService ? 'Edit Business' : 'Add Business') : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'services' ? 'Services' : tab === 'rebook-requests' ? 'Re-book Requests' : tab === 'payout' ? 'Payout account' : tab === 'edit' ? (editingService ? 'Edit Service' : 'Add Service') : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -646,25 +645,12 @@ function Metric({ label, value }) {
   return <div className="seller-metric rounded-xl bg-white p-4 shadow-sm"><p className="text-sm text-gray-500">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{value}</p></div>;
 }
 
-function CommissionTermsCard({ item }) {
-  const terms = item?.commissionTerms;
-  const percentage = item?.commissionPercentage ?? terms?.percentage;
-  if (!terms && (percentage === undefined || percentage === null)) return null;
-  return (
-    <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
-      <p className="text-xs font-black uppercase tracking-wide text-blue-700">Platform commission terms</p>
-      <h2 className="mt-1 font-black">{terms?.label || `${Number(percentage || 0).toLocaleString()}% platform commission`}</h2>
-      <p className="mt-1 text-sm text-blue-800">{terms?.description || 'SafarisCon takes this commission from paid bookings for this business.'}</p>
-    </div>
-  );
-}
-
 function canSellerReviewBooking(booking) {
   return ['pending', 'reviewing', 'requested'].includes(String(booking.status || '').toLowerCase());
 }
 
 function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
-  if (!services.length) return <p className="p-4 text-gray-600">No businesses yet. Add your first business listing.</p>;
+  if (!services.length) return <p className="p-4 text-gray-600">No services yet. Add your first service listing. These cards come from GET /api/hotel/services for this signed-in provider.</p>;
   return (
     <div className="seller-service-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {services.map((service) => (
@@ -678,7 +664,6 @@ function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
           </div>
           <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
           <p className="mt-3 text-sm font-semibold text-primary">Prices are managed in the Service / Price table.</p>
-          <CommissionTermsCard item={service} />
           {Array.isArray(service.images) && service.images.length > 0 && (
             <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
               {service.images.slice(0, 3).map((image, index) => (
@@ -838,7 +823,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
   const updateTable = (updater) => setForm((prev) => ({ ...prev, availabilityTable: updater(prev.availabilityTable) }));
   return (
     <form onSubmit={onSubmit} className="seller-service-form grid gap-4 md:grid-cols-2">
-      <Input label="Business Name" value={form.title} onChange={(value) => set('title', value)} required />
+      <Input label="Service name" value={form.title} onChange={(value) => set('title', value)} required />
       <CategorySelect value={form.category} onChange={(value) => set('category', value)} />
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
         <p className="text-sm font-black text-blue-950">Booking mode: <span className="capitalize">{globalBookingMode === 'service-level' ? form.bookingMode : globalBookingMode}</span></p>
@@ -958,7 +943,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
         <p className="mt-2 text-sm text-slate-500">The required customer fields above always stay in place. Open this section only when your service needs extra questions.</p>
         <div className="mt-4"><BookingFormBuilder bookingForm={form.bookingForm} setBookingForm={(bookingForm) => set('bookingForm', bookingForm)} /></div>
       </details>
-      <button type="submit" disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Business' : 'Create Business'}</button>
+      <button type="submit" disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Service' : 'Create Service'}</button>
     </form>
   );
 }

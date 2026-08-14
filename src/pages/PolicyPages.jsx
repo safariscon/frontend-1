@@ -13,9 +13,9 @@ const NAV = [
   ['Payments & refunds', '/payments'],
 ];
 
-export function HowItWorksPage() {
+export function HowItWorksPage({ embedded = false }) {
   return (
-    <PolicyShell title="How SafarisCon works" lead="SafarisCon is a booking marketplace. You pay in the app. We hold the money, protect provider details until you pay, and only then you get what you need to travel.">
+    <PolicyShell embedded={embedded} title="How SafarisCon works" lead="SafarisCon is a booking marketplace. You pay in the app. We hold the money, protect provider details until you pay, and only then you get what you need to travel.">
       <ol className="space-y-4">
         {HOW_IT_WORKS_STEPS.map(([title, body], index) => (
           <li key={title} className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -31,9 +31,9 @@ export function HowItWorksPage() {
   );
 }
 
-export function TermsPage() {
+export function TermsPage({ embedded = false }) {
   return (
-    <PolicyShell title="Terms of use" lead="These terms describe the current SafarisCon product for guests and providers.">
+    <PolicyShell embedded={embedded} title="Terms of use" lead="These terms describe the current SafarisCon product for guests and providers.">
       <TermsAcceptancePanel />
       <Section title="For guests">
         <ul className="list-disc space-y-2 pl-5">
@@ -71,9 +71,9 @@ export function TermsPage() {
   );
 }
 
-export function PrivacyPage() {
+export function PrivacyPage({ embedded = false }) {
   return (
-    <PolicyShell title="Privacy policy — how we handle your data" lead="We use your details to run accounts, bookings, receipts, and payments. We do not sell personal data.">
+    <PolicyShell embedded={embedded} title="Privacy policy — how we handle your data" lead="We use your details to run accounts, bookings, receipts, and payments. We do not sell personal data.">
       <Section title="What we collect">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -124,9 +124,9 @@ export function PrivacyPage() {
   );
 }
 
-export function PaymentsPolicyPage() {
+export function PaymentsPolicyPage({ embedded = false }) {
   return (
-    <PolicyShell title="Payments, cancellations, and refunds" lead="You pay the full listing price in the app. Money is held in the SafarisCon wallet until the cancel window ends.">
+    <PolicyShell embedded={embedded} title="Payments, cancellations, and refunds" lead="You pay the full listing price in the app. Money is held in the SafarisCon wallet until the cancel window ends.">
       <Section title="Paying for a booking">
         <ul className="list-disc space-y-2 pl-5">
           <li>Currency is RWF. Methods: Mobile Money or card.</li>
@@ -157,24 +157,32 @@ export function PaymentsPolicyPage() {
   );
 }
 
-function PolicyShell({ title, lead, children }) {
+function PolicyShell({ title, lead, children, embedded = false }) {
+  const body = (
+    <>
+      {!embedded && <p className="text-xs font-black uppercase tracking-wide text-primary">SafarisCon policies</p>}
+      <h1 className={`${embedded ? 'text-xl' : 'mt-2 text-3xl'} font-black text-slate-950`}>{title}</h1>
+      <p className="mt-3 text-sm leading-6 text-slate-600">{lead}</p>
+      {!embedded && (
+        <nav className="mt-6 flex flex-wrap gap-2">
+          {NAV.map(([label, to]) => (
+            <Link key={to} to={to} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-primary hover:text-primary">
+              {label}
+            </Link>
+          ))}
+        </nav>
+      )}
+      <div className="mt-8 space-y-6 text-sm leading-6 text-slate-700">{children}</div>
+    </>
+  );
+
+  if (embedded) return <div>{body}</div>;
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Navbar />
       <main className="flex-1 px-4 py-10">
-        <div className="mx-auto max-w-3xl">
-          <p className="text-xs font-black uppercase tracking-wide text-primary">SafarisCon policies</p>
-          <h1 className="mt-2 text-3xl font-black text-slate-950">{title}</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">{lead}</p>
-          <nav className="mt-6 flex flex-wrap gap-2">
-            {NAV.map(([label, to]) => (
-              <Link key={to} to={to} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-primary hover:text-primary">
-                {label}
-              </Link>
-            ))}
-          </nav>
-          <div className="mt-8 space-y-6 text-sm leading-6 text-slate-700">{children}</div>
-        </div>
+        <div className="mx-auto max-w-3xl">{body}</div>
       </main>
       <Footer />
     </div>

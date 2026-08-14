@@ -389,12 +389,52 @@ export const authApi = {
       body: { email, otp, newPassword },
       skipAuthRefresh: true,
     }),
-  completeProviderRegistration: (payload) =>
-    apiRequest("/api/auth/provider/complete-registration", {
+  changePassword: (token, payload) =>
+    apiRequest("/api/auth/change-password", {
       method: "POST",
+      token,
       body: payload,
-      skipAuthRefresh: true,
     }),
+  completeProviderRegistration: (payload) => {
+    const businessName = String(payload?.businessName || payload?.providerName || '').trim();
+    const payoutDetails = payload?.payoutDetails || {};
+    const method = payoutDetails.method === 'bank' ? 'bank' : 'momo';
+    const accountNumber = String(payoutDetails.accountNumber || payoutDetails.msisdn || '').trim();
+    return apiRequest("/api/auth/provider/complete-registration", {
+      method: "POST",
+      body: {
+        sellerId: payload.sellerId,
+        newPassword: payload.newPassword,
+        confirmPassword: payload.confirmPassword,
+        acceptedTerms: true,
+        providerName: businessName || undefined,
+        providerEmail: payload.providerEmail,
+        businessName,
+        payoutMethod: method,
+        payoutDetails: {
+          method,
+          providerId: String(payoutDetails.providerId || '').trim(),
+          accountName: String(payoutDetails.accountName || businessName).trim(),
+          accountNumber,
+          ...(method === 'momo' ? { msisdn: accountNumber } : {}),
+        },
+      },
+      skipAuthRefresh: true,
+    });
+  },
+  getProviderOnboarding: (sellerId) => {
+    const id = encodeURIComponent(String(sellerId || "").trim());
+    return apiRequest(`/api/auth/provider/onboarding?sellerId=${id}`, {
+      skipAuthRefresh: true,
+      token: null,
+    }).catch((error) => {
+      if (error?.status !== 404 && error?.status !== 400) throw error;
+      return apiRequest(`/api/auth/provider/onboarding/${id}`, {
+        skipAuthRefresh: true,
+        token: null,
+      });
+    });
+  },
   acceptTerms: () =>
     apiRequest("/api/auth/accept-terms", {
       method: "POST",

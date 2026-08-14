@@ -16,6 +16,8 @@ import EmailVerificationPage from './pages/EmailVerificationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
+import NotificationsPage from './pages/NotificationsPage';
 import { HowItWorksPage, PaymentsPolicyPage, PrivacyPage, TermsPage } from './pages/PolicyPages';
 import ProviderCompleteRegistrationPage from './pages/ProviderCompleteRegistrationPage';
 import BusinessRegisterPage from './pages/BusinessRegisterPage';
@@ -131,6 +133,8 @@ function AppContent() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/payments" element={<PaymentsPolicyPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/provider-register" element={<ProviderCompleteRegistrationPage />} />
             <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />

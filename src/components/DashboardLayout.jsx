@@ -27,13 +27,15 @@ export default function DashboardLayout({ children }) {
     }
 
     if (isSeller) {
-      items[0] = { to: dashboardRoute || '/hotel-dashboard', label: 'Business dashboard', icon: 'briefcase', match: ['/hotel-dashboard', '/dashboard/seller'] };
+      items[0] = { to: dashboardRoute || '/dashboard/seller', label: 'Dashboard', icon: 'dashboard', match: ['/hotel-dashboard', '/dashboard/seller'] };
     }
 
     if (isAdmin) {
       items[0] = { to: '/admin-dashboard', label: 'Admin dashboard', icon: 'shield', match: ['/admin-dashboard'] };
     }
 
+    items.push({ to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] });
+    items.push({ to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] });
     items.push({ to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] });
     return items;
   }, [dashboardRoute, isAdmin, isCustomer, isSeller]);
@@ -165,6 +167,8 @@ export function Icon({ name }) {
     briefcase: 'M10 6V5a2 2 0 012-2h0a2 2 0 012 2v1m-9 0h10a2 2 0 012 2v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z',
     shield: 'M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z',
     settings: 'M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm7-3.5l2-1-2-3-2 .5a8 8 0 00-2-1L14.5 5h-5L9 7.5a8 8 0 00-2 1L5 8l-2 3 2 1a8 8 0 000 2l-2 1 2 3 2-.5a8 8 0 002 1l.5 2.5h5l.5-2.5a8 8 0 002-1l2 .5 2-3-2-1a8 8 0 000-2z',
+    user: 'M12 12a4 4 0 100-8 4 4 0 000 8zM6 20a6 6 0 0112 0',
+    bell: 'M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0a3 3 0 11-6 0',
     logout: 'M15 17l5-5-5-5M20 12H9m3 8H5a1 1 0 01-1-1V5a1 1 0 011-1h7',
     menu: 'M4 6h16M4 12h16M4 18h16',
     close: 'M6 18L18 6M6 6l12 12',
@@ -189,6 +193,7 @@ function getGreeting(user) {
 }
 
 function formatRole(role) {
+  if (role === 'hotel' || role === 'supplier') return 'Service provider';
   return String(role || 'user').replace(/[-_]/g, ' ');
 }
 
