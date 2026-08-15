@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
+import { getDashboardRoute, isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 import { getAuthData, hotelApi, paymentsApi, publicApi } from '../lib/api';
 import { payoutStatusLabel } from '../lib/payments';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
@@ -24,6 +24,9 @@ const EMPTY_FORM = {
     cell: '',
     village: '',
     fullAddress: '',
+    formattedAddress: '',
+    placeName: '',
+    placeId: '',
     latitude: null,
     longitude: null,
     locationSource: 'map_click',
@@ -158,7 +161,10 @@ const normalizeServiceLocationForForm = (service) => {
     sector: source.sector || legacy.sector || '',
     cell: source.cell || legacy.cell || '',
     village: source.village || legacy.village || '',
-    fullAddress: source.fullAddress || service.contactDetails?.exactAddress || service.location || '',
+    fullAddress: source.fullAddress || source.formattedAddress || service.contactDetails?.exactAddress || service.location || '',
+    formattedAddress: source.formattedAddress || source.fullAddress || '',
+    placeName: source.placeName || '',
+    placeId: source.placeId || source.googlePlaceId || '',
     latitude: source.latitude ?? service.contactDetails?.latitude ?? null,
     longitude: source.longitude ?? service.contactDetails?.longitude ?? null,
     locationSource: source.locationSource || 'map_click',
@@ -310,10 +316,16 @@ const normalizeBookingFormForForm = (bookingForm) => ({
 export default function HotelDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { section } = useParams();
+  const view = ['services', 'bookings', 'finance'].includes(section) ? section : 'dashboard';
+  const basePath = getDashboardRoute(user) || '/dashboard/seller';
   const [overview, setOverview] = useState(null);
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [activeTab, setActiveTab] = useState('services');
+  const [showEditor, setShowEditor] = useState(false);
+  const [bookingSubTab, setBookingSubTab] = useState('bookings');
+  const [financeSubTab, setFinanceSubTab] = useState('finance');
+  const [serviceStatusFilter, setServiceStatusFilter] = useState('all');
   const [editingService, setEditingService] = useState(null);
   const [approvalBooking, setApprovalBooking] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -340,7 +352,7 @@ export default function HotelDashboard() {
         hotelApi.getFinance(token).catch(() => null),
       ]);
       setOverview(overviewResp);
-      setServices(servicesResp.services || []);
+      setServices(withoutDrafts(servicesResp.services || []));
       setBookings(bookingsResp.bookings || []);
       setGlobalBookingMode(settingsResp.settings?.bookingMode || 'manual');
       setPayoutDetails(payoutResp.payoutDetails || null);
@@ -375,6 +387,10 @@ export default function HotelDashboard() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user]);
+
+  useEffect(() => {
+    if (view !== 'services') setShowEditor(false);
+  }, [view]);
 
   const stats = useMemo(() => {
     const activeServices = services.filter((service) => service.status === 'available' && service.isActive !== false);
@@ -437,12 +453,14 @@ export default function HotelDashboard() {
       bookingForm: normalizeBookingFormForForm(service.bookingForm),
       bookingMode: service.bookingMode || 'manual',
     });
-    setActiveTab('edit');
+    setShowEditor(true);
+    if (view !== 'services') navigate(`${basePath}/services`);
   };
 
   const resetForm = () => {
     setEditingService(null);
     setForm(EMPTY_FORM);
+    setShowEditor(false);
   };
 
   const saveService = async (event) => {
@@ -505,7 +523,7 @@ export default function HotelDashboard() {
         : await hotelApi.createService(token, payload);
       setInfo(response.message);
       resetForm();
-      setActiveTab('services');
+      setShowEditor(false);
       await loadData({ silent: true });
     } catch (requestError) {
       setError(requestError.message);
@@ -522,7 +540,8 @@ export default function HotelDashboard() {
     const hasPriceRows = service.availabilityTable?.rows?.some((row) => row.cells?.service && row.cells?.price);
     if (!hasLocation || !hasPayout || !hasPriceRows) {
       if (!hasPayout) {
-        setActiveTab('payout');
+        setFinanceSubTab('payout');
+        navigate(`${basePath}/finance`);
         setInfo('Save your MoMo or bank payout details before customers can pay this listing.');
         return;
       }
@@ -587,52 +606,90 @@ export default function HotelDashboard() {
 
   if (!user || !isSellerRole(user.role)) return null;
 
+  const pageMeta = {
+    dashboard: { title: 'Analytics', subtitle: 'Your bookings, earnings, and service activity.' },
+    services: { title: 'Services', subtitle: 'Manage your pending and approved listings.' },
+    bookings: { title: 'Bookings', subtitle: 'Manage your bookings.' },
+    finance: { title: 'Finance', subtitle: 'Earnings, payouts, and payout account.' },
+  }[view];
+  const visibleServices = services.filter((service) => {
+    const approval = serviceApprovalStatus(service);
+    return serviceStatusFilter === 'all' || approval === serviceStatusFilter;
+  });
+  const openAddService = () => {
+    resetForm();
+    setShowEditor(true);
+    if (view !== 'services') navigate(`${basePath}/services`);
+  };
+
   return (
     <DashboardLayout>
       <main className="seller-dashboard-main py-6 sm:py-8">
         <div className="seller-dashboard-shell max-w-7xl mx-auto px-4">
           <div className="seller-dashboard-header mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-600">Manage {overview?.business?.businessName || overview?.business?.name || 'your'} services and bookings.</p>
+              <h1 className="text-3xl font-bold text-gray-900">{pageMeta.title}</h1>
+              <p className="text-gray-600">{pageMeta.subtitle}</p>
             </div>
             <div className="seller-dashboard-actions flex gap-2">
               <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
-              <button onClick={() => { resetForm(); setActiveTab('edit'); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Add Service</button>
             </div>
           </div>
 
           {(error || info) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
 
-          <div className="seller-dashboard-metrics grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-            <Metric label="Services" value={stats.totalServices} />
-            <Metric label="Earnings" value={formatRwf(overview?.stats?.earnings ?? stats.revenue)} />
-            <Metric label="Pending payout" value={formatRwf(overview?.stats?.pendingPayout ?? overview?.stats?.pendingSettlement ?? 0)} />
-            <Metric label="Paid out" value={formatRwf(overview?.stats?.paidOut ?? overview?.stats?.availableForPayout ?? 0)} />
-            <Metric label="Bookings" value={stats.totalBookings} />
-          </div>
-          {!payoutDetails?.accountNumber && !payoutDetails?.msisdn && (
+          {view === 'dashboard' && (
+            <div className="seller-dashboard-metrics grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <Metric label="Services" value={stats.totalServices} />
+              <Metric label="Earnings" value={formatRwf(overview?.stats?.earnings ?? stats.revenue)} />
+              <Metric label="Held payout" value={formatRwf(overview?.stats?.pendingPayout ?? overview?.stats?.pendingSettlement ?? 0)} />
+              <Metric label="Bookings" value={stats.totalBookings} />
+            </div>
+          )}
+          {view === 'finance' && !payoutDetails?.accountNumber && !payoutDetails?.msisdn && (
             <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Customers cannot pay until you save payout details. We store your MoMo or bank details only to pay you after the guest cancel window.</p>
           )}
 
-          <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
-            {['services', 'bookings', 'rebook-requests', 'verification', 'finance', 'payout', 'analytics', 'edit'].map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>
-                {tab === 'services' ? 'Services' : tab === 'rebook-requests' ? 'Re-book Requests' : tab === 'payout' ? 'Payout account' : tab === 'edit' ? (editingService ? 'Edit Service' : 'Add Service') : tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
+          {view === 'bookings' && (
+            <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
+              {[['bookings', 'Bookings'], ['rebook-requests', 'Re-book requests'], ['verification', 'Verification']].map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setBookingSubTab(id)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${bookingSubTab === id ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>{label}</button>
+              ))}
+            </div>
+          )}
+          {view === 'finance' && (
+            <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
+              {[['finance', 'Finance'], ['payout', 'Payout account']].map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setFinanceSubTab(id)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${financeSubTab === id ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>{label}</button>
+              ))}
+            </div>
+          )}
 
           <section className="seller-dashboard-content bg-white rounded-2xl shadow-sm p-4">
             {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
-            {!loading && activeTab === 'services' && <ServiceGrid services={services} onEdit={startEdit} onDelete={deleteService} onStatus={updateStatus} />}
-            {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onApproveBooking={setApprovalBooking} onCompleted={() => loadData({ silent: true })} />}
-            {!loading && activeTab === 'rebook-requests' && <SellerRebookRequests />}
-            {!loading && activeTab === 'verification' && <SellerBookingVerification token={token} />}
-            {!loading && activeTab === 'finance' && <FinancePanel finance={finance} />}
-            {!loading && activeTab === 'payout' && <PayoutDetailsForm token={token} initial={payoutDetails} onSaved={() => loadData({ silent: true })} />}
-            {!loading && activeTab === 'analytics' && <Analytics stats={stats} services={services} />}
-            {activeTab === 'edit' && <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} globalBookingMode={globalBookingMode} />}
+            {!loading && view === 'dashboard' && <Analytics stats={stats} services={services} />}
+            {!loading && view === 'services' && !showEditor && (
+              <ServiceGrid
+                services={visibleServices}
+                statusFilter={serviceStatusFilter}
+                setStatusFilter={setServiceStatusFilter}
+                onAdd={openAddService}
+                onEdit={startEdit}
+                onDelete={deleteService}
+                onStatus={updateStatus}
+              />
+            )}
+            {view === 'services' && showEditor && (
+              <div>
+                <button type="button" onClick={resetForm} className="mb-4 text-sm font-semibold text-primary">Back to services</button>
+                <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} globalBookingMode={globalBookingMode} />
+              </div>
+            )}
+            {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onApproveBooking={setApprovalBooking} onCompleted={() => loadData({ silent: true })} />}
+            {!loading && view === 'bookings' && bookingSubTab === 'rebook-requests' && <SellerRebookRequests />}
+            {!loading && view === 'bookings' && bookingSubTab === 'verification' && <SellerBookingVerification token={token} />}
+            {!loading && view === 'finance' && financeSubTab === 'finance' && <FinancePanel finance={finance} />}
+            {!loading && view === 'finance' && financeSubTab === 'payout' && <PayoutDetailsForm token={token} initial={payoutDetails} onSaved={() => loadData({ silent: true })} />}
           </section>
         </div>
       </main>
@@ -649,45 +706,76 @@ function canSellerReviewBooking(booking) {
   return ['pending', 'reviewing', 'requested'].includes(String(booking.status || '').toLowerCase());
 }
 
-function ServiceGrid({ services, onEdit, onDelete, onStatus }) {
-  if (!services.length) return <p className="p-4 text-gray-600">No services yet. Add your first service listing. These cards come from GET /api/hotel/services for this signed-in provider.</p>;
+function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onEdit, onDelete, onStatus }) {
   return (
-    <div className="seller-service-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {services.map((service) => (
-        <div key={service._id} className="seller-service-card rounded-xl border border-gray-200 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-gray-900">{service.title || service.name}</h3>
-              <p className="text-sm text-gray-600">{service.serviceType || service.category}</p>
-            </div>
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.availabilityText || formatStatus(service.status)}</span>
-          </div>
-          <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
-          <p className="mt-3 text-sm font-semibold text-primary">Prices are managed in the Service / Price table.</p>
-          {Array.isArray(service.images) && service.images.length > 0 && (
-            <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
-              {service.images.slice(0, 3).map((image, index) => (
-                <div key={image} className="relative">
-                  <img src={image} alt={service.title || service.name} className="h-20 w-full rounded-lg object-cover" />
-                  {index === 0 && service.promotion?.enabled && Number(service.promotion?.percent || 0) > 0 && (
-                    <span className="absolute left-1 top-1 rounded bg-amber-400 px-2 py-1 text-[10px] font-black text-amber-950">-{Number(service.promotion.percent)}%</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {service.availabilityTable?.columns?.length > 0 && (
-            <p className="seller-service-meta mt-3 text-xs font-semibold text-gray-500">
-              Availability table: {service.availabilityTable.rows?.length || 0} rows, {service.availabilityTable.columns.length} columns
-            </p>
-          )}
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button onClick={() => onEdit(service)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Edit</button>
-            <button onClick={() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available')} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{service.status === 'available' ? 'Set Not Available' : 'Set Available'}</button>
-            <button onClick={() => onDelete(service._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Delete</button>
-          </div>
+    <div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-black text-slate-950">Services</h2>
+          <p className="text-sm text-slate-500">Your pending and approved listings.</p>
         </div>
-      ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold">
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <button type="button" onClick={onAdd} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ Add service</button>
+        </div>
+      </div>
+      {!services.length ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+          <p className="font-black text-slate-900">No services yet</p>
+          <p className="mt-1 text-sm text-slate-600">Create a service so customers can find and book you.</p>
+          <button type="button" onClick={onAdd} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">Add service</button>
+        </div>
+      ) : (
+        <div className="seller-service-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <button type="button" onClick={onAdd} className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary/40 bg-blue-50/60 p-4 text-center text-primary hover:bg-blue-50">
+            <span className="text-3xl font-black">+</span>
+            <span className="mt-2 text-sm font-bold">Add service</span>
+          </button>
+          {services.map((service) => (
+            <div key={service._id} className="seller-service-card rounded-xl border border-gray-200 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-gray-900">{service.title || service.name}</h3>
+                  <p className="text-sm text-gray-600">{service.serviceType || service.category}</p>
+                </div>
+                <div className="grid gap-1 text-right">
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold capitalize text-blue-800">{serviceApprovalStatus(service)}</span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.availabilityText || formatStatus(service.status)}</span>
+                </div>
+              </div>
+              <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
+              <p className="mt-3 text-sm font-semibold text-primary">Prices are managed in the Service / Price table.</p>
+              {Array.isArray(service.images) && service.images.length > 0 && (
+                <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
+                  {service.images.slice(0, 3).map((image, index) => (
+                    <div key={image} className="relative">
+                      <img src={image} alt={service.title || service.name} className="h-20 w-full rounded-lg object-cover" />
+                      {index === 0 && service.promotion?.enabled && Number(service.promotion?.percent || 0) > 0 && (
+                        <span className="absolute left-1 top-1 rounded bg-amber-400 px-2 py-1 text-[10px] font-black text-amber-950">-{Number(service.promotion.percent)}%</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {service.availabilityTable?.columns?.length > 0 && (
+                <p className="seller-service-meta mt-3 text-xs font-semibold text-gray-500">
+                  Availability table: {service.availabilityTable.rows?.length || 0} rows, {service.availabilityTable.columns.length} columns
+                </p>
+              )}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => onEdit(service)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Edit</button>
+                <button type="button" onClick={() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available')} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{service.status === 'available' ? 'Set Not Available' : 'Set Available'}</button>
+                <button type="button" onClick={() => onDelete(service._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -798,7 +886,18 @@ function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
 
 function Analytics({ stats, services }) {
   const low = services.filter((service) => Number(service.availableQuantity || 0) <= 2);
-  return <div className="grid gap-4 md:grid-cols-2"><Metric label="Active Bookings" value={stats.activeBookings} /><Metric label="Completed" value={stats.completedBookings} /><Metric label="Cancellation Rate" value={`${stats.cancellationRate}%`} /><Metric label="Low Availability" value={low.length} /></div>;
+  const pending = services.filter((service) => serviceApprovalStatus(service) === 'pending').length;
+  const approved = services.filter((service) => serviceApprovalStatus(service) === 'approved').length;
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Metric label="Active bookings" value={stats.activeBookings} />
+      <Metric label="Completed" value={stats.completedBookings} />
+      <Metric label="Cancellation rate" value={`${stats.cancellationRate}%`} />
+      <Metric label="Low availability" value={low.length} />
+      <Metric label="Pending services" value={pending} />
+      <Metric label="Approved services" value={approved} />
+    </div>
+  );
 }
 
 function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMode }) {
@@ -1584,26 +1683,21 @@ function FinancePanel({ finance }) {
   const rows = finance?.transactions || [];
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">{finance?.message || 'Earnings stay in the SafarisCon wallet until the cancel window ends.'}</p>
+      <p className="text-sm text-slate-600">{finance?.message || 'Customer payments stay held until the cancellation window closes, then payout is sent. If the guest cancels in time, most of the cancellation fee is paid to you.'}</p>
       <div className="grid gap-3 md:grid-cols-3">
         <Metric label="Gross collected" value={formatRwf(summary.grossCollected)} />
-        <Metric label="Commission" value={formatRwf(summary.commission)} />
-        <Metric label="Your share" value={formatRwf(summary.providerEarnings)} />
-        <Metric label="Pending payout" value={formatRwf(summary.pendingPayout)} />
-        <Metric label="Paid out" value={formatRwf(summary.paidOut)} />
+        <Metric label="Held payout" value={formatRwf(summary.pendingPayout ?? summary.heldPayout)} />
         <Metric label="Failed payout" value={formatRwf(summary.failedPayout)} />
       </div>
       {!rows.length ? <p className="rounded-xl border border-slate-200 p-4 text-sm text-slate-600">No payout rows yet.</p> : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Gross</th><th className="py-2 pr-3">Commission</th><th className="py-2 pr-3">Your share</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Payout id</th><th className="py-2 pr-3">Destination</th><th className="py-2">Note</th></tr></thead>
+            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Gross</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Payout id</th><th className="py-2 pr-3">Destination</th><th className="py-2">Note</th></tr></thead>
             <tbody>
               {rows.map((tx) => (
                 <tr key={tx._id || tx.payoutReference} className="border-b border-slate-100">
                   <td className="py-2 pr-3">{tx.bookingId?.bookingCode || tx.bookingId?._id || '-'}</td>
                   <td className="py-2 pr-3">{formatRwf(tx.amount)}</td>
-                  <td className="py-2 pr-3">{formatRwf(tx.platformAmount)}</td>
-                  <td className="py-2 pr-3">{formatRwf(tx.providerAmount)}</td>
                   <td className="py-2 pr-3">{payoutStatusLabel(tx.payoutStatus)}</td>
                   <td className="py-2 pr-3">{tx.payoutReference || '-'}</td>
                   <td className="py-2 pr-3">{tx.payoutAccount || '-'}</td>

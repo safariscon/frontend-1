@@ -45,7 +45,13 @@ export const normalizeHotel = (hotel) => {
     amenities: Array.isArray(hotel.amenities) ? hotel.amenities : [],
     rooms: Array.isArray(hotel.rooms) ? hotel.rooms : [],
     isFeatured: Boolean(hotel.isFeatured),
-    provider: hotel.provider || null,
+    provider: hotel.provider || ((hotel.providerName || hotel.sellerName || hotel.sellerId || hotel.providerId)
+      ? {
+          id: hotel.providerId || hotel.sellerUserId || hotel.userId?._id || hotel.userId || hotel.businessId?._id || hotel.businessId,
+          name: hotel.providerName || hotel.sellerName || hotel.provider?.name || '',
+          sellerId: hotel.sellerId || hotel.provider?.sellerId || '',
+        }
+      : null),
   };
 };
 

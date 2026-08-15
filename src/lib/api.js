@@ -477,6 +477,14 @@ export const adminApi = {
   verifyBooking: (token, lookup) => apiRequest(`/api/admin/booking-verification/${encodeURIComponent(lookup)}`, { token }),
   getServices: (token, query = {}) =>
     apiRequest("/api/admin/services" + (typeof query === "string" ? query : buildQueryString(query)), { token }),
+  getService: (token, serviceId) =>
+    apiRequest(`/api/admin/services/${serviceId}`, { token }),
+  updateServiceApproval: (token, serviceId, payload) =>
+    apiRequest(`/api/admin/services/${serviceId}/approval`, {
+      method: "PUT",
+      token,
+      body: typeof payload === "string" ? { status: payload } : payload,
+    }),
   getTransactions: (token, query = "") => apiRequest("/api/admin/transactions" + query, { token }),
   getStorageOverview: (token) => apiRequest("/api/admin/storage/overview", { token }),
   getMongoStorage: (token) => apiRequest("/api/admin/storage/mongodb", { token }),
@@ -740,6 +748,20 @@ export const publicApi = {
   getAnnouncement: () => apiRequest("/api/announcement"),
   getMarketplaceSettings: () => apiRequest("/api/marketplace-settings"),
   verifyBooking: (token) => apiRequest(`/api/verify/${token}`),
+};
+
+export const geoApi = {
+  searchPlaces: (query) =>
+    apiRequest("/api/geo/search" + buildQueryString({ q: query, country: "rw" }), { skipAuthRefresh: true, token: null }),
+  reverseGeocode: (latitude, longitude) =>
+    apiRequest("/api/geo/reverse" + buildQueryString({ lat: latitude, lng: longitude }), { skipAuthRefresh: true, token: null }),
+  getRoute: (from, to) =>
+    apiRequest("/api/geo/route" + buildQueryString({
+      fromLat: from.latitude,
+      fromLng: from.longitude,
+      toLat: to.latitude,
+      toLng: to.longitude,
+    }), { skipAuthRefresh: true, token: null }),
 };
 
 export { API_BASE_URL };

@@ -25,6 +25,7 @@ import UserDashboard from './pages/UserDashboard';
 import HotelDashboard from './pages/HotelDashboard';
 import SellerDashboard from './pages/SellerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminServiceReviewPage from './pages/AdminServiceReviewPage';
 import VerificationPage from './pages/VerificationPage';
 import InstallBanner from './components/InstallBanner';
 import InstallModal from './components/InstallModal';
@@ -139,8 +140,12 @@ function AppContent() {
             <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />
             <Route path="/dashboard/seller" element={<SellerDashboard />} />
+            <Route path="/dashboard/seller/:section" element={<SellerDashboard />} />
             <Route path="/hotel-dashboard" element={<HotelDashboard />} />
+            <Route path="/hotel-dashboard/:section" element={<HotelDashboard />} />
+            <Route path="/admin-dashboard/services/:serviceId" element={<AdminServiceReviewPage />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/admin-dashboard/:section" element={<AdminDashboard />} />
             <Route path="/verify/:token" element={<VerificationPage />} />
           </Routes>
           </TermsGate>

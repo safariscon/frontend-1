@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { adminApi, bookingApi, getAuthData, publicApi } from '../lib/api';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { SERVICE_CATEGORY_TUPLES as BUSINESS_TYPE_GROUPS } from '../data/serviceCategories';
 import AdminRebookRequests from '../components/rebook/AdminRebookRequests';
+import { isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 
 const EMPTY_PROVIDER_FORM = {
   providerName: '',
   providerEmail: '',
 };
 
-const DEFAULT_ANNOUNCEMENT = {
+export const DEFAULT_ANNOUNCEMENT = {
   enabled: true,
   intervalSeconds: 5,
   items: [{ text: 'Niba ushaka guhindura ururimi kanda ahanditse English', linkUrl: '', linkLabel: '' }],
@@ -38,6 +39,8 @@ function buildTransactionQuery(filters) {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { section } = useParams();
+  const view = ['users', 'services', 'bookings', 'revenue'].includes(section) ? section : 'dashboard';
   const [stats, setStats] = useState(null);
   const [businesses, setBusinesses] = useState([]);
   const [services, setServices] = useState([]);
@@ -49,7 +52,12 @@ export default function AdminDashboard() {
   const [transactionPagination, setTransactionPagination] = useState(null);
   const [transactionFilters, setTransactionFilters] = useState(DEFAULT_TRANSACTION_FILTERS);
   const [users, setUsers] = useState([]);
-  const [activeTab, setActiveTab] = useState('businesses');
+  const [providers, setProviders] = useState([]);
+  const [bookingSubTab, setBookingSubTab] = useState('bookings');
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [serviceProviderId, setServiceProviderId] = useState('');
+  const [serviceStatusFilter, setServiceStatusFilter] = useState('all');
+  const [showCreateProvider, setShowCreateProvider] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingService, setSavingService] = useState(false);
   const [error, setError] = useState('');
@@ -91,7 +99,8 @@ export default function AdminDashboard() {
       ]);
       setStats(statsResp);
       setBusinesses(businessResp.businesses || businessResp.hotels || []);
-      setServices(serviceResp.services || []);
+      setServices(withoutDrafts(serviceResp.services || []));
+      setProviders(serviceResp.providers || []);
       setBookings(bookingResp.bookings || []);
       setUsers(userResp.users || []);
       setTransactions(transactionResp.transactions || []);
@@ -147,10 +156,10 @@ export default function AdminDashboard() {
   }, [token, user?.role]);
 
   useEffect(() => {
-    if (!token || user?.role !== 'admin' || activeTab !== 'revenue') return;
+    if (!token || user?.role !== 'admin' || view !== 'revenue') return;
     Promise.resolve().then(() => loadData({ silent: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionFilters, activeTab, payoutStatusFilter]);
+  }, [transactionFilters, view, payoutStatusFilter]);
 
   const syncPayout = async (transaction) => {
     if (!token) return;
@@ -366,7 +375,8 @@ export default function AdminDashboard() {
         credentialEmail: response.credentialEmail || null,
       });
       setProviderForm(EMPTY_PROVIDER_FORM);
-      setActiveTab('businesses');
+      setShowCreateProvider(false);
+      navigate('/admin-dashboard/users');
       await loadData({ silent: true });
       if (response.credentialEmail?.warning) {
         setWarning(response.credentialEmail.warning || 'Service provider was created, but credential email delivery failed.');
@@ -397,23 +407,51 @@ export default function AdminDashboard() {
 
   if (!user || user.role !== 'admin') return null;
 
+  const visibleServices = services.filter((service) => {
+    const approval = serviceApprovalStatus(service);
+    const providerId = String(service.providerId || service.sellerId || service.businessId?._id || service.businessId || service.userId?._id || service.userId || '');
+    const matchesProvider = !serviceProviderId || providerId === String(serviceProviderId) || String(service.sellerId || '') === String(serviceProviderId);
+    const matchesStatus = serviceStatusFilter === 'all' || approval === serviceStatusFilter;
+    const haystack = `${service.title || ''} ${service.name || ''} ${service.category || ''} ${service.sellerName || ''} ${service.providerName || ''} ${service.provider?.name || ''}`.toLowerCase();
+    const matchesSearch = !serviceSearch.trim() || haystack.includes(serviceSearch.trim().toLowerCase());
+    return matchesProvider && matchesStatus && matchesSearch;
+  });
+  const providerOptions = providers.length
+    ? providers
+    : users.filter((item) => isSellerRole(item.role)).map((item) => ({
+      _id: item._id || item.id,
+      name: item.name,
+      sellerId: item.sellerId,
+    }));
+  const pageMeta = {
+    dashboard: { title: 'Analytics', subtitle: 'Marketplace activity.' },
+    users: { title: 'Users', subtitle: 'Manage system users.' },
+    services: { title: 'Services', subtitle: 'Review pending and approved listings.' },
+    bookings: { title: 'Bookings', subtitle: 'Manage bookings.' },
+    revenue: { title: 'Revenue', subtitle: 'Track payments and payouts.' },
+  }[view];
+
   return (
     <DashboardLayout>
       <main className="py-6 sm:py-8">
         <div className="max-w-7xl mx-auto px-4">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Marketplace Admin</h1>
-              <p className="text-gray-600">Control businesses, users, bookings, revenue, and live activity.</p>
+              <h1 className="text-3xl font-bold text-gray-900">{pageMeta.title}</h1>
+              <p className="text-gray-600">{pageMeta.subtitle}</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setActiveTab('register-business'); setProviderForm(EMPTY_PROVIDER_FORM); }} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">Create Provider</button>
-              <button onClick={() => activeTab === 'storage' ? loadStorageOverview() : loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
+              {view === 'users' && (
+                <button type="button" onClick={() => setShowCreateProvider((open) => !open)} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">
+                  {showCreateProvider ? 'Close' : 'Create Provider'}
+                </button>
+              )}
+              <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
             </div>
           </div>
 
           {(error || info || warning) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{warning && <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">{warning}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
-          {onboardingCredentials?.sellerId && (
+          {onboardingCredentials?.sellerId && view === 'users' && (
             <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -436,50 +474,60 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-            <Metric label="Users" value={stats?.totalUsers ?? users.length} />
-            <Metric label="Businesses" value={stats?.totalBusinesses ?? businesses.length} />
-            <Metric label="Services" value={stats?.totalServices ?? services.length} />
-            <Metric label="Bookings" value={stats?.totalBookings ?? bookings.length} />
-            <Metric label="Revenue" value={`${Number(stats?.totalRevenue ?? 0).toLocaleString()} RWF`} />
-            <Metric label="Pending" value={stats?.pendingApprovals ?? 0} />
-          </div>
+          {view === 'dashboard' && (
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+              <Metric label="Users" value={stats?.totalUsers ?? users.length} />
+              <Metric label="Services" value={services.length} />
+              <Metric label="Bookings" value={stats?.totalBookings ?? bookings.length} />
+              <Metric label="Revenue" value={`${Number(stats?.totalRevenue ?? 0).toLocaleString()} RWF`} />
+              <Metric label="Pending" value={stats?.pendingApprovals ?? services.filter((item) => serviceApprovalStatus(item) === 'pending').length} />
+            </div>
+          )}
 
-          <div className="mb-6 flex gap-2 overflow-x-auto">
-            {['businesses', 'announcement', 'booking-rules', 'register-business', 'users', 'services', 'bookings', 'rebook-requests', 'verification', 'revenue', 'analytics', 'storage', 'activity'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => { setActiveTab(tab); if (tab === 'storage' && !storageOverview) loadStorageOverview(); }}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white text-gray-700 border border-gray-200'}`}
-              >
-                {tab === 'register-business' ? 'Create Provider' : tab === 'rebook-requests' ? 'Manage Re-book Requests' : tab === 'storage' ? 'Storage Overview' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
-          </div>
+          {view === 'bookings' && (
+            <div className="mb-6 flex gap-2 overflow-x-auto">
+              {[['bookings', 'Bookings'], ['rebook-requests', 'Re-book requests'], ['verification', 'Verification']].map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setBookingSubTab(id)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${bookingSubTab === id ? 'bg-primary text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>{label}</button>
+              ))}
+            </div>
+          )}
 
           <section className="bg-white rounded-2xl shadow-sm p-4">
             {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
-            {!loading && activeTab === 'businesses' && <BusinessTable businesses={businesses} onApprove={setBusinessApprovalTarget} onReview={reviewBusiness} onDelete={deleteBusiness} onView={setSelectedBusiness} />}
-            {!loading && activeTab === 'announcement' && <AnnouncementForm form={announcementForm} setForm={setAnnouncementForm} onSubmit={saveAnnouncement} />}
-            {!loading && activeTab === 'booking-rules' && <MarketplaceSettingsForm form={marketplaceSettings} setForm={setMarketplaceSettings} onSubmit={saveMarketplaceSettings} onModeChange={saveGlobalBookingMode} />}
-            {!loading && activeTab === 'register-business' && <AdminProviderForm form={providerForm} setForm={setProviderForm} onSubmit={createProvider} saving={savingService} />}
-            {!loading && activeTab === 'users' && (
-              <UserGroups
-                users={users}
-                selectedUserIds={selectedUserIds}
-                setSelectedUserIds={setSelectedUserIds}
-                onDeleteSelected={deleteSelectedUsers}
-                onDeleteOne={deleteOneUser}
+            {!loading && view === 'dashboard' && <AnalyticsDashboard token={token} />}
+            {!loading && view === 'users' && (
+              <div className="space-y-6">
+                {showCreateProvider && <AdminProviderForm form={providerForm} setForm={setProviderForm} onSubmit={createProvider} saving={savingService} />}
+                <UserGroups
+                  users={users}
+                  selectedUserIds={selectedUserIds}
+                  setSelectedUserIds={setSelectedUserIds}
+                  onDeleteSelected={deleteSelectedUsers}
+                  onDeleteOne={deleteOneUser}
+                />
+              </div>
+            )}
+            {!loading && view === 'services' && (
+              <ServiceTable
+                services={visibleServices}
+                providers={providerOptions}
+                search={serviceSearch}
+                setSearch={setServiceSearch}
+                providerId={serviceProviderId}
+                setProviderId={setServiceProviderId}
+                statusFilter={serviceStatusFilter}
+                setStatusFilter={setServiceStatusFilter}
+                onView={(service) => navigate(`/admin-dashboard/services/${service._id || service.id}`)}
+                onModeChange={updateServiceBookingMode}
+                globalBookingMode={marketplaceSettings.bookingMode || 'manual'}
+                updatingModeId={updatingModeId}
+                modeErrors={modeErrors}
               />
             )}
-            {!loading && activeTab === 'services' && <ServiceTable services={services} onModeChange={updateServiceBookingMode} globalBookingMode={marketplaceSettings.bookingMode || 'manual'} updatingModeId={updatingModeId} modeErrors={modeErrors} />}
-            {!loading && activeTab === 'bookings' && <BookingTable bookings={bookings} onView={setSelectedBooking} />}
-            {!loading && activeTab === 'rebook-requests' && <AdminRebookRequests />}
-            {!loading && activeTab === 'verification' && <BookingVerification token={token} verify={adminApi.verifyBooking} />}
-            {!loading && activeTab === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} />}
-            {!loading && activeTab === 'analytics' && <AnalyticsDashboard token={token} />}
-            {!loading && activeTab === 'storage' && <StorageOverview data={storageOverview} loading={storageLoading} error={storageError} onRefresh={loadStorageOverview} />}
-            {!loading && activeTab === 'activity' && <ActivityFeed bookings={bookings} services={services} businesses={businesses} />}
+            {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingTable bookings={bookings} onView={setSelectedBooking} />}
+            {!loading && view === 'bookings' && bookingSubTab === 'rebook-requests' && <AdminRebookRequests />}
+            {!loading && view === 'bookings' && bookingSubTab === 'verification' && <BookingVerification token={token} verify={adminApi.verifyBooking} />}
+            {!loading && view === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} />}
           </section>
         </div>
       </main>
@@ -582,24 +630,48 @@ function BusinessApprovalModal({ business, defaultCommission, onApprove, onClose
   );
 }
 
-function ServiceTable({ services, onModeChange, globalBookingMode, updatingModeId, modeErrors }) {
-  return <SimpleTable rows={services} columns={['Business Item', 'Type', 'Availability', 'Booking mode', 'Status']} map={(service) => [
-    service.title || service.name,
-    service.serviceType || service.category,
-    service.availabilityText || (service.availableQuantity ?? 0),
-    <div key={`${service._id}-mode`} className="grid gap-1">
-      <select disabled={String(updatingModeId) === String(service._id || service.id)} value={service.bookingMode || 'manual'} onChange={(event) => onModeChange(service, event.target.value)} className="rounded-lg border border-blue-300 bg-white px-2 py-1 text-xs font-bold text-blue-950 disabled:opacity-60">
-        <option value="manual">Manual</option>
-        <option value="automatic">Automatic</option>
-      </select>
-      <span className="text-[10px] font-semibold text-slate-500">{String(updatingModeId) === String(service._id || service.id) ? 'Saving mode…' : globalBookingMode === 'service-level' ? 'Effective for this service' : `Global override: ${globalBookingMode}`}</span>
-      {modeErrors[service._id || service.id] && <span className="max-w-56 text-[10px] font-semibold leading-4 text-red-600">{modeErrors[service._id || service.id]}</span>}
-    </div>,
-    service.status,
-  ]} />;
+function ServiceTable({ services, providers, search, setSearch, providerId, setProviderId, statusFilter, setStatusFilter, onView, onModeChange, globalBookingMode, updatingModeId, modeErrors }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search services" className="rounded-xl border border-gray-300 px-4 py-3 text-sm" />
+        <select value={providerId} onChange={(event) => setProviderId(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-3 text-sm">
+          <option value="">All providers</option>
+          {providers.map((provider) => (
+            <option key={provider._id || provider.id || provider.sellerId} value={provider._id || provider.id || provider.sellerId}>
+              {provider.name || provider.providerName || provider.sellerId || 'Provider'}
+            </option>
+          ))}
+        </select>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-3 text-sm">
+          <option value="all">Pending and approved</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <SimpleTable rows={services} columns={['Service', 'Provider', 'Category', 'Approval', 'Availability', 'Booking mode', 'Actions']} map={(service) => [
+        service.title || service.name,
+        service.providerName || service.provider?.name || service.sellerName || service.sellerId || '—',
+        service.serviceType || service.category,
+        serviceApprovalStatus(service),
+        service.availabilityText || (service.availableQuantity ?? 0),
+        <div key={`${service._id}-mode`} className="grid gap-1">
+          <select disabled={String(updatingModeId) === String(service._id || service.id)} value={service.bookingMode || 'manual'} onChange={(event) => onModeChange(service, event.target.value)} className="rounded-lg border border-blue-300 bg-white px-2 py-1 text-xs font-bold text-blue-950 disabled:opacity-50">
+            <option value="manual">Manual</option>
+            <option value="automatic">Automatic</option>
+          </select>
+          <span className="text-[10px] font-semibold text-slate-500">{String(updatingModeId) === String(service._id || service.id) ? 'Saving mode…' : globalBookingMode === 'service-level' ? 'Effective for this service' : `Global override: ${globalBookingMode}`}</span>
+          {modeErrors[service._id || service.id] && <span className="max-w-56 text-[10px] font-semibold leading-4 text-red-600">{modeErrors[service._id || service.id]}</span>}
+        </div>,
+        <button key={`${service._id}-view`} type="button" onClick={() => onView(service)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white">View details</button>,
+      ]} />
+    </div>
+  );
 }
 
 function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelected, onDeleteOne }) {
+  const [roleFilter, setRoleFilter] = useState('all');
   const selectedSet = new Set(selectedUserIds);
   const toggleUser = (userId) => {
     setSelectedUserIds((prev) =>
@@ -609,32 +681,44 @@ function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelect
   const grouped = users.reduce((acc, user) => {
     const role = String(user.role || '').toLowerCase();
     const key = role === 'admin'
-      ? 'Admin Users'
-      : ['supplier', 'hotel', 'business'].includes(role)
-        ? 'Business Users'
-        : 'Other Users';
+      ? 'Admins'
+      : isSellerRole(role) || role === 'business'
+        ? 'Service providers'
+        : 'Customers';
     acc[key] = acc[key] || [];
     acc[key].push(user);
     return acc;
   }, {});
+  const groups = roleFilter === 'providers'
+    ? ['Service providers']
+    : roleFilter === 'customers'
+      ? ['Customers']
+      : ['Service providers', 'Customers', 'Admins'];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gray-50 p-3">
-        <p className="text-sm font-semibold text-gray-700">{selectedUserIds.length} selected</p>
-        <button
-          type="button"
-          disabled={selectedUserIds.length === 0}
-          onClick={onDeleteSelected}
-          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          Delete selected users
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {[['all', 'All users'], ['providers', 'Service providers'], ['customers', 'Customers']].map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setRoleFilter(id)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${roleFilter === id ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>{label}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <p className="text-sm font-semibold text-gray-700">{selectedUserIds.length} selected</p>
+          <button
+            type="button"
+            disabled={selectedUserIds.length === 0}
+            onClick={onDeleteSelected}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            Delete selected users
+          </button>
+        </div>
       </div>
-      {['Business Users', 'Admin Users', 'Other Users'].map((group) => (
+      {groups.map((group) => (
         <section key={group}>
           <h2 className="mb-2 text-lg font-bold text-gray-900">{group}</h2>
-          <SimpleTable rows={grouped[group] || []} columns={['Select', 'Name', 'Email', 'Provider ID', 'Role', 'Business', 'Actions']} map={(user) => [
+          <SimpleTable rows={grouped[group] || []} columns={['Select', 'Name', 'Email', 'Provider ID', 'Role', 'Actions']} map={(user) => [
             <input
               type="checkbox"
               checked={selectedSet.has(user._id || user.id)}
@@ -644,8 +728,7 @@ function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelect
             user.name,
             user.email,
             user.sellerId || '-',
-            ['hotel', 'supplier'].includes(user.role) ? 'Provider' : user.role,
-            user.businessName || user.hotelId?.businessName || user.hotelId?.name || user.hotelId || '-',
+            isSellerRole(user.role) ? 'Service provider' : user.role === 'admin' ? 'Admin' : 'Customer',
             <button
               type="button"
               onClick={() => onDeleteOne(user._id || user.id)}
@@ -880,7 +963,7 @@ function AnalyticsDashboard({ token }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Admin only</p><h2 className="mt-1 text-2xl font-black text-slate-950">Analytics Dashboard</h2><p className="mt-1 text-sm text-slate-500">Visits, service interest, booking actions, and deposit conversion.</p></div>
+        <div><h2 className="text-2xl font-black text-slate-950">Analytics</h2><p className="mt-1 text-sm text-slate-500">Visits, service interest, booking actions, and deposit conversion.</p></div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="grid gap-1 text-xs font-bold text-slate-600">Date filter<select value={range} onChange={(event) => setRange(event.target.value)} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm"><option value="today">Today</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="custom">Custom range</option></select></label>
           {range === 'custom' && <><label className="grid gap-1 text-xs font-bold text-slate-600">From<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="rounded-xl border border-slate-300 px-3 py-2" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">To<input type="date" min={startDate || undefined} value={endDate} onChange={(event) => setEndDate(event.target.value)} className="rounded-xl border border-slate-300 px-3 py-2" /></label></>}
@@ -1002,7 +1085,7 @@ function ActivityFeed({ bookings, services, businesses }) {
   return <div className="space-y-2">{items.map((item) => <p key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">{item.text}</p>)}</div>;
 }
 
-function AnnouncementForm({ form, setForm, onSubmit }) {
+export function AnnouncementForm({ form, setForm, onSubmit }) {
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const items = Array.isArray(form.items) ? form.items : [];
   const updateItem = (index, key, value) => setForm((previous) => ({
@@ -1060,7 +1143,7 @@ function AnnouncementForm({ form, setForm, onSubmit }) {
   );
 }
 
-function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange }) {
+export function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange }) {
   const rulesText = (form.bookingRules || []).join('\n');
   return (
     <form onSubmit={onSubmit} className="grid gap-5">

@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { formatDisplayRole } from '../lib/dashboard';
 import AnnouncementBar from './AnnouncementBar';
 
 const storageKey = 'safariscon_sidebar_collapsed';
@@ -17,26 +18,40 @@ export default function DashboardLayout({ children }) {
   }, [collapsed]);
 
   const navItems = useMemo(() => {
-    const items = [
-      { to: dashboardRoute || '/dashboard', label: 'Dashboard', icon: 'dashboard', match: ['/dashboard'] },
-      { to: '/services', label: 'Browse services', icon: 'services', match: ['/services', '/hotels', '/hotel/', '/business/'] },
-    ];
-
-    if (isCustomer) {
-      items[0] = { to: '/dashboard', label: 'My bookings', icon: 'bookings', match: ['/dashboard'] };
+    if (isAdmin) {
+      return [
+        { to: '/admin-dashboard', label: 'Analytics', icon: 'dashboard', match: ['/admin-dashboard'], exact: true },
+        { to: '/admin-dashboard/users', label: 'Users', icon: 'user', match: ['/admin-dashboard/users'] },
+        { to: '/admin-dashboard/services', label: 'Services', icon: 'services', match: ['/admin-dashboard/services'] },
+        { to: '/admin-dashboard/bookings', label: 'Bookings', icon: 'bookings', match: ['/admin-dashboard/bookings'] },
+        { to: '/admin-dashboard/revenue', label: 'Revenue', icon: 'revenue', match: ['/admin-dashboard/revenue'] },
+        { to: '/services', label: 'Browse services', icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
+        { to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] },
+        { to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] },
+        { to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] },
+      ];
     }
 
     if (isSeller) {
-      items[0] = { to: dashboardRoute || '/dashboard/seller', label: 'Dashboard', icon: 'dashboard', match: ['/hotel-dashboard', '/dashboard/seller'] };
+      return [
+        { to: dashboardRoute || '/dashboard/seller', label: 'Analytics', icon: 'dashboard', match: ['/dashboard/seller', '/hotel-dashboard'], exact: true },
+        { to: `${dashboardRoute || '/dashboard/seller'}/services`, label: 'Services', icon: 'services', match: ['/dashboard/seller/services', '/hotel-dashboard/services'] },
+        { to: `${dashboardRoute || '/dashboard/seller'}/bookings`, label: 'Bookings', icon: 'bookings', match: ['/dashboard/seller/bookings', '/hotel-dashboard/bookings'] },
+        { to: `${dashboardRoute || '/dashboard/seller'}/finance`, label: 'Finance', icon: 'revenue', match: ['/dashboard/seller/finance', '/hotel-dashboard/finance'] },
+        { to: '/services', label: 'Browse services', icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
+        { to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] },
+        { to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] },
+        { to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] },
+      ];
     }
 
-    if (isAdmin) {
-      items[0] = { to: '/admin-dashboard', label: 'Admin dashboard', icon: 'shield', match: ['/admin-dashboard'] };
-    }
-
-    items.push({ to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] });
-    items.push({ to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] });
-    items.push({ to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] });
+    const items = [
+      { to: '/dashboard', label: isCustomer ? 'My bookings' : 'Dashboard', icon: isCustomer ? 'bookings' : 'dashboard', match: ['/dashboard'], exact: true },
+      { to: '/services', label: 'Browse services', icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
+      { to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] },
+      { to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] },
+      { to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] },
+    ];
     return items;
   }, [dashboardRoute, isAdmin, isCustomer, isSeller]);
 
@@ -51,28 +66,13 @@ export default function DashboardLayout({ children }) {
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100">
       <AnnouncementBar />
       <aside className={`fixed bottom-0 left-0 top-8 z-50 hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-200 dark:border-slate-800 dark:bg-slate-900 lg:flex lg:flex-col ${collapsed ? 'w-20' : 'w-72'}`}>
-        <SidebarContent
-          collapsed={collapsed}
-          navItems={navItems}
-          pathname={location.pathname}
-          user={user}
-          onToggle={() => setCollapsed((value) => !value)}
-          onLogout={handleLogout}
-        />
+        <SidebarContent collapsed={collapsed} navItems={navItems} pathname={location.pathname} onToggle={() => setCollapsed((value) => !value)} onLogout={handleLogout} />
       </aside>
 
       {mobileOpen && (
         <div className="fixed inset-x-0 bottom-0 top-8 z-50 bg-slate-950/45 lg:hidden" onClick={() => setMobileOpen(false)}>
           <aside className="h-full w-80 max-w-[86vw] bg-white shadow-2xl dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
-            <SidebarContent
-              collapsed={false}
-              navItems={navItems}
-              pathname={location.pathname}
-              user={user}
-              onToggle={() => setMobileOpen(false)}
-              onLogout={handleLogout}
-              mobile
-            />
+            <SidebarContent collapsed={false} navItems={navItems} pathname={location.pathname} onToggle={() => setMobileOpen(false)} onLogout={handleLogout} mobile />
           </aside>
         </div>
       )}
@@ -84,17 +84,17 @@ export default function DashboardLayout({ children }) {
               <button type="button" onClick={() => setMobileOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 lg:hidden" aria-label="Open sidebar">
                 <Icon name="menu" />
               </button>
+              <h1 className="truncate text-lg font-black text-slate-950 dark:text-slate-50 sm:text-xl">{activeLabel}</h1>
+            </div>
+            <Link to="/profile" className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-1 text-right hover:bg-slate-50 dark:hover:bg-slate-900" title="Open profile">
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wide text-primary">{activeLabel}</p>
-                <h1 className="truncate text-lg font-black text-slate-950 dark:text-slate-50 sm:text-xl">{getGreeting(user)}</h1>
+                <p className="truncate text-sm font-black text-slate-950 dark:text-slate-50">{user?.name || 'User'}</p>
+                <p className="truncate text-xs font-semibold text-slate-500">{formatDisplayRole(user?.role)}</p>
               </div>
-            </div>
-            <div className="hidden items-center gap-3 sm:flex">
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-primary dark:bg-blue-950/60 dark:text-blue-200">{formatRole(user?.role)}</span>
-              <Link to="/settings" className={`rounded-xl border px-4 py-2 text-sm font-bold ${location.pathname === '/settings' ? 'border-primary bg-primary text-white' : 'border-slate-200 bg-white text-slate-700 hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:text-blue-300'}`}>
-                Settings
-              </Link>
-            </div>
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-sm font-black text-white">
+                {getInitials(user?.name)}
+              </div>
+            </Link>
           </div>
         </header>
         {children}
@@ -103,7 +103,7 @@ export default function DashboardLayout({ children }) {
   );
 }
 
-function SidebarContent({ collapsed, navItems, pathname, user, onToggle, onLogout, mobile = false }) {
+function SidebarContent({ collapsed, navItems, pathname, onToggle, onLogout, mobile = false }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center justify-between gap-3 border-b border-slate-200 px-4 dark:border-slate-800">
@@ -126,7 +126,7 @@ function SidebarContent({ collapsed, navItems, pathname, user, onToggle, onLogou
           const active = isActivePath(pathname, item);
           return (
             <Link
-              key={item.label}
+              key={`${item.to}-${item.label}`}
               to={item.to}
               className={`group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition ${active ? 'bg-primary text-white shadow-sm' : 'text-slate-500 hover:bg-blue-50 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-blue-300'}`}
               title={collapsed ? item.label : undefined}
@@ -139,18 +139,7 @@ function SidebarContent({ collapsed, navItems, pathname, user, onToggle, onLogou
       </nav>
 
       <div className="border-t border-slate-200 p-3 dark:border-slate-800">
-        <div className={`mb-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/80 ${collapsed ? 'text-center' : ''}`}>
-          <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-black text-white">
-            {getInitials(user?.name || user?.email)}
-          </div>
-          {!collapsed && (
-            <div className="mt-2 min-w-0 text-center">
-              <p className="truncate text-sm font-black text-slate-900 dark:text-slate-100">{user?.name || 'User'}</p>
-              <p className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{user?.email}</p>
-            </div>
-          )}
-        </div>
-        <button type="button" onClick={onLogout} className={`flex w-full items-center justify-center gap-3 rounded-xl bg-slate-100 px-3 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 ${collapsed ? '' : 'justify-start'}`}>
+        <button type="button" onClick={onLogout} className={`flex w-full items-center justify-center gap-3 rounded-xl bg-red-50 px-3 py-3 text-sm font-black text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-950/70 ${collapsed ? '' : 'justify-start'}`}>
           <Icon name="logout" />
           {!collapsed && <span>Logout</span>}
         </button>
@@ -164,11 +153,13 @@ export function Icon({ name }) {
     dashboard: 'M4 13h7V4H4v9zm9 7h7V4h-7v16zM4 20h7v-5H4v5z',
     bookings: 'M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 011 1v14H4V6a1 1 0 011-1z',
     services: 'M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z',
+    grid: 'M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z',
     briefcase: 'M10 6V5a2 2 0 012-2h0a2 2 0 012 2v1m-9 0h10a2 2 0 012 2v9a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z',
     shield: 'M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3z',
     settings: 'M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm7-3.5l2-1-2-3-2 .5a8 8 0 00-2-1L14.5 5h-5L9 7.5a8 8 0 00-2 1L5 8l-2 3 2 1a8 8 0 000 2l-2 1 2 3 2-.5a8 8 0 002 1l.5 2.5h5l.5-2.5a8 8 0 002-1l2 .5 2-3-2-1a8 8 0 000-2z',
     user: 'M12 12a4 4 0 100-8 4 4 0 000 8zM6 20a6 6 0 0112 0',
     bell: 'M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0a3 3 0 11-6 0',
+    revenue: 'M4 19V5m0 14h16M8 17V9m4 8V7m4 10v-6',
     logout: 'M15 17l5-5-5-5M20 12H9m3 8H5a1 1 0 01-1-1V5a1 1 0 011-1h7',
     menu: 'M4 6h16M4 12h16M4 18h16',
     close: 'M6 18L18 6M6 6l12 12',
@@ -184,17 +175,10 @@ export function Icon({ name }) {
 }
 
 function isActivePath(pathname, item) {
-  return item.match.some((match) => match === pathname || (match.endsWith('/') && pathname.startsWith(match)));
-}
-
-function getGreeting(user) {
-  const firstName = user?.name?.split(' ')?.[0];
-  return firstName ? `Welcome, ${firstName}` : 'Welcome back';
-}
-
-function formatRole(role) {
-  if (role === 'hotel' || role === 'supplier') return 'Service provider';
-  return String(role || 'user').replace(/[-_]/g, ' ');
+  if (item.exact) {
+    return item.match.some((match) => pathname === match);
+  }
+  return item.match.some((match) => pathname === match || pathname.startsWith(`${match}/`) || (match.endsWith('/') && pathname.startsWith(match)));
 }
 
 function getInitials(value = '') {

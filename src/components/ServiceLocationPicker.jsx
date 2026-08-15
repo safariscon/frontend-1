@@ -1,52 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-
-const DEFAULT_CENTER = { latitude: -1.9441, longitude: 30.0619 };
-const RWANDA_BOUNDS = {
-  minLatitude: -2.9,
-  maxLatitude: -1.0,
-  minLongitude: 28.8,
-  maxLongitude: 31.0,
-};
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
-const searchCache = new Map();
-
-const isInsideRwanda = (latitude, longitude) =>
-  Number.isFinite(latitude) &&
-  Number.isFinite(longitude) &&
-  latitude >= RWANDA_BOUNDS.minLatitude &&
-  latitude <= RWANDA_BOUNDS.maxLatitude &&
-  longitude >= RWANDA_BOUNDS.minLongitude &&
-  longitude <= RWANDA_BOUNDS.maxLongitude;
-
-const loadLeaflet = () => new Promise((resolve, reject) => {
-  if (window.L) {
-    resolve(window.L);
-    return;
-  }
-
-  if (!document.querySelector('link[data-leaflet-css]')) {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    link.dataset.leafletCss = 'true';
-    document.head.appendChild(link);
-  }
-
-  const existingScript = document.querySelector('script[data-leaflet-js]');
-  if (existingScript) {
-    existingScript.addEventListener('load', () => resolve(window.L), { once: true });
-    existingScript.addEventListener('error', reject, { once: true });
-    return;
-  }
-
-  const script = document.createElement('script');
-  script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-  script.async = true;
-  script.dataset.leafletJs = 'true';
-  script.onload = () => resolve(window.L);
-  script.onerror = reject;
-  document.body.appendChild(script);
-});
+import loadLeaflet, { DEFAULT_RWANDA_CENTER, isInsideRwanda, leafletMarkerIcon } from '../lib/leafletMap';
+import { reverseGeocode, searchPlaces } from '../lib/geo';
 
 export default function ServiceLocationPicker({ value, onChange, districts = [] }) {
   const location = useMemo(() => ({
@@ -56,38 +10,82 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     sector: value?.sector || '',
     cell: value?.cell || '',
     village: value?.village || '',
-    fullAddress: value?.fullAddress || '',
+    placeName: value?.placeName || '',
+    fullAddress: value?.fullAddress || value?.formattedAddress || '',
+    formattedAddress: value?.formattedAddress || value?.fullAddress || '',
     latitude: value?.latitude ?? null,
     longitude: value?.longitude ?? null,
+    placeId: value?.placeId || value?.googlePlaceId || '',
     locationSource: value?.locationSource || 'map_click',
     isExactLocationVerified: Boolean(value?.isExactLocationVerified),
   }), [value]);
   const mapNodeRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const [query, setQuery] = useState(location.fullAddress || location.placeName || '');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
-  const canShowSearchResults = location.fullAddress.trim().length >= 3;
 
-  const update = (patch) => onChange({ ...location, ...patch, country: 'Rwanda' });
+  const update = (patch) => onChange({
+    ...location,
+    ...patch,
+    country: 'Rwanda',
+    formattedAddress: patch.formattedAddress ?? patch.fullAddress ?? location.formattedAddress,
+    fullAddress: patch.fullAddress ?? patch.formattedAddress ?? location.fullAddress,
+  });
 
-  const setMarker = (latitude, longitude, source) => {
-    update({ latitude, longitude, locationSource: source, isExactLocationVerified: false });
+  const applyCoordinates = async (latitude, longitude, source, extras = {}) => {
+    if (!isInsideRwanda(latitude, longitude)) {
+      setMessage('Please choose a location inside Rwanda.');
+      return;
+    }
+    setMessage('');
+    update({
+      latitude,
+      longitude,
+      locationSource: source,
+      isExactLocationVerified: false,
+      ...extras,
+    });
+    drawMarker(latitude, longitude);
+    if (!extras.formattedAddress) {
+      const place = await reverseGeocode(latitude, longitude).catch(() => null);
+      if (place) {
+        update({
+          latitude,
+          longitude,
+          locationSource: source,
+          isExactLocationVerified: false,
+          placeName: extras.placeName || place.placeName,
+          formattedAddress: place.formattedAddress,
+          fullAddress: place.formattedAddress,
+          placeId: extras.placeId || place.placeId,
+          province: location.province || place.province,
+          district: location.district || place.district,
+          sector: location.sector || place.sector,
+        });
+        setQuery(place.formattedAddress || extras.placeName || query);
+      }
+    }
+  };
+
+  const drawMarker = (latitude, longitude) => {
     if (!mapRef.current || !window.L) return;
     const latLng = [latitude, longitude];
     if (!markerRef.current) {
       markerRef.current = window.L.marker(latLng, {
-        icon: window.L.icon({
-          iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-          iconAnchor: [12, 41],
-        }),
+        draggable: true,
+        icon: leafletMarkerIcon(window.L),
       }).addTo(mapRef.current);
+      markerRef.current.on('dragend', (event) => {
+        const next = event.target.getLatLng();
+        applyCoordinates(Number(next.lat), Number(next.lng), 'map_drag');
+      });
     } else {
       markerRef.current.setLatLng(latLng);
     }
-    mapRef.current.setView(latLng, 15);
+    mapRef.current.setView(latLng, 16);
   };
 
   useEffect(() => {
@@ -95,77 +93,43 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     loadLeaflet()
       .then((leaflet) => {
         if (cancelled || !mapNodeRef.current || mapRef.current) return;
-        const start = [location.latitude || DEFAULT_CENTER.latitude, location.longitude || DEFAULT_CENTER.longitude];
-        mapRef.current = leaflet.map(mapNodeRef.current).setView(start, location.latitude ? 15 : 8);
+        const start = [location.latitude || DEFAULT_RWANDA_CENTER.latitude, location.longitude || DEFAULT_RWANDA_CENTER.longitude];
+        mapRef.current = leaflet.map(mapNodeRef.current).setView(start, location.latitude ? 16 : 8);
         leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; OpenStreetMap contributors',
         }).addTo(mapRef.current);
         mapRef.current.on('click', (event) => {
-          const latitude = Number(event.latlng.lat);
-          const longitude = Number(event.latlng.lng);
-          if (!isInsideRwanda(latitude, longitude)) {
-            setMessage('Please choose a location inside Rwanda.');
-            return;
-          }
-          setMessage('');
-          setMarker(latitude, longitude, 'map_click');
+          applyCoordinates(Number(event.latlng.lat), Number(event.latlng.lng), 'map_click');
         });
-        if (location.latitude && location.longitude) setMarker(Number(location.latitude), Number(location.longitude), location.locationSource || 'map_click');
+        if (location.latitude && location.longitude) drawMarker(Number(location.latitude), Number(location.longitude));
       })
-      .catch(() => setMessage('Map could not load. You can still search for an address.'));
-
+      .catch(() => setMessage('Map could not load. Search a place name, then confirm the pin.'));
     return () => {
       cancelled = true;
     };
-    // Map must initialize only once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!location.latitude || !location.longitude || !mapRef.current || !window.L) return;
-    const latLng = [Number(location.latitude), Number(location.longitude)];
-    if (!markerRef.current) {
-      markerRef.current = window.L.marker(latLng).addTo(mapRef.current);
-    } else {
-      markerRef.current.setLatLng(latLng);
+  const runSearch = async (event) => {
+    event?.preventDefault?.();
+    const text = query.trim();
+    if (text.length < 3) {
+      setMessage('Type at least 3 characters, then search.');
+      return;
     }
-    mapRef.current.setView(latLng, 15);
-  }, [location.latitude, location.longitude]);
-
-  useEffect(() => {
-    const address = location.fullAddress.trim();
-    if (address.length < 3) {
-      return undefined;
+    setSearching(true);
+    setMessage('');
+    try {
+      const results = await searchPlaces(text);
+      setSearchResults(results);
+      if (!results.length) setMessage('No matching place. Pin the exact spot on the map instead.');
+    } catch {
+      setSearchResults([]);
+      setMessage('Search is unavailable. Pin the exact spot on the map.');
+    } finally {
+      setSearching(false);
     }
-
-    const timeout = window.setTimeout(async () => {
-      const query = address.toLowerCase().includes('rwanda') ? address : `${address}, Rwanda`;
-      if (searchCache.has(query)) {
-        setSearchResults(searchCache.get(query));
-        return;
-      }
-      setSearching(true);
-      try {
-        const params = new URLSearchParams({ q: query, format: 'jsonv2', addressdetails: '1', limit: '5', countrycodes: 'rw' });
-        const response = await fetch(`${NOMINATIM_URL}?${params.toString()}`);
-        const results = (await response.json())
-          .map((item) => ({
-            label: item.display_name,
-            latitude: Number(item.lat),
-            longitude: Number(item.lon),
-          }))
-          .filter((item) => isInsideRwanda(item.latitude, item.longitude));
-        searchCache.set(query, results);
-        setSearchResults(results);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 600);
-
-    return () => window.clearTimeout(timeout);
-  }, [location.fullAddress]);
+  };
 
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -174,16 +138,7 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     }
     setMessage('Requesting GPS permission...');
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = Number(position.coords.latitude);
-        const longitude = Number(position.coords.longitude);
-        if (!isInsideRwanda(latitude, longitude)) {
-          setMessage('Your current position is outside Rwanda.');
-          return;
-        }
-        setMessage('');
-        setMarker(latitude, longitude, 'gps');
-      },
+      (position) => applyCoordinates(Number(position.coords.latitude), Number(position.coords.longitude), 'gps'),
       () => setMessage('GPS permission was denied or unavailable.'),
       { enableHighAccuracy: true, timeout: 12000 }
     );
@@ -191,21 +146,23 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
 
   const selectResult = (result) => {
     setSearchResults([]);
-    update({
-      fullAddress: result.label,
-      latitude: result.latitude,
-      longitude: result.longitude,
-      locationSource: 'search',
-      isExactLocationVerified: false,
+    setQuery(result.label);
+    applyCoordinates(result.latitude, result.longitude, 'search', {
+      placeName: result.placeName || result.label,
+      formattedAddress: result.formattedAddress || result.label,
+      fullAddress: result.formattedAddress || result.label,
+      placeId: result.placeId,
+      province: location.province || result.province,
+      district: location.district || result.district,
+      sector: location.sector || result.sector,
     });
-    setMarker(result.latitude, result.longitude, 'search');
   };
 
   return (
     <section className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
       <div className="mb-4">
-        <h3 className="font-bold text-blue-950">Service Location</h3>
-        <p className="mt-1 text-sm text-blue-800">Set the exact place customers will visit. Coordinates are saved silently from search, map click, or GPS.</p>
+        <h3 className="font-bold text-blue-950">Service location</h3>
+        <p className="mt-1 text-sm text-blue-800">Search a known place, or drop a pin if the business is not listed. Customers will get the road from their GPS to this point.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -215,8 +172,25 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
         <PickerInput label="Cell" value={location.cell} onChange={(cell) => update({ cell })} />
         <PickerInput label="Village" value={location.village} onChange={(village) => update({ village })} />
         <div className="relative">
-          <PickerInput label="Full address / place name" value={location.fullAddress} onChange={(fullAddress) => update({ fullAddress })} placeholder="Kigali, Nyarugenge, Nyamirambo" />
-          {canShowSearchResults && (searching || searchResults.length > 0) && (
+          <label className="block">
+            <span className="text-sm font-semibold text-blue-950">Place name / address</span>
+            <div className="mt-1 flex gap-2">
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    runSearch();
+                  }
+                }}
+                placeholder="Kigali Heights, Nyamirambo, Mama Jane Hair Salon"
+                className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3"
+              />
+              <button type="button" onClick={runSearch} className="shrink-0 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white">{searching ? '...' : 'Search'}</button>
+            </div>
+          </label>
+          {(searching || searchResults.length > 0) && (
             <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
               {searching && <p className="p-3 text-sm text-slate-500">Searching Rwanda...</p>}
               {searchResults.map((result) => (
@@ -234,8 +208,15 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button type="button" onClick={useCurrentLocation} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Use my current location</button>
+        {location.latitude && location.longitude && (
+          <button type="button" onClick={() => update({ isExactLocationVerified: true })} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white">
+            Confirm this pin
+          </button>
+        )}
         {location.latitude && location.longitude ? (
-          <span className="rounded-lg bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700">Exact location selected by {String(location.locationSource).replace('_', ' ')}</span>
+          <span className={`rounded-lg px-3 py-2 text-xs font-bold ${location.isExactLocationVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+            {location.isExactLocationVerified ? 'Exact location confirmed' : `Pin set by ${String(location.locationSource).replace('_', ' ')}. Drag if needed, then confirm.`}
+          </span>
         ) : (
           <span className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-700">Exact map point required before publishing</span>
         )}

@@ -12,6 +12,7 @@ import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { t } from '../lib/translations';
+import { serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 
 export default function HotelsPage() {
   const { isAuthenticated } = useAuth();
@@ -52,26 +53,28 @@ function ServicesCatalog({ embedded = false }) {
     if (!silent) setLoading(true);
     setLoadError('');
     try {
+      const catalogResponse = await publicApi.getHotels({
+        category: categoryFilter || undefined,
+        type: categoryFilter || undefined,
+        location: locationParam || undefined,
+        search: searchParam || undefined,
+      });
+      let listings = withoutDrafts(normalizeHotels(catalogResponse.services || catalogResponse.businesses || catalogResponse.hotels || []));
       if (isAdmin) {
         const token = getAuthData()?.token;
-        const response = await adminApi.getServices(token, {
-          providerId: providerId || undefined,
-          category: categoryFilter || undefined,
-          location: locationParam || undefined,
-          search: searchParam || undefined,
-        });
-        setProviders(response.providers || []);
-        setAllHotels(normalizeHotels(response.services || response.businesses || response.hotels || []));
+        const adminResponse = token ? await adminApi.getServices(token).catch(() => ({})) : {};
+        setProviders(adminResponse.providers || []);
+        if (providerId) {
+          listings = listings.filter((hotel) => matchesCatalogProvider(hotel, providerId));
+          if (!listings.length) {
+            const filteredAdmin = await adminApi.getServices(token, { providerId, approvalStatus: 'approved' }).catch(() => ({}));
+            listings = withoutDrafts(normalizeHotels(filteredAdmin.services || [])).filter((item) => serviceApprovalStatus(item) === 'approved' || !item.approvalStatus);
+          }
+        }
       } else {
-        const response = await publicApi.getHotels({
-          category: categoryFilter || undefined,
-          type: categoryFilter || undefined,
-          location: locationParam || undefined,
-          search: searchParam || undefined,
-        });
         setProviders([]);
-        setAllHotels(normalizeHotels(response.businesses || response.hotels || response.services || []));
       }
+      setAllHotels(listings);
     } catch (error) {
       setAllHotels([]);
       setLoadError(error.message || 'Unable to load services.');
@@ -316,4 +319,22 @@ function formatLabel(value) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function matchesCatalogProvider(hotel, providerId) {
+  const wanted = String(providerId || '');
+  if (!wanted) return true;
+  const ids = [
+    hotel.providerId,
+    hotel.provider?.id,
+    hotel.provider?._id,
+    hotel.provider?.sellerId,
+    hotel.sellerId,
+    hotel.sellerUserId,
+    hotel.userId?._id,
+    hotel.userId,
+    hotel.businessId?._id,
+    hotel.businessId,
+  ];
+  return ids.some((id) => String(id || '') === wanted);
 }
