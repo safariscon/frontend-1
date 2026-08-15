@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
+import TermsCheckbox from '../components/TermsCheckbox';
 import { t } from '../lib/translations';
 import PasswordInput from '../components/PasswordInput';
 
@@ -18,6 +19,7 @@ export default function ProviderCompleteRegistrationPage() {
     newPassword: '',
     confirmPassword: '',
   });
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { language } = useLanguage();
@@ -29,6 +31,10 @@ export default function ProviderCompleteRegistrationPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    if (!acceptedTerms) {
+      setError('You must accept the Terms of use and Privacy policy before creating an account.');
+      return;
+    }
     if (form.newPassword !== form.confirmPassword) {
       setError(t('passwordMismatch', language));
       return;
@@ -42,6 +48,7 @@ export default function ProviderCompleteRegistrationPage() {
         sellerId: form.sellerId,
         newPassword: form.newPassword,
         confirmPassword: form.confirmPassword,
+        acceptedTerms: true,
       });
       navigate('/verify-email', {
         state: {
@@ -79,8 +86,9 @@ export default function ProviderCompleteRegistrationPage() {
             <input type="text" required placeholder={t('providerName', language)} value={form.providerName} onChange={updateField('providerName')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="email" required placeholder={t('providerEmail', language)} value={form.providerEmail} onChange={updateField('providerEmail')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="text" required autoCapitalize="characters" placeholder={t('providerId', language)} value={form.sellerId} onChange={updateField('sellerId')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
-            <PasswordInput required minLength={8} placeholder={t('createPassword', language)} value={form.newPassword} onChange={updateField('newPassword')} inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl" />
-            <PasswordInput required minLength={8} placeholder={t('confirmPassword', language)} value={form.confirmPassword} onChange={updateField('confirmPassword')} inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl" />
+            <input type="password" required minLength={8} placeholder={t('createPassword', language)} value={form.newPassword} onChange={updateField('newPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
+            <input type="password" required minLength={8} placeholder={t('confirmPassword', language)} value={form.confirmPassword} onChange={updateField('confirmPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
+            <TermsCheckbox checked={acceptedTerms} onChange={setAcceptedTerms} />
             <button type="submit" disabled={loading} className="w-full py-3 bg-primary text-white rounded-xl hover:bg-primary-dark disabled:opacity-50">
               {loading ? t('submitting', language) : t('completeProviderRegistration', language)}
             </button>

@@ -1,5 +1,5 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { InstallProvider } from './context/InstallContext';
 import { useTheme } from './context/ThemeContext';
 import { Component, useEffect } from 'react';
@@ -16,6 +16,7 @@ import EmailVerificationPage from './pages/EmailVerificationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import { HowItWorksPage, PaymentsPolicyPage, PrivacyPage, TermsPage } from './pages/PolicyPages';
 import ProviderCompleteRegistrationPage from './pages/ProviderCompleteRegistrationPage';
 import BusinessRegisterPage from './pages/BusinessRegisterPage';
 import UserDashboard from './pages/UserDashboard';
@@ -27,6 +28,37 @@ import InstallBanner from './components/InstallBanner';
 import InstallModal from './components/InstallModal';
 import MobileFloatingInstall from './components/MobileFloatingInstall';
 import { ANALYTICS_EVENTS, trackAnalytics } from './lib/analytics';
+import { needsTermsAcceptance } from './lib/dashboard';
+
+const OPEN_PATHS = [
+  '/',
+  '/about',
+  '/contact',
+  '/services',
+  '/hotels',
+  '/login',
+  '/register',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/provider-register',
+  '/business-register',
+  '/how-it-works',
+  '/terms',
+  '/privacy',
+  '/payments',
+];
+
+function TermsGate({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return children;
+  if (!needsTermsAcceptance(user)) return children;
+  if (OPEN_PATHS.includes(location.pathname) || location.pathname.startsWith('/hotel/') || location.pathname.startsWith('/business/') || location.pathname.startsWith('/verify/')) {
+    return children;
+  }
+  return <Navigate to="/terms" replace state={{ requireAcceptance: true }} />;
+}
 
 class DashboardErrorBoundary extends Component {
   constructor(props) {
@@ -79,6 +111,7 @@ function AppContent() {
     <AuthProvider>
       <InstallProvider>
         <Router>
+          <TermsGate>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/about" element={<AboutPage />} />
@@ -93,6 +126,10 @@ function AppContent() {
             <Route path="/verify-email" element={<EmailVerificationPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/how-it-works" element={<HowItWorksPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/payments" element={<PaymentsPolicyPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/provider-register" element={<ProviderCompleteRegistrationPage />} />
             <Route path="/business-register" element={<BusinessRegisterPage />} />
@@ -102,6 +139,7 @@ function AppContent() {
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/verify/:token" element={<VerificationPage />} />
           </Routes>
+          </TermsGate>
         </Router>
         
         {/* Install-related components (global) */}

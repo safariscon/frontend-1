@@ -2,15 +2,42 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 import { bookingApi, getAuthData, publicApi, rebookApi } from '../lib/api';
+import { amountDueNow, completeBookingPayment, listingCancelHours, listingCancelPenalty } from '../lib/payments';
 import { formatRwf } from '../lib/currency';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import DepositPaymentModal from './DepositPaymentModal';
+import PhoneNumberField from './PhoneNumberField';
+import OptionDetailsModal from './OptionDetailsModal';
 import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
+import { isValidPhoneNumber } from '../lib/phone';
+import {
+  formatDays,
+  formatDisplayDate,
+  formatTime,
+  optionMaxDate,
+  optionMinDate,
+  parseOptionAvailability,
+  validateOptionSchedule,
+} from '../lib/availability';
 
 const TODAY = new Date().toISOString().split('T')[0];
+const OUTDATED_RULE = /30%|remaining balance is paid|advance money is not refunded|pay the 30%/i;
+
+const currentBookingRules = (listing) => {
+  const hours = listingCancelHours(listing);
+  const penalty = listingCancelPenalty(listing);
+  const refund = 100 - penalty;
+  return [
+    'Provide accurate booking information.',
+    'Pay the full listing price in the app (Mobile Money or card). There is no 30% deposit and no remaining balance at the venue.',
+    'Payment goes to the SafarisCon wallet. The provider is paid after the cancel window ends — not at the moment you pay.',
+    `You may cancel until ${hours} hours before the service. If you cancel in time, you get ${refund}% back and ${penalty}% is a cancellation fee. This listing may use different hours or %.`,
+    'After the deadline, Cancel is hidden and the booking stays valid. Show your booking code at the venue. There is no second payment on arrival.',
+  ];
+};
 
 const BASE_VALUES = {
   destinationPlace: '',
@@ -118,15 +145,44 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   );
   const offers = business?.availabilityTable?.rows || [];
   const selectedOfferRow = offers.find((row) => row.cells?.service === selectedOffer);
+  const optionSchedule = useMemo(
+    () => parseOptionAvailability(selectedOfferRow, { ...business, ...service }),
+    [selectedOfferRow, business, service]
+  );
+  const dateMin = optionMinDate(optionSchedule, TODAY);
+  const dateMax = optionMaxDate(optionSchedule);
+  const overnightHours = Boolean(optionSchedule.openTime && optionSchedule.closeTime && optionSchedule.openTime > optionSchedule.closeTime);
   const activePromotion = getVisiblePromotion(business?.promotion);
   const effectiveMode = marketplaceSettings.bookingMode === 'service-level'
     ? business?.bookingMode || service?.bookingMode || 'manual'
     : marketplaceSettings.bookingMode || 'manual';
   const isUnavailable = (service?.status || business?.status) === 'unavailable';
+  const displayedRules = useMemo(() => {
+    const defaults = currentBookingRules(business || service);
+    const extras = marketplaceRules.filter((rule) => rule && !OUTDATED_RULE.test(rule) && !defaults.includes(rule));
+    return [...defaults, ...extras];
+  }, [business, service, marketplaceRules]);
 
   const updateValue = (key, value) => {
-    setValues((prev) => ({ ...prev, [key]: value }));
+    setValues((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'bookingDate' && (optionSchedule.sameDayOnly || !optionSchedule.requiresEndDate)) {
+        next.endBookingDate = value;
+      }
+      return next;
+    });
   };
+
+  useEffect(() => {
+    setValues((prev) => {
+      if (!prev.bookingDate) return prev;
+      if (optionSchedule.sameDayOnly || !optionSchedule.requiresEndDate) {
+        if (prev.endBookingDate === prev.bookingDate) return prev;
+        return { ...prev, endBookingDate: prev.bookingDate };
+      }
+      return prev;
+    });
+  }, [optionSchedule.sameDayOnly, optionSchedule.requiresEndDate, selectedOffer]);
 
   const updateCustomerLocation = (key, value) => {
     setValues((prev) => ({
@@ -143,13 +199,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (isUnavailable) return 'This service is currently not available.';
     if (!selectedOffer) return 'Please choose a service from the price table.';
     if (!values.fullName.trim()) return 'Please complete Full name.';
-    if (!/^\+?[0-9][0-9\s-]{7,18}$/.test(values.phone)) return 'Please enter a valid phone number.';
+    if (!isValidPhoneNumber(values.phone)) return 'Please enter a valid phone number for the selected country.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return 'Please enter a valid email address.';
-    if (!values.bookingDate) return 'Please choose a booking date.';
-    if (!values.endBookingDate) return 'Please choose an end booking date.';
-    if (new Date(values.endBookingDate) < new Date(values.bookingDate)) return 'End booking date cannot be before the booking date.';
-    if (!values.startTime) return 'Please choose a start time.';
-    if (!values.endTime) return 'Please choose an end time.';
+    const scheduleError = validateOptionSchedule(optionSchedule, values, TODAY);
+    if (scheduleError) return scheduleError;
     if (Number(values.numberOfPeople) < 1) return 'Number of people must be at least 1.';
     if (Number(values.quantity) < 1) return 'Quantity / units must be at least 1.';
     const customerLocationFields = [
@@ -230,10 +283,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         totalConsumptionUnits: numberOfPeople * quantity,
         totalPrice: 0,
         startDate: values.bookingDate,
-        endDate: values.endBookingDate,
-        endBookingDate: values.endBookingDate,
-        startTime: values.startTime,
-        endTime: values.endTime,
+        endDate: values.endBookingDate || values.bookingDate,
+        endBookingDate: values.endBookingDate || values.bookingDate,
+        startTime: values.startTime || undefined,
+        endTime: values.endTime || undefined,
         destinationPlace: values.destinationPlace,
         destinationLocation: values.destinationLocation,
         vehicleType: values.vehicleType,
@@ -250,9 +303,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           email: values.email,
           phone: values.phone,
           bookingDate: values.bookingDate,
-          endBookingDate: values.endBookingDate,
-          startTime: values.startTime,
-          endTime: values.endTime,
+          endBookingDate: values.endBookingDate || values.bookingDate,
+          startTime: values.startTime || '',
+          endTime: values.endTime || '',
           numberOfPeople,
           quantity,
           totalConsumptionUnits: numberOfPeople * quantity,
@@ -324,10 +377,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         </div>
       )}
 
-      {marketplaceRules.length > 0 && (
+      {displayedRules.length > 0 && (
         <div className="mb-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-950">
           <p className="font-bold">SafarisCon booking rules</p>
-          <ul className="mt-2 list-disc pl-5">{marketplaceRules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
+          <ul className="mt-2 list-disc pl-5">{displayedRules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
         </div>
       )}
 
@@ -344,7 +397,17 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       {selectedOfferRow && (
         <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
           <div className="flex items-center justify-between gap-3">
-            <div><strong>{selectedOfferRow.cells?.service}</strong><p className="mt-1 capitalize">{String(selectedOfferRow.cells?.priceType || 'Manual quote').replace(/-/g, ' ')}</p></div>
+            <div>
+              <strong>{selectedOfferRow.cells?.service}</strong>
+              <p className="mt-1 capitalize">{String(selectedOfferRow.cells?.priceType || 'Manual quote').replace(/-/g, ' ')}</p>
+              <p className="mt-1 text-xs">
+                {optionSchedule.capacity > 0 ? `${optionSchedule.capacity} slots` : 'Capacity on request'}
+                {' · '}
+                {optionSchedule.availableFrom || optionSchedule.availableTo
+                  ? `${formatDisplayDate(optionSchedule.availableFrom)} – ${optionSchedule.availableTo ? formatDisplayDate(optionSchedule.availableTo) : 'open'}`
+                  : 'No published date window yet'}
+              </p>
+            </div>
             <button type="button" onClick={() => setDetailsOpen(true)} className="rounded-lg bg-white px-3 py-2 font-bold text-primary">View details</button>
           </div>
         </div>
@@ -360,12 +423,50 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FixedInput label="Full name" value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
-        <FixedInput label="Phone number" type="tel" value={values.phone} onChange={(value) => updateValue('phone', value)} required />
+        <PhoneNumberField label="Phone number" value={values.phone} onChange={(value) => updateValue('phone', value)} required />
         <FixedInput label="Email" type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
-        <FixedInput label="Booking date" type="date" min={TODAY} value={values.bookingDate} onChange={(value) => updateValue('bookingDate', value)} required />
-        <FixedInput label="End booking date" type="date" min={values.bookingDate || TODAY} value={values.endBookingDate} onChange={(value) => updateValue('endBookingDate', value)} required />
-        <FixedInput label="Start time" type="time" value={values.startTime} onChange={(value) => updateValue('startTime', value)} required />
-        <FixedInput label="End time" type="time" value={values.endTime} onChange={(value) => updateValue('endTime', value)} required />
+        <FixedInput
+          label="Booking date"
+          type="date"
+          min={dateMin}
+          max={dateMax || undefined}
+          value={values.bookingDate}
+          onChange={(value) => updateValue('bookingDate', value)}
+          required
+          hint={dateHint(optionSchedule, dateMin, dateMax)}
+        />
+        {(optionSchedule.requiresEndDate || optionSchedule.sameDayOnly) && (
+          <FixedInput
+            label="End booking date"
+            type="date"
+            min={values.bookingDate || dateMin}
+            max={dateMax || undefined}
+            value={values.endBookingDate}
+            onChange={(value) => updateValue('endBookingDate', value)}
+            required={optionSchedule.requiresEndDate}
+            hint={optionSchedule.sameDayOnly ? 'This option is same-day only.' : 'Must stay inside this option’s available dates.'}
+          />
+        )}
+        <FixedInput
+          label="Start time"
+          type="time"
+          min={overnightHours ? undefined : optionSchedule.openTime || undefined}
+          max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
+          value={values.startTime}
+          onChange={(value) => updateValue('startTime', value)}
+          required={optionSchedule.requiresTime}
+          hint={timeHint(optionSchedule, 'start')}
+        />
+        <FixedInput
+          label="End time"
+          type="time"
+          min={overnightHours ? undefined : optionSchedule.openTime || undefined}
+          max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
+          value={values.endTime}
+          onChange={(value) => updateValue('endTime', value)}
+          required={optionSchedule.requiresTime}
+          hint={timeHint(optionSchedule, 'end')}
+        />
         <FixedInput label="Number of people" type="number" min="1" value={values.numberOfPeople} onChange={(value) => updateValue('numberOfPeople', value)} required />
         <FixedInput label="Quantity / units" type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
         <CustomerLocationFields location={values.customerLocationDetails} onChange={updateCustomerLocation} />
@@ -395,10 +496,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         {useRebook && verifiedRebookId && <p className="mt-2 text-xs font-bold text-emerald-700">Re-book ID verified. It will be marked used only after this booking is created.</p>}
       </div>
 
-      <label className="mb-5 flex items-start gap-3 rounded-xl border border-gray-200 p-4 text-sm text-gray-700"><input type="checkbox" checked={values.agreeToTerms} onChange={(event) => updateValue('agreeToTerms', event.target.checked)} required /><span>I agree to the terms and conditions and understand that provider details unlock only after successful deposit payment.</span></label>
+      <label className="mb-5 flex items-start gap-3 rounded-xl border border-gray-200 p-4 text-sm text-gray-700"><input type="checkbox" checked={values.agreeToTerms} onChange={(event) => updateValue('agreeToTerms', event.target.checked)} required /><span>I agree to the <a href="/terms" className="font-semibold text-primary">Terms</a> and <a href="/payments" className="font-semibold text-primary">Payments & refunds</a>. Provider details unlock only after you pay the full amount. Money is held until the cancel window ends.</span></label>
 
       <div className="bg-gray-50 rounded-xl p-4 mb-6 text-sm text-gray-700">
-        {effectiveMode === 'automatic' ? 'Automatic booking: the backend validates availability and calculates the exact RWF quote. You can pay the 30% deposit immediately.' : "Manual booking: admin reviews your request and confirms the exact RWF price before the 30% deposit is available."}
+        {effectiveMode === 'automatic' ? 'Automatic booking: the backend validates availability and calculates the exact RWF quote. You pay the full price in the app.' : "Manual booking: admin or the provider confirms the exact RWF price before full payment is available."}
       </div>
 
       {isUnavailable && <div className="mb-4 p-3 bg-amber-50 text-amber-700 rounded-lg text-sm">This service is currently not available for booking.</div>}
@@ -420,13 +521,42 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       </button>
 
       {quoteResult && <QuoteCard result={quoteResult} paymentMethod={values.paymentMethod} onPaid={(booking) => onSuccess?.(booking)} />}
-      {detailsOpen && <DetailsModal row={selectedOfferRow} onClose={() => setDetailsOpen(false)} />}
+      {detailsOpen && <OptionDetailsModal row={selectedOfferRow} listing={{ ...business, ...service }} onClose={() => setDetailsOpen(false)} />}
     </form>
   );
 }
 
-function FixedInput({ label, value, onChange, type = 'text', min, required = false }) {
-  return <label className="block"><span className="mb-1 block text-sm font-medium text-gray-700">{label}</span><input type={type} min={min} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
+function FixedInput({ label, value, onChange, type = 'text', min, max, required = false, hint }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-gray-700">
+        {label}{required ? '' : <span className="font-normal text-gray-400"> (optional)</span>}
+      </span>
+      <input type={type} min={min} max={max} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3" />
+      {hint && <span className="mt-1 block text-xs text-gray-500">{hint}</span>}
+    </label>
+  );
+}
+
+function dateHint(option, minDate, maxDate) {
+  const windowText = maxDate
+    ? `Pick a date from ${formatDisplayDate(minDate)} to ${formatDisplayDate(maxDate)}.`
+    : `Pick a date on or after ${formatDisplayDate(minDate)}.`;
+  const days = option.availableDays.length ? ` Available days: ${formatDays(option.availableDays)}.` : '';
+  if (!option.availableFrom && !option.availableTo) {
+    return `${windowText} This option has not published a closing date yet.${days}`;
+  }
+  return `${windowText}${days}`;
+}
+
+function timeHint(option, kind) {
+  if (!option.requiresTime) {
+    return 'Optional for this option. Add a time only if you need a specific slot.';
+  }
+  if (option.openTime && option.closeTime) {
+    return `${kind === 'start' ? 'Start' : 'End'} time must be between ${formatTime(option.openTime)} and ${formatTime(option.closeTime)}.`;
+  }
+  return `${kind === 'start' ? 'Start' : 'End'} time is required because this option is priced or limited by hours.`;
 }
 
 function CustomerLocationFields({ location, onChange }) {
@@ -460,7 +590,7 @@ function CustomerLocationFields({ location, onChange }) {
 function QuoteCard({ result, paymentMethod, onPaid }) {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const pay = async (paymentDetails) => {
-    const response = await bookingApi.payBooking(getAuthData()?.token, result.booking._id, { paymentMethod: paymentDetails.paymentMethod || paymentMethod, senderAccount: paymentDetails.senderAccount });
+    const response = await completeBookingPayment(getAuthData()?.token, result.booking._id, { paymentMethod: paymentDetails.paymentMethod || paymentMethod, senderAccount: paymentDetails.senderAccount, email: paymentDetails.email, cname: paymentDetails.cname });
     setPaymentOpen(false);
     onPaid(response.booking);
   };
@@ -469,11 +599,7 @@ function QuoteCard({ result, paymentMethod, onPaid }) {
   const people = quote.people ?? quote.numberOfPeople ?? result.booking.bookingDetails?.numberOfPeople ?? 1;
   const quantity = quote.quantity ?? result.booking.quantity ?? result.booking.bookingDetails?.quantity ?? 1;
   const totalUnits = quote.totalConsumptionUnits ?? result.booking.totalConsumptionUnits ?? Number(people || 1) * Number(quantity || 1);
-  return <><aside className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-blue-700">Automatic quote preview</p><h3 className="mt-1 text-xl font-black">{snapshot.name}</h3><dl className="mt-4 grid gap-2 text-sm"><div className="flex justify-between"><dt>Price type</dt><dd className="capitalize">{String(snapshot.priceType || '').replace(/-/g, ' ')}</dd></div><div className="flex justify-between"><dt>Number of people</dt><dd>{people}</dd></div><div className="flex justify-between"><dt>Quantity / units</dt><dd>{quantity}</dd></div><div className="flex justify-between"><dt>Total consumption units</dt><dd>{totalUnits}</dd></div>{quote.duration && <div className="flex justify-between"><dt>Booking duration</dt><dd>{quote.duration} {snapshot.durationUnit}</dd></div>}{snapshot.promotionApplied && <><div className="flex justify-between"><dt>Original price</dt><dd className="font-bold">{formatRwf(snapshot.originalPrice)}</dd></div><div className="flex justify-between"><dt>{snapshot.promotionTitle} ({snapshot.promotionPercent}% off)</dt><dd className="font-bold text-emerald-700">-{formatRwf(snapshot.discountAmount)}</dd></div><div className="flex justify-between"><dt>Final price after promotion</dt><dd className="font-black">{formatRwf(snapshot.finalPrice)}</dd></div></>}<div className="flex justify-between"><dt>{snapshot.promotionApplied ? 'Final total' : 'Total price'}</dt><dd className="font-black">{formatRwf(quote.total)}</dd></div><div className="flex justify-between"><dt>Deposit required (30%)</dt><dd className="font-black text-primary">{formatRwf(quote.deposit)}</dd></div><div className="flex justify-between"><dt>Remaining balance</dt><dd className="font-bold">{formatRwf(quote.remaining)}</dd></div></dl><p className="mt-4 rounded-xl bg-white p-3 text-sm">{quote.reason}</p><button type="button" onClick={() => setPaymentOpen(true)} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black text-white">Pay deposit</button></aside>{paymentOpen && <DepositPaymentModal booking={result.booking} customer={getAuthData()?.user} onClose={() => setPaymentOpen(false)} onConfirm={pay} />}</>;
-}
-
-function DetailsModal({ row, onClose }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-blue-700">Option details & amenities</p><h3 className="mt-1 text-xl font-black">{row?.cells?.service}</h3></div><button type="button" onClick={onClose} className="text-2xl text-gray-500">×</button></div><p className="mt-4 whitespace-pre-wrap text-gray-700">{row?.cells?.details || 'The seller has not added extra amenities for this option.'}</p><button type="button" onClick={onClose} className="mt-5 rounded-xl bg-primary px-4 py-2 font-bold text-white">Close</button></div></div>;
+  return <><aside className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-950 shadow-sm"><p className="text-xs font-black uppercase tracking-wider text-blue-700">Automatic quote preview</p><h3 className="mt-1 text-xl font-black">{snapshot.name}</h3><dl className="mt-4 grid gap-2 text-sm"><div className="flex justify-between"><dt>Price type</dt><dd className="capitalize">{String(snapshot.priceType || '').replace(/-/g, ' ')}</dd></div><div className="flex justify-between"><dt>Number of people</dt><dd>{people}</dd></div><div className="flex justify-between"><dt>Quantity / units</dt><dd>{quantity}</dd></div><div className="flex justify-between"><dt>Total consumption units</dt><dd>{totalUnits}</dd></div>{quote.duration && <div className="flex justify-between"><dt>Booking duration</dt><dd>{quote.duration} {snapshot.durationUnit}</dd></div>}{snapshot.promotionApplied && <><div className="flex justify-between"><dt>Original price</dt><dd className="font-bold">{formatRwf(snapshot.originalPrice)}</dd></div><div className="flex justify-between"><dt>{snapshot.promotionTitle} ({snapshot.promotionPercent}% off)</dt><dd className="font-bold text-emerald-700">-{formatRwf(snapshot.discountAmount)}</dd></div><div className="flex justify-between"><dt>Final price after promotion</dt><dd className="font-black">{formatRwf(snapshot.finalPrice)}</dd></div></>}<div className="flex justify-between"><dt>{snapshot.promotionApplied ? 'Final total' : 'Total price'}</dt><dd className="font-black">{formatRwf(quote.total)}</dd></div><div className="flex justify-between"><dt>Pay now</dt><dd className="font-black text-primary">{formatRwf(amountDueNow(result.booking) || quote.total || quote.deposit)}</dd></div></dl><p className="mt-4 rounded-xl bg-white p-3 text-sm">{quote.reason}</p><button type="button" onClick={() => setPaymentOpen(true)} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 font-black text-white">Pay in full</button></aside>{paymentOpen && <DepositPaymentModal booking={result.booking} customer={getAuthData()?.user} onClose={() => setPaymentOpen(false)} onConfirm={pay} />}</>;
 }
 
 function getVisiblePromotion(promotion) {

@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
-import { getAuthData, hotelApi, publicApi } from '../lib/api';
+import { getAuthData, hotelApi, paymentsApi, publicApi } from '../lib/api';
+import { payoutStatusLabel } from '../lib/payments';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { formatRwf } from '../lib/currency';
 import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES } from '../data/serviceCategories';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
+import OptionDetailsModal from '../components/OptionDetailsModal';
+import { DAY_OPTIONS, TIME_REQUIREMENT_OPTIONS, parseOptionAvailability, toggleAvailableDay } from '../lib/availability';
 
 const EMPTY_FORM = {
   title: '',
@@ -37,6 +40,8 @@ const EMPTY_FORM = {
   imageFiles: [],
   promotion: { enabled: false, title: '', percent: '', note: '', startAt: '', endAt: '' },
   rebookSettings: { requestDeadlineHours: 24, rebookIdValidityHours: 72 },
+  cancelWindowHours: 6,
+  cancelPenaltyPercent: 20,
   promotionHistory: [],
   availabilityTable: {
     columns: [
@@ -47,6 +52,12 @@ const EMPTY_FORM = {
       { id: 'durationUnit', label: 'Duration unit' },
       { id: 'maximumDuration', label: 'Maximum duration' },
       { id: 'availability', label: 'Availability / capacity' },
+      { id: 'availableFrom', label: 'Available from' },
+      { id: 'availableTo', label: 'Available until' },
+      { id: 'availableDays', label: 'Available days' },
+      { id: 'availableStartTime', label: 'Open time' },
+      { id: 'availableEndTime', label: 'Close time' },
+      { id: 'requiresTime', label: 'Times required' },
       { id: 'details', label: 'Details / amenities' },
     ],
     rows: [{ id: 'row_1', cells: { service: '', price: '' } }],
@@ -311,6 +322,8 @@ export default function HotelDashboard() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [globalBookingMode, setGlobalBookingMode] = useState('manual');
+  const [payoutDetails, setPayoutDetails] = useState(null);
+  const [finance, setFinance] = useState(null);
   const token = getAuthData()?.token;
 
   const loadData = async ({ silent = false } = {}) => {
@@ -318,16 +331,20 @@ export default function HotelDashboard() {
     if (!silent) setLoading(true);
     setError('');
     try {
-      const [overviewResp, servicesResp, bookingsResp, settingsResp] = await Promise.all([
+      const [overviewResp, servicesResp, bookingsResp, settingsResp, payoutResp, financeResp] = await Promise.all([
         hotelApi.getOverview(token),
         hotelApi.getMyServices(token),
         hotelApi.getMyBookings(token),
         publicApi.getMarketplaceSettings().catch(() => ({ settings: { bookingMode: 'manual' } })),
+        hotelApi.getPayoutDetails(token).catch(() => ({ payoutDetails: null })),
+        hotelApi.getFinance(token).catch(() => null),
       ]);
       setOverview(overviewResp);
       setServices(servicesResp.services || []);
       setBookings(bookingsResp.bookings || []);
       setGlobalBookingMode(settingsResp.settings?.bookingMode || 'manual');
+      setPayoutDetails(payoutResp.payoutDetails || null);
+      setFinance(financeResp);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -413,6 +430,8 @@ export default function HotelDashboard() {
         requestDeadlineHours: Number(service.rebookSettings?.requestDeadlineHours ?? 24),
         rebookIdValidityHours: Number(service.rebookSettings?.rebookIdValidityHours ?? 72),
       },
+      cancelWindowHours: Number(service.cancelWindowHours ?? service.cancellationTerms?.windowHours ?? 6),
+      cancelPenaltyPercent: Number(service.cancelPenaltyPercent ?? service.cancellationTerms?.penaltyPercent ?? 20),
       promotionHistory: Array.isArray(service.promotionHistory) ? service.promotionHistory : [],
       availabilityTable: normalizeTableForForm(service.availabilityTable),
       bookingForm: normalizeBookingFormForForm(service.bookingForm),
@@ -459,7 +478,6 @@ export default function HotelDashboard() {
       description: form.description,
       serviceLocation: form.serviceLocation,
       locationDetails,
-      payoutDetails: form.payoutDetails,
       contactDetails: form.contactDetails,
       serviceType: 'rental',
       category: form.category,
@@ -471,6 +489,12 @@ export default function HotelDashboard() {
       images: [...(form.existingImages || []), ...uploadedImageUrls].slice(0, 3),
       promotion: form.promotion,
       rebookSettings: form.rebookSettings,
+      cancelWindowHours: Number(form.cancelWindowHours || 6),
+      cancelPenaltyPercent: Number(form.cancelPenaltyPercent || 20),
+      cancellationPolicy: {
+        windowHours: Number(form.cancelWindowHours || 6),
+        penaltyPercent: Number(form.cancelPenaltyPercent || 20),
+      },
       availabilityTable: form.availabilityTable,
       bookingForm: form.bookingForm,
       isActive: true,
@@ -494,9 +518,14 @@ export default function HotelDashboard() {
     const structuredLocation = normalizeLocationForForm(service);
     const serviceLocation = normalizeServiceLocationForForm(service);
     const hasLocation = serviceLocation.province && serviceLocation.district && serviceLocation.sector && serviceLocation.latitude && serviceLocation.longitude;
-    const hasPayout = service.payoutDetails?.accountName && service.payoutDetails?.accountNumber;
+    const hasPayout = payoutDetails?.accountName && (payoutDetails?.accountNumber || payoutDetails?.msisdn);
     const hasPriceRows = service.availabilityTable?.rows?.some((row) => row.cells?.service && row.cells?.price);
     if (!hasLocation || !hasPayout || !hasPriceRows) {
+      if (!hasPayout) {
+        setActiveTab('payout');
+        setInfo('Save your MoMo or bank payout details before customers can pay this listing.');
+        return;
+      }
       startEdit(service);
       setInfo('Complete the exact location, payout account, and Service / Price table before changing availability.');
       return;
@@ -577,17 +606,20 @@ export default function HotelDashboard() {
 
           <div className="seller-dashboard-metrics grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <Metric label="Businesses" value={stats.totalServices} />
-            <Metric label="Active" value={stats.activeServices} />
+            <Metric label="Earnings" value={formatRwf(overview?.stats?.earnings ?? stats.revenue)} />
+            <Metric label="Pending payout" value={formatRwf(overview?.stats?.pendingPayout ?? overview?.stats?.pendingSettlement ?? 0)} />
+            <Metric label="Paid out" value={formatRwf(overview?.stats?.paidOut ?? overview?.stats?.availableForPayout ?? 0)} />
             <Metric label="Bookings" value={stats.totalBookings} />
-            <Metric label="Revenue" value={formatRwf(stats.revenue)} />
-            <Metric label="Listings" value={stats.availableQuantity} />
           </div>
+          {!payoutDetails?.accountNumber && !payoutDetails?.msisdn && (
+            <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Customers cannot pay until you save payout details. We store your MoMo or bank details only to pay you after the guest cancel window.</p>
+          )}
           <CommissionTermsCard item={overview?.business || overview} />
 
           <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
-            {['services', 'bookings', 'rebook-requests', 'verification', 'analytics', 'edit'].map((tab) => (
+            {['services', 'bookings', 'rebook-requests', 'verification', 'finance', 'payout', 'analytics', 'edit'].map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${activeTab === tab ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>
-                {tab === 'services' ? 'Businesses' : tab === 'rebook-requests' ? 'Re-book Requests' : tab === 'edit' ? (editingService ? 'Edit Business' : 'Add Business') : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'services' ? 'Businesses' : tab === 'rebook-requests' ? 'Re-book Requests' : tab === 'payout' ? 'Payout account' : tab === 'edit' ? (editingService ? 'Edit Business' : 'Add Business') : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -598,6 +630,8 @@ export default function HotelDashboard() {
             {!loading && activeTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onApproveBooking={setApprovalBooking} onCompleted={() => loadData({ silent: true })} />}
             {!loading && activeTab === 'rebook-requests' && <SellerRebookRequests />}
             {!loading && activeTab === 'verification' && <SellerBookingVerification token={token} />}
+            {!loading && activeTab === 'finance' && <FinancePanel finance={finance} />}
+            {!loading && activeTab === 'payout' && <PayoutDetailsForm token={token} initial={payoutDetails} onSaved={() => loadData({ silent: true })} />}
             {!loading && activeTab === 'analytics' && <Analytics stats={stats} services={services} />}
             {activeTab === 'edit' && <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} globalBookingMode={globalBookingMode} />}
           </section>
@@ -798,7 +832,6 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
       village: serviceLocation.village || '',
     },
   }));
-  const setPayout = (key, value) => setForm((prev) => ({ ...prev, payoutDetails: { ...prev.payoutDetails, [key]: value } }));
   const setContact = (key, value) => setForm((prev) => ({ ...prev, contactDetails: { ...prev.contactDetails, [key]: value } }));
   const setPromotion = (key, value) => setForm((prev) => ({ ...prev, promotion: { ...prev.promotion, [key]: value } }));
   const setRebookSetting = (key, value) => setForm((prev) => ({ ...prev, rebookSettings: { ...prev.rebookSettings, [key]: value } }));
@@ -870,13 +903,12 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
           <Input label="Re-book ID validity (hours)" type="number" value={form.rebookSettings.rebookIdValidityHours} onChange={(value) => setRebookSetting('rebookIdValidityHours', Number(value))} required />
         </div>
       </div>
-      <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-4">
-        <h3 className="font-bold text-blue-950">Where SafarisCon should send your money</h3>
-        <p className="mt-1 text-sm text-blue-800">Use the account belonging to you or your business. Customers never see this information.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Select label="Payout method" value={form.payoutDetails.method} onChange={(value) => setPayout('method', value)} options={[["mobile-money", "Mobile Money"], ["bank", "Bank account"]]} />
-          <Input label="Account name" value={form.payoutDetails.accountName} onChange={(value) => setPayout('accountName', value)} required />
-          <Input label="Phone / account number" value={form.payoutDetails.accountNumber} onChange={(value) => setPayout('accountNumber', value)} required />
+      <div className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <h3 className="font-bold text-blue-950">Guest cancellation rules</h3>
+        <p className="mt-1 text-sm text-blue-800">Hours before the service when cancel closes, and the percent the guest loses if they cancel. Defaults are 6 hours and 20%.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Input label="Cancel window (hours before service)" type="number" value={form.cancelWindowHours ?? 6} onChange={(value) => set('cancelWindowHours', Number(value))} required />
+          <Input label="Cancel penalty percent" type="number" value={form.cancelPenaltyPercent ?? 20} onChange={(value) => set('cancelPenaltyPercent', Number(value))} required />
         </div>
       </div>
       <label className="seller-photo-input block">
@@ -1125,7 +1157,7 @@ function AvailabilityTableBuilder({ table, updateTable }) {
     const id = makeId('row');
     updateTable((current) => ({
       ...current,
-      rows: [...(current.rows || []), { id, cells: { service: '', price: '', priceType: '', calculationField: '', durationUnit: '', maximumDuration: '', availability: '', details: '' } }],
+      rows: [...(current.rows || []), { id, cells: { service: '', price: '', priceType: '', calculationField: '', durationUnit: '', maximumDuration: '', availability: '', availableFrom: '', availableTo: '', availableDays: '', availableStartTime: '', availableEndTime: '', requiresTime: '', details: '' } }],
     }));
     setSelectedRowId(id);
   };
@@ -1148,8 +1180,6 @@ function AvailabilityTableBuilder({ table, updateTable }) {
   const duration = 2;
   const basePrice = Number(selected.price || 0);
   const previewTotal = calculatePreviewTotal(selected.priceType, basePrice, people, quantity, duration);
-  const previewDeposit = Math.round(previewTotal * 0.3);
-  const previewBalance = previewTotal - previewDeposit;
   const priceTypeLabel = PRICE_TABLE_OPTIONS.priceType.find(([value]) => value === selected.priceType)?.[1] || 'Select price type';
 
   return (
@@ -1192,6 +1222,32 @@ function AvailabilityTableBuilder({ table, updateTable }) {
               <StudioSelect label="Duration unit" value={selected.durationUnit || ''} options={PRICE_TABLE_OPTIONS.durationUnit} onChange={(value) => updateCell(selectedRow.id, 'durationUnit', value)} />
               <StudioField label="Maximum booking duration" type="number" value={selected.maximumDuration || ''} onChange={(value) => updateCell(selectedRow.id, 'maximumDuration', value)} />
               <StudioField label="Availability / capacity" type="number" value={selected.availability || ''} onChange={(value) => updateCell(selectedRow.id, 'availability', value)} />
+              <StudioField label="Available from" type="date" value={selected.availableFrom || ''} onChange={(value) => updateCell(selectedRow.id, 'availableFrom', value)} />
+              <StudioField label="Available until" type="date" value={selected.availableTo || ''} onChange={(value) => updateCell(selectedRow.id, 'availableTo', value)} />
+              <StudioField label="Open time (optional)" type="time" value={selected.availableStartTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableStartTime', value)} />
+              <StudioField label="Close time (optional)" type="time" value={selected.availableEndTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableEndTime', value)} />
+              <StudioSelect label="Clock times on booking form" value={selected.requiresTime || ''} options={TIME_REQUIREMENT_OPTIONS} onChange={(value) => updateCell(selectedRow.id, 'requiresTime', value)} />
+              <fieldset className="sm:col-span-2">
+                <span className="text-xs font-bold text-slate-600">Available days</span>
+                <p className="mt-1 text-[11px] text-slate-500">Leave all unchecked to allow every day inside the date window.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {DAY_OPTIONS.map(([key, label]) => {
+                    const selectedDays = String(selected.availableDays || '').split(',').filter(Boolean);
+                    const checked = selectedDays.includes(key);
+                    return (
+                      <label key={key} className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${checked ? 'border-primary bg-blue-50 text-primary' : 'border-slate-200 bg-white text-slate-600'}`}>
+                        <input
+                          type="checkbox"
+                          className="mr-1.5 align-middle"
+                          checked={checked}
+                          onChange={() => updateCell(selectedRow.id, 'availableDays', toggleAvailableDay(selected.availableDays, key))}
+                        />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
               <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600">Details / amenities</span><textarea rows={2} value={selected.details || ''} onChange={(event) => updateCell(selectedRow.id, 'details', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Wi-Fi, breakfast, private bathroom..." /></label>
             </div>
           </div>}
@@ -1208,8 +1264,9 @@ function AvailabilityTableBuilder({ table, updateTable }) {
             <PreviewInput label="Phone number" placeholder="+250 7XX XXX XXX" />
             <PreviewInput label="Email" placeholder="you@example.com" />
             <PreviewInput label="Booking date" placeholder="Select date" />
-            <PreviewInput label="Start time" placeholder="Select start time" />
-            <PreviewInput label="End time / completion time" placeholder="Select end time" />
+            {parseOptionAvailability(selectedRow).requiresEndDate && <PreviewInput label="End booking date" placeholder="Select end date" />}
+            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? 'Start time' : 'Start time (optional)'} placeholder="Select start time" />
+            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? 'End time' : 'End time (optional)'} placeholder="Select end time" />
             <PreviewInput label="Number of people" placeholder="2" />
             <PreviewInput label="Quantity / units" placeholder="1" />
             <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-700">Special request <span className="font-normal text-slate-400">(optional)</span></span><textarea disabled rows={4} placeholder="Any special request or notes..." className="mt-1 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
@@ -1227,13 +1284,13 @@ function AvailabilityTableBuilder({ table, updateTable }) {
           </dl>
           <div className="my-5 border-t border-slate-200" />
           <QuoteLine label="Total price" value={formatRwf(previewTotal)} strong />
-          <div className="mt-5 space-y-4 text-xs"><QuoteLine label="Deposit (30%)" value={formatRwf(previewDeposit)} /><div className="border-t border-slate-100" /><QuoteLine label="Remaining balance" value={formatRwf(previewBalance)} /></div>
-          <button type="button" disabled className="mt-7 w-full rounded-xl bg-primary px-3 py-3 text-sm font-black text-white opacity-90">▣ &nbsp; Pay deposit</button>
+          <p className="mt-4 text-xs text-slate-500">Guests pay this full amount in the app. There is no remaining balance at the venue.</p>
+          <button type="button" disabled className="mt-7 w-full rounded-xl bg-primary px-3 py-3 text-sm font-black text-white opacity-90">▣ &nbsp; Pay in full</button>
           <p className="mt-3 text-center text-[10px] text-slate-500">♢ Your payment is secure and protected.</p>
         </aside>
       </div>
 
-      {detailsRow && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Option details & amenities</p><h3 className="mt-1 text-xl font-black text-slate-950">{detailsRow.cells?.service || 'Service option'}</h3></div><button type="button" onClick={() => setDetailsRow(null)} className="text-2xl text-slate-400">×</button></div><p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{detailsRow.cells?.details || 'No additional details added yet.'}</p><button type="button" onClick={() => setDetailsRow(null)} className="mt-5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white">Close</button></div></div>}
+      {detailsRow && <OptionDetailsModal row={detailsRow} onClose={() => setDetailsRow(null)} />}
     </section>
   );
 }
@@ -1271,7 +1328,6 @@ function CompleteBookingPanel({ onCompleted }) {
       const response = await hotelApi.completeVerifiedBooking(token, {
         bookingId: summary.bookingId,
         code: code.trim(),
-        confirmRemainingPaid: true,
       });
       setMessage(response.message);
       setCode('');
@@ -1287,7 +1343,7 @@ function CompleteBookingPanel({ onCompleted }) {
   return (
     <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
       <h3 className="font-black text-blue-950">Complete Booking</h3>
-      <p className="mt-1 text-sm text-blue-800">Enter the customer's Booking Code to verify it before confirming the remaining 70% payment.</p>
+      <p className="mt-1 text-sm text-blue-800">Enter the customer's Booking Code to verify it, then mark the stay done. Completing a booking does not collect extra payment.</p>
       <form onSubmit={verify} className="mt-4 flex flex-col gap-2 sm:flex-row">
         <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="Enter Booking Code only" className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono uppercase" />
         <button disabled={busy || !code.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Checking...' : 'Verify Code'}</button>
@@ -1301,10 +1357,10 @@ function CompleteBookingPanel({ onCompleted }) {
             <Detail label="Customer" value={summary.customerName} />
             <Detail label="Service" value={summary.serviceName} />
             <Detail label="Booking date" value={summary.bookingDate ? new Date(summary.bookingDate).toLocaleString() : '-'} />
-            <Detail label="Deposit paid" value={formatRwf(summary.depositAmount || 0)} />
-            <Detail label="Remaining 70%" value={formatRwf(summary.remainingAmount || 0)} />
+            <Detail label="Amount paid" value={formatRwf(summary.depositAmount || summary.amountPaid || 0)} />
+            <Detail label="Remaining at venue" value={formatRwf(summary.remainingAmount || 0)} />
           </dl>
-          <button type="button" disabled={busy} onClick={complete} className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">Confirm Remaining 70% Paid & Complete Booking</button>
+          <button type="button" disabled={busy} onClick={complete} className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">Complete booking</button>
         </div>
       )}
     </section>
@@ -1473,4 +1529,106 @@ function ResponseList({ responses }) {
   const entries = Object.entries(responses || {}).filter(([, value]) => value !== undefined && value !== null && value !== '');
   if (!entries.length) return <p className="mt-4 text-sm text-gray-500">No form responses saved.</p>;
   return <div className="mt-4"><h3 className="font-bold text-gray-900">Form Responses</h3><div className="mt-2 grid gap-2">{entries.map(([key, value]) => <div key={key} className="rounded-lg border border-gray-200 p-3"><p className="text-xs font-semibold uppercase text-gray-500">{key}</p><p className="break-all text-sm text-gray-800">{Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value)}</p></div>)}</div></div>;
+}
+
+function PayoutDetailsForm({ token, initial, onSaved }) {
+  const [catalog, setCatalog] = useState(null);
+  const [form, setForm] = useState({
+    method: initial?.method === 'bank' ? 'bank' : 'momo',
+    providerId: initial?.providerId || '',
+    accountName: initial?.accountName || '',
+    accountNumber: initial?.accountNumber || initial?.msisdn || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    paymentsApi.getMethods().then(setCatalog).catch(() => setCatalog(null));
+  }, []);
+
+  useEffect(() => {
+    setForm({
+      method: initial?.method === 'bank' ? 'bank' : 'momo',
+      providerId: initial?.providerId || '',
+      accountName: initial?.accountName || '',
+      accountNumber: initial?.accountNumber || initial?.msisdn || '',
+    });
+  }, [initial]);
+
+  const providers = form.method === 'bank' ? catalog?.bankProviders || [] : catalog?.mobileMoneyProviders || [];
+
+  const save = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await hotelApi.savePayoutDetails(token, form);
+      setMessage(response.message || 'Payout details saved.');
+      onSaved?.();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="grid max-w-2xl gap-4">
+      <h3 className="text-xl font-black text-slate-950">Settlement account</h3>
+      <p className="text-sm text-slate-600">We store your MoMo or bank details only to pay you after the guest cancel window. Customers never see this information. Do not put these numbers on the public listing form.</p>
+      <Select label="Payout method" value={form.method} onChange={(value) => setForm((prev) => ({ ...prev, method: value, providerId: '' }))} options={[['momo', 'Mobile Money'], ['bank', 'Bank transfer']]} />
+      <label className="block"><span className="text-sm font-semibold text-gray-700">Provider</span>
+        <select required value={form.providerId} onChange={(event) => setForm((prev) => ({ ...prev, providerId: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
+          <option value="">Select provider</option>
+          {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+        </select>
+      </label>
+      <Input label="Account name" value={form.accountName} onChange={(value) => setForm((prev) => ({ ...prev, accountName: value }))} required />
+      <Input label={form.method === 'bank' ? 'Account number' : 'MoMo number'} value={form.accountNumber} onChange={(value) => setForm((prev) => ({ ...prev, accountNumber: value }))} required />
+      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {message && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
+      <button disabled={saving} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{saving ? 'Saving...' : 'Save payout details'}</button>
+    </form>
+  );
+}
+
+function FinancePanel({ finance }) {
+  const summary = finance?.summary || {};
+  const rows = finance?.transactions || [];
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-600">{finance?.message || 'Earnings stay in the SafarisCon wallet until the cancel window ends.'}</p>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Metric label="Gross collected" value={formatRwf(summary.grossCollected)} />
+        <Metric label="Commission" value={formatRwf(summary.commission)} />
+        <Metric label="Your share" value={formatRwf(summary.providerEarnings)} />
+        <Metric label="Pending payout" value={formatRwf(summary.pendingPayout)} />
+        <Metric label="Paid out" value={formatRwf(summary.paidOut)} />
+        <Metric label="Failed payout" value={formatRwf(summary.failedPayout)} />
+      </div>
+      {!rows.length ? <p className="rounded-xl border border-slate-200 p-4 text-sm text-slate-600">No payout rows yet.</p> : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Gross</th><th className="py-2 pr-3">Commission</th><th className="py-2 pr-3">Your share</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Payout id</th><th className="py-2 pr-3">Destination</th><th className="py-2">Note</th></tr></thead>
+            <tbody>
+              {rows.map((tx) => (
+                <tr key={tx._id || tx.payoutReference} className="border-b border-slate-100">
+                  <td className="py-2 pr-3">{tx.bookingId?.bookingCode || tx.bookingId?._id || '-'}</td>
+                  <td className="py-2 pr-3">{formatRwf(tx.amount)}</td>
+                  <td className="py-2 pr-3">{formatRwf(tx.platformAmount)}</td>
+                  <td className="py-2 pr-3">{formatRwf(tx.providerAmount)}</td>
+                  <td className="py-2 pr-3">{payoutStatusLabel(tx.payoutStatus)}</td>
+                  <td className="py-2 pr-3">{tx.payoutReference || '-'}</td>
+                  <td className="py-2 pr-3">{tx.payoutAccount || '-'}</td>
+                  <td className="py-2">{tx.payoutMessage || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }

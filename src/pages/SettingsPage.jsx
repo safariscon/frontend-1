@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import InstallButton from '../components/InstallButton';
 import { useAuth } from '../context/AuthContext';
@@ -93,6 +93,19 @@ export default function SettingsPage() {
                 <SettingInfo label="Email" value={user.email || '-'} />
                 <SettingInfo label="Role" value={String(user.role || 'user').replace(/[-_]/g, ' ')} />
               </dl>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:col-span-2">
+              <h2 className="text-lg font-black text-slate-950 dark:text-slate-50">About SafarisCon</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Read how we authenticate, handle data, take payments, and refund. These pages match the live product.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Link to="/how-it-works" className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 hover:border-primary hover:text-primary">How it works</Link>
+                <Link to="/terms" className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 hover:border-primary hover:text-primary">Terms of use</Link>
+                <Link to="/privacy" className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 hover:border-primary hover:text-primary">Privacy policy</Link>
+                <Link to="/payments" className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-800 hover:border-primary hover:text-primary">Payments & cancellations</Link>
+              </div>
             </section>
           </div>
         </div>

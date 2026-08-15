@@ -12,6 +12,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import MarketplaceGuide from '../components/MarketplaceGuide';
 import PaymentMethods from '../components/PaymentMethods';
+import { HOME_TRUST_LEAD, HOME_TRUST_LINE, HOW_IT_WORKS_STEPS } from '../lib/policyCopy';
 
 const SERVICE_AREAS = [
   ['Hotels and stays', 'Verified rooms, lodges, guesthouses, and retreats.', '/services?service=hotel'],
@@ -185,6 +186,31 @@ export default function HomePage() {
             {!loadingHotels && !servicesError && featuredHotels.length === 0 && (
               <p className="text-slate-500 dark:text-slate-400">{t('noServicesAvailable', language)}</p>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="section-block bg-slate-50 dark:bg-slate-900">
+        <div className="mx-auto max-w-6xl px-4">
+          <p className="text-xs font-black uppercase tracking-wide text-primary">Trust & how we work</p>
+          <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">How SafarisCon works</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">{HOME_TRUST_LEAD}</p>
+          <ol className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {HOW_IT_WORKS_STEPS.map(([title, body], index) => (
+              <li key={title} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-950">
+                <p className="text-xs font-black uppercase tracking-wide text-primary">{index + 1}</p>
+                <h3 className="mt-1 font-black text-slate-950 dark:text-white">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{body}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-6 text-sm font-semibold text-slate-700 dark:text-slate-200">{HOME_TRUST_LINE}</p>
+          <p className="mt-2 text-xs text-slate-500">Each listing shows its own cancel window and fee. Defaults are 6 hours and 20%.</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link to="/terms" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white">Terms of use</Link>
+            <Link to="/privacy" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">Privacy</Link>
+            <Link to="/payments" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">Payments & refunds</Link>
+            <Link to="/how-it-works" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">How it works</Link>
           </div>
         </div>
       </section>

@@ -3,6 +3,20 @@ const trimTrailingSlash = (value) => String(value || "").replace(/\/+$/, "");
 const API_BASE_URL = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL);
 const AUTH_STORAGE_KEY = "tourconnect_auth";
 const LEGACY_USER_KEY = "toorconnect_user";
+const AUTH_EXPIRED_EVENT = "auth:expired";
+const AUTH_REFRESH_SKIP_PREFIXES = [
+  "/api/auth/login",
+  "/api/auth/refresh",
+  "/api/auth/logout",
+  "/api/auth/register",
+  "/api/auth/email/",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/api/auth/provider/",
+];
+
+let memorySession = null;
+let refreshPromise = null;
 
 export class ApiError extends Error {
   constructor(message, { status, payload } = {}) {
@@ -14,11 +28,26 @@ export class ApiError extends Error {
   }
 }
 
-export const getAuthData = () => {
+const normalizeSession = (raw) => {
+  if (!raw || typeof raw !== "object") return null;
+  const accessToken = raw.accessToken || raw.token || null;
+  const refreshToken = raw.refreshToken || null;
+  return {
+    user: raw.user || null,
+    token: accessToken,
+    accessToken,
+    refreshToken,
+    rememberMe: Boolean(raw.rememberMe ?? refreshToken),
+    accessTokenExpiresIn: raw.accessTokenExpiresIn,
+    refreshTokenExpiresIn: raw.refreshTokenExpiresIn,
+  };
+};
+
+const readStoredSession = () => {
   const raw = localStorage.getItem(AUTH_STORAGE_KEY);
   if (raw) {
     try {
-      return JSON.parse(raw);
+      return normalizeSession(JSON.parse(raw));
     } catch {
       localStorage.removeItem(AUTH_STORAGE_KEY);
     }
@@ -28,7 +57,7 @@ export const getAuthData = () => {
   if (legacyUserRaw) {
     try {
       const user = JSON.parse(legacyUserRaw);
-      return { user, token: null };
+      return normalizeSession({ user, token: null });
     } catch {
       localStorage.removeItem(LEGACY_USER_KEY);
     }
@@ -37,15 +66,77 @@ export const getAuthData = () => {
   return null;
 };
 
-export const saveAuthData = (authData) => {
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
-  localStorage.removeItem(LEGACY_USER_KEY);
+export const getAuthData = () => {
+  if (memorySession) return memorySession;
+  memorySession = readStoredSession();
+  return memorySession;
 };
 
+export const persistAuthSession = (result = {}, { rememberMe } = {}) => {
+  const previous = getAuthData() || {};
+  const isAuthTokenResponse =
+    result.accessToken != null || result.token != null || Object.prototype.hasOwnProperty.call(result, "refreshToken");
+
+  const accessToken = isAuthTokenResponse
+    ? result.accessToken || result.token || null
+    : result.accessToken || result.token || previous.accessToken || null;
+  const refreshToken = isAuthTokenResponse
+    ? result.refreshToken || null
+    : previous.refreshToken || null;
+
+  const explicitRememberMe = rememberMe ?? result.rememberMe;
+  const persistToStorage =
+    explicitRememberMe === true ||
+    (explicitRememberMe !== false && Boolean(accessToken || result.user || refreshToken));
+
+  const session = normalizeSession({
+    user: result.user || previous.user || null,
+    accessToken,
+    token: accessToken,
+    refreshToken,
+    rememberMe: Boolean(explicitRememberMe === true || (persistToStorage && refreshToken)),
+    accessTokenExpiresIn: result.accessTokenExpiresIn ?? previous.accessTokenExpiresIn,
+    refreshTokenExpiresIn: result.refreshTokenExpiresIn ?? previous.refreshTokenExpiresIn,
+  });
+
+  memorySession = session;
+
+  if (persistToStorage) {
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({
+        user: session.user,
+        token: session.token,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        rememberMe: session.rememberMe,
+      })
+    );
+  } else {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+
+  localStorage.removeItem(LEGACY_USER_KEY);
+  return session;
+};
+
+export const saveAuthData = (authData) => persistAuthSession(authData);
+
 export const clearAuthData = () => {
+  memorySession = null;
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
 };
+
+export const expireAuthSession = () => {
+  clearAuthData();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
+};
+
+const shouldSkipAuthRefresh = (path) =>
+  AUTH_REFRESH_SKIP_PREFIXES.some((prefix) => path.startsWith(prefix));
 
 const buildHeaders = (token, customHeaders = {}) => {
   const headers = { ...customHeaders };
@@ -58,12 +149,80 @@ const buildHeaders = (token, customHeaders = {}) => {
   return headers;
 };
 
-export const apiRequest = async (path, { method = "GET", body, token, headers } = {}) => {
+const parseResponsePayload = async (response) => {
+  try {
+    return await response.json();
+  } catch {
+    try {
+      const fallbackText = await response.text();
+      return fallbackText ? { message: fallbackText } : {};
+    } catch {
+      return {};
+    }
+  }
+};
+
+export const refreshSession = async () => {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const current = getAuthData();
+    if (!current?.refreshToken) {
+      throw new ApiError("No refresh token.", { status: 401 });
+    }
+
+    const result = await apiRequest("/api/auth/refresh", {
+      method: "POST",
+      body: { refreshToken: current.refreshToken },
+      skipAuthRefresh: true,
+      token: null,
+    });
+
+    return persistAuthSession(
+      {
+        ...result,
+        user: result.user || current.user,
+      },
+      { rememberMe: true }
+    );
+  })();
+
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+};
+
+const retryAfterRefresh = async (path, options, error) => {
+  const canRefresh =
+    error.status === 401 &&
+    !options.skipAuthRefresh &&
+    !shouldSkipAuthRefresh(path) &&
+    Boolean(getAuthData()?.refreshToken);
+
+  if (!canRefresh) return null;
+
+  try {
+    await refreshSession();
+    return apiRequest(path, {
+      ...options,
+      token: getAuthData()?.token,
+      skipAuthRefresh: true,
+    });
+  } catch {
+    expireAuthSession();
+    return null;
+  }
+};
+
+export const apiRequest = async (path, { method = "GET", body, token, headers, skipAuthRefresh = false } = {}) => {
+  const accessToken = token === undefined ? getAuthData()?.token ?? null : token;
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
-      headers: buildHeaders(token, headers),
+      headers: buildHeaders(accessToken, headers),
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (error) {
@@ -72,32 +231,37 @@ export const apiRequest = async (path, { method = "GET", body, token, headers } 
     );
   }
 
-  let payload = {};
-  try {
-    payload = await response.json();
-  } catch {
-    try {
-      const fallbackText = await response.text();
-      payload = fallbackText ? { message: fallbackText } : {};
-    } catch {
-      payload = {};
-    }
-  }
+  const payload = await parseResponsePayload(response);
 
   if (!response.ok) {
-    throw new ApiError(payload.message || "Request failed.", {
+    const error = new ApiError(payload.message || "Request failed.", {
       status: response.status,
       payload,
     });
+    const retried = await retryAfterRefresh(
+      path,
+      { method, body, headers, skipAuthRefresh },
+      error
+    );
+    if (retried) return retried;
+    if (error.status === 403 && error.code === "TERMS_NOT_ACCEPTED") {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:terms-required", { detail: error.payload }));
+      }
+    } else if (error.status === 401 && !shouldSkipAuthRefresh(path) && getAuthData()) {
+      expireAuthSession();
+    }
+    throw error;
   }
 
   return payload;
 };
 
-export const uploadRequest = async (path, { method = "POST", formData, token } = {}) => {
+export const uploadRequest = async (path, { method = "POST", formData, token, skipAuthRefresh = false } = {}) => {
+  const accessToken = token === undefined ? getAuthData()?.token ?? null : token;
   const headers = {};
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -114,7 +278,37 @@ export const uploadRequest = async (path, { method = "POST", formData, token } =
   }
 
   if (!response.ok) {
-    throw new Error(payload.message || "Upload failed.");
+    const error = new ApiError(payload.message || "Upload failed.", {
+      status: response.status,
+      payload,
+    });
+    const canRefresh =
+      error.status === 401 &&
+      !skipAuthRefresh &&
+      !shouldSkipAuthRefresh(path) &&
+      Boolean(getAuthData()?.refreshToken);
+
+    if (canRefresh) {
+      try {
+        await refreshSession();
+        return uploadRequest(path, {
+          method,
+          formData,
+          token: getAuthData()?.token,
+          skipAuthRefresh: true,
+        });
+      } catch {
+        expireAuthSession();
+      }
+    } else if (error.status === 403 && error.code === "TERMS_NOT_ACCEPTED") {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("auth:terms-required", { detail: error.payload }));
+      }
+    } else if (error.status === 401 && getAuthData()) {
+      expireAuthSession();
+    }
+
+    throw error;
   }
 
   return payload;
@@ -133,40 +327,78 @@ export const pingBackend = async () => {
 };
 
 export const authApi = {
-  login: (email, password) =>
+  login: (email, password, rememberMe = false) =>
     apiRequest("/api/auth/login", {
       method: "POST",
-      body: { email, password },
+      body: { email, password, rememberMe: Boolean(rememberMe) },
+      skipAuthRefresh: true,
+    }),
+  resendLoginOtp: (email) =>
+    apiRequest("/api/auth/login/resend-otp", {
+      method: "POST",
+      body: { email },
+      skipAuthRefresh: true,
+    }),
+  verifyLoginOtp: (email, otp) =>
+    apiRequest("/api/auth/login/verify-otp", {
+      method: "POST",
+      body: { email, otp },
+      skipAuthRefresh: true,
+    }),
+  refresh: (refreshToken) =>
+    apiRequest("/api/auth/refresh", {
+      method: "POST",
+      body: { refreshToken },
+      skipAuthRefresh: true,
+      token: null,
+    }),
+  logout: (refreshToken) =>
+    apiRequest("/api/auth/logout", {
+      method: "POST",
+      body: refreshToken ? { refreshToken } : {},
+      skipAuthRefresh: true,
+      token: null,
     }),
   register: (userData) =>
     apiRequest("/api/auth/register", {
       method: "POST",
       body: userData,
+      skipAuthRefresh: true,
     }),
   resendEmailVerificationOtp: (email) =>
     apiRequest("/api/auth/email/resend-verification-otp", {
       method: "POST",
       body: { email },
+      skipAuthRefresh: true,
     }),
   verifyEmailOtp: (email, otp) =>
     apiRequest("/api/auth/email/verify-otp", {
       method: "POST",
       body: { email, otp },
+      skipAuthRefresh: true,
     }),
   forgotPassword: (email) =>
     apiRequest("/api/auth/forgot-password", {
       method: "POST",
       body: { email },
+      skipAuthRefresh: true,
     }),
   resetPassword: (email, otp, newPassword) =>
     apiRequest("/api/auth/reset-password", {
       method: "POST",
       body: { email, otp, newPassword },
+      skipAuthRefresh: true,
     }),
   completeProviderRegistration: (payload) =>
     apiRequest("/api/auth/provider/complete-registration", {
       method: "POST",
       body: payload,
+      skipAuthRefresh: true,
+    }),
+  acceptTerms: () =>
+    apiRequest("/api/auth/accept-terms", {
+      method: "POST",
+      body: { acceptedTerms: true },
     }),
 };
 
@@ -284,6 +516,13 @@ export const adminApi = {
       method: "DELETE",
       token,
     }),
+  getFinance: (token) => apiRequest("/api/admin/finance", { token }),
+  getPayouts: (token, query = "") => apiRequest("/api/admin/payouts" + query, { token }),
+  syncPayout: (token, transactionId) =>
+    apiRequest(`/api/admin/payouts/${transactionId}/sync`, {
+      method: "POST",
+      token,
+    }),
 };
 
 export const analyticsApi = {
@@ -356,6 +595,16 @@ export const hotelApi = {
       method: "DELETE",
       token,
     }),
+  getPayoutDetails: (token) => apiRequest("/api/hotel/payout-details", { token }),
+  savePayoutDetails: (token, payoutDetails) =>
+    apiRequest("/api/hotel/payout-details", {
+      method: "PUT",
+      token,
+      body: { payoutDetails },
+    }),
+  getFinance: (token) => apiRequest("/api/hotel/finance", { token }),
+  verifyBooking: (token, lookup) =>
+    apiRequest(`/api/hotel/booking-verification/${encodeURIComponent(lookup)}`, { token }),
 };
 
 export const bookingApi = {
@@ -398,6 +647,14 @@ export const bookingApi = {
       token,
       body: payload,
     }),
+  getPaymentStatus: (token, bookingId) =>
+    apiRequest(`/api/bookings/${bookingId}/payment-status`, { token }),
+  cancelBooking: (token, bookingId, reason) =>
+    apiRequest(`/api/bookings/${bookingId}/cancel`, {
+      method: "POST",
+      token,
+      body: { reason, cancellationReason: reason },
+    }),
   getReceiptUrl: (bookingOrToken) =>
     bookingOrToken ? `${API_BASE_URL}/api/receipt/${encodeURIComponent(bookingOrToken)}` : "",
   getPrintableReceiptUrl: (bookingOrToken) =>
@@ -420,6 +677,11 @@ export const rebookApi = {
   verifyId: (token, rebookId, serviceId) => apiRequest("/api/rebook/verify-id", { method: "POST", token, body: { rebookId, serviceId } }),
   getSettings: (token) => apiRequest("/api/rebook/settings", { token }),
   updateSettings: (token, payload) => apiRequest("/api/rebook/settings", { method: "PUT", token, body: payload }),
+};
+
+export const paymentsApi = {
+  getMethods: () => apiRequest("/api/payments/methods", { skipAuthRefresh: true, token: null }),
+  getProviders: () => apiRequest("/api/payments/providers", { skipAuthRefresh: true, token: null }),
 };
 
 export const publicApi = {

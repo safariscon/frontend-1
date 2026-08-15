@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardRoute } from '../lib/dashboard';
+import { getPostAuthRoute } from '../lib/dashboard';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import TermsCheckbox from '../components/TermsCheckbox';
 import PasswordInput from '../components/PasswordInput';
 
 export default function RegisterPage() {
@@ -16,6 +17,7 @@ export default function RegisterPage() {
       confirmPassword: '',
       role: 'customer',
     });
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { register, user } = useAuth();
@@ -24,7 +26,7 @@ export default function RegisterPage() {
 
    useEffect(() => {
      if (user) {
-       navigate(getDashboardRoute(user));
+       navigate(getPostAuthRoute(user), { state: { requireAcceptance: true } });
      }
    }, [user, navigate]);
 
@@ -37,6 +39,10 @@ export default function RegisterPage() {
      e.preventDefault();
      setError('');
 
+     if (!acceptedTerms) {
+       setError('You must accept the Terms of use and Privacy policy before creating an account.');
+       return;
+     }
      if (formData.password !== formData.confirmPassword) {
        setError(t('passwordMismatch', language));
        return;
@@ -52,6 +58,7 @@ export default function RegisterPage() {
        email: formData.email,
        password: formData.password,
        role: formData.role,
+       acceptedTerms: true,
      });
 
      if (!result.success) {
@@ -64,7 +71,7 @@ export default function RegisterPage() {
          },
        });
      } else {
-       navigate(result.user ? getDashboardRoute(result.user) : '/login');
+       navigate(result.user ? getPostAuthRoute(result.user) : '/login', { state: { requireAcceptance: true } });
      }
      setLoading(false);
    };
@@ -168,9 +175,13 @@ export default function RegisterPage() {
                   />
                 </div>
 
+                <div className="mb-6">
+                  <TermsCheckbox checked={acceptedTerms} onChange={setAcceptedTerms} />
+                </div>
+
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !acceptedTerms}
                   className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50"
                 >
                   {loading ? `${t('createAccountBtn', language)}...` : t('createAccountBtn', language)}

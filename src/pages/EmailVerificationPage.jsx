@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardRoute } from '../lib/dashboard';
+import { getPostAuthRoute } from '../lib/dashboard';
 
 export default function EmailVerificationPage() {
   const location = useLocation();
@@ -18,7 +18,7 @@ export default function EmailVerificationPage() {
 
   useEffect(() => {
     if (user?.emailVerified) {
-      navigate(getDashboardRoute(user), { replace: true });
+      navigate(getPostAuthRoute(user), { replace: true, state: { requireAcceptance: true } });
     }
   }, [navigate, user]);
 
@@ -30,7 +30,7 @@ export default function EmailVerificationPage() {
 
     const result = await verifyEmailOtp(email.trim(), otp.trim());
     if (result.success) {
-      navigate(getDashboardRoute(result.user), { replace: true });
+      navigate(getPostAuthRoute(result.user), { replace: true, state: { requireAcceptance: true } });
     } else {
       setError(result.error);
     }
