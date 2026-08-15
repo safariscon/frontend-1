@@ -394,6 +394,12 @@ export const authApi = {
       method: "POST",
       token,
       body: payload,
+      skipAuthRefresh: true,
+    }),
+  acceptTerms: () =>
+    apiRequest("/api/auth/accept-terms", {
+      method: "POST",
+      body: { acceptedTerms: true },
     }),
   completeProviderRegistration: (payload) => {
     const businessName = String(payload?.businessName || payload?.providerName || '').trim();

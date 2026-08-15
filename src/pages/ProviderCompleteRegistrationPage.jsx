@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi, paymentsApi } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
+import TermsCheckbox from '../components/TermsCheckbox';
 import { t } from '../lib/translations';
 import TermsCheckbox from '../components/TermsCheckbox';
 
