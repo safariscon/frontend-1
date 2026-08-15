@@ -124,16 +124,9 @@ export default function UserDashboard() {
     <DashboardLayout>
       <main className="py-6 sm:py-8">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-              {t('liveCustomerDashboard', language)}
-            </span>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 md:text-4xl">
-              {t('welcomeBackUser', language, { name: user?.name?.split(' ')[0] || '' })}
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">
-              {t('trackBookings', language)}
-            </p>
+          <div className="mb-8">
+            <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-4xl">Bookings</h1>
+            <p className="mt-1 text-sm text-slate-600">Manage your bookings.</p>
             <button onClick={refreshBookings} className="mt-5 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700">
               Refresh
             </button>
@@ -399,7 +392,13 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
   const remainingBalance = remainingAtVenue(booking);
   const depositAmount = amountDueNow(booking);
   const contacts = providerUnlocked ? business?.contactDetails || {} : {};
-  const serviceLocation = business?.serviceLocation || business?.publicLocation || {};
+  const serviceLocation = {
+    ...(business?.serviceLocation || {}),
+    ...(service?.serviceLocation || {}),
+    ...(business?.publicLocation || {}),
+    latitude: service?.serviceLocation?.latitude ?? business?.serviceLocation?.latitude ?? contacts.latitude,
+    longitude: service?.serviceLocation?.longitude ?? business?.serviceLocation?.longitude ?? contacts.longitude,
+  };
   const address = locationUnlocked ? serviceLocation.fullAddress || formatFullLocation(business?.locationDetails, contacts.exactAddress || business?.location) : 'Pay in full to unlock exact location and directions.';
   const submittedRows = getBookingDetailRows(booking.bookingDetails);
   const summaryLocation = locationUnlocked

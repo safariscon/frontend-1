@@ -16,6 +16,34 @@ export function getDashboardRoute(user) {
   return '/dashboard';
 }
 
+export function formatDisplayRole(role) {
+  if (role === 'hotel' || role === 'supplier') return 'Service provider';
+  if (role === 'admin') return 'Admin';
+  if (role === 'tourist' || role === 'customer') return 'Customer';
+  return String(role || 'user').replace(/[-_]/g, ' ');
+}
+
+export const isDraftStatus = (value) => String(value || '').toLowerCase() === 'draft';
+
+export function isDraftService(item) {
+  if (!item) return false;
+  return ['approvalStatus', 'listingStatus', 'publicationStatus', 'moderationStatus'].some((key) => isDraftStatus(item[key]))
+    || isDraftStatus(item.status);
+}
+
+export const serviceApprovalStatus = (item) => {
+  const status = String(item?.approvalStatus || item?.verificationStatus || item?.moderationStatus || '').toLowerCase();
+  if (status === 'approved' || status === 'posted' || status === 'live') return 'approved';
+  if (status === 'rejected') return 'rejected';
+  if (status === 'pending' || status === 'in-review' || status === 'review') return 'pending';
+  if (item?.isApproved === true || item?.isPosted === true) return 'approved';
+  return 'pending';
+};
+
+export function withoutDrafts(items) {
+  return (Array.isArray(items) ? items : []).filter((item) => !isDraftService(item));
+}
+
 export function needsTermsAcceptance(user) {
   return Boolean(user) && user.role !== 'admin' && user.termsAccepted !== true;
 }

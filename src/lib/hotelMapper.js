@@ -2,6 +2,7 @@ export const normalizeHotel = (hotel) => {
   if (!hotel) return null;
 
   const id = hotel._id || hotel.id;
+  const name = hotel.name || hotel.title || hotel.serviceName || '';
   const uploadedImages = Array.isArray(hotel.images)
     ? hotel.images.filter((item) => /^https?:\/\//.test(String(item || ""))).slice(0, 3)
     : [];
@@ -14,7 +15,8 @@ export const normalizeHotel = (hotel) => {
   return {
     ...hotel,
     id,
-    type: hotel.type || 'hotel',
+    name,
+    type: hotel.type || hotel.category || hotel.serviceType || 'service',
     contactInfo: hotel.contactInfo || '',
     image,
     images: uploadedImages.length ? uploadedImages : (image ? [image] : []),
@@ -23,8 +25,8 @@ export const normalizeHotel = (hotel) => {
     businessType: hotel.type || hotel.category || 'service',
     primaryService: {
       _id: id,
-      title: hotel.name,
-      name: hotel.name,
+      title: name,
+      name,
       category: hotel.type || hotel.category || 'service',
       serviceType: hotel.type || hotel.category || 'service',
       location: hotel.location,
@@ -43,6 +45,13 @@ export const normalizeHotel = (hotel) => {
     amenities: Array.isArray(hotel.amenities) ? hotel.amenities : [],
     rooms: Array.isArray(hotel.rooms) ? hotel.rooms : [],
     isFeatured: Boolean(hotel.isFeatured),
+    provider: hotel.provider || ((hotel.providerName || hotel.sellerName || hotel.sellerId || hotel.providerId)
+      ? {
+          id: hotel.providerId || hotel.sellerUserId || hotel.userId?._id || hotel.userId || hotel.businessId?._id || hotel.businessId,
+          name: hotel.providerName || hotel.sellerName || hotel.provider?.name || '',
+          sellerId: hotel.sellerId || hotel.provider?.sellerId || '',
+        }
+      : null),
   };
 };
 

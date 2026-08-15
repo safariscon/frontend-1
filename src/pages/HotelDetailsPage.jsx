@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import DashboardLayout from '../components/DashboardLayout';
+import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { publicApi } from '../lib/api';
 import { normalizeHotels } from '../lib/hotelMapper';
@@ -13,6 +15,7 @@ import { formatRwf } from '../lib/currency';
 export default function HotelDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [hotel, setHotel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -40,22 +43,26 @@ export default function HotelDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
+      <CatalogShell authenticated={isAuthenticated}>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <LoadingSpinner size="lg" />
+        </div>
+      </CatalogShell>
     );
   }
 
   if (!hotel) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('hotelNotFound', language)}</h2>
-          <button onClick={() => navigate('/hotels')} className="text-primary hover:underline">
-            {t('backToServices', language)}
-          </button>
+      <CatalogShell authenticated={isAuthenticated}>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('hotelNotFound', language)}</h2>
+            <button onClick={() => navigate('/services')} className="text-primary hover:underline">
+              {t('backToServices', language)}
+            </button>
+          </div>
         </div>
-      </div>
+      </CatalogShell>
     );
   }
   const isNotAvailable = hotel.status === 'unavailable';
@@ -80,8 +87,7 @@ export default function HotelDetailsPage() {
   const promotion = getVisiblePromotion(hotel.promotion);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar />
+    <CatalogShell authenticated={isAuthenticated}>
 
       <main className="flex-1">
         {images.length > 0 && (
@@ -250,6 +256,18 @@ export default function HotelDetailsPage() {
         </div>
       )}
 
+    </CatalogShell>
+  );
+}
+
+function CatalogShell({ authenticated, children }) {
+  if (authenticated) {
+    return <DashboardLayout>{children}</DashboardLayout>;
+  }
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      {children}
       <Footer />
     </div>
   );

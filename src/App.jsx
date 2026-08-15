@@ -16,6 +16,8 @@ import EmailVerificationPage from './pages/EmailVerificationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
+import NotificationsPage from './pages/NotificationsPage';
 import { HowItWorksPage, PaymentsPolicyPage, PrivacyPage, TermsPage } from './pages/PolicyPages';
 import ProviderCompleteRegistrationPage from './pages/ProviderCompleteRegistrationPage';
 import BusinessRegisterPage from './pages/BusinessRegisterPage';
@@ -23,6 +25,7 @@ import UserDashboard from './pages/UserDashboard';
 import HotelDashboard from './pages/HotelDashboard';
 import SellerDashboard from './pages/SellerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminServiceReviewPage from './pages/AdminServiceReviewPage';
 import VerificationPage from './pages/VerificationPage';
 import InstallBanner from './components/InstallBanner';
 import InstallModal from './components/InstallModal';
@@ -131,12 +134,18 @@ function AppContent() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/payments" element={<PaymentsPolicyPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/provider-register" element={<ProviderCompleteRegistrationPage />} />
             <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />
             <Route path="/dashboard/seller" element={<SellerDashboard />} />
+            <Route path="/dashboard/seller/:section" element={<SellerDashboard />} />
             <Route path="/hotel-dashboard" element={<HotelDashboard />} />
+            <Route path="/hotel-dashboard/:section" element={<HotelDashboard />} />
+            <Route path="/admin-dashboard/services/:serviceId" element={<AdminServiceReviewPage />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/admin-dashboard/:section" element={<AdminDashboard />} />
             <Route path="/verify/:token" element={<VerificationPage />} />
           </Routes>
           </TermsGate>

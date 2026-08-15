@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 import { guestCancelCopy } from '../lib/payments';
 
-export default function HotelCard({ hotel, compact = false }) {
+export default function HotelCard({ hotel, compact = false, showProvider = false }) {
   const { language } = useLanguage();
   const hotelId = hotel.id || hotel._id;
   const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
@@ -48,7 +49,7 @@ export default function HotelCard({ hotel, compact = false }) {
 
       <div className="p-5 md:p-6">
         <div className="mb-2 flex items-start justify-between gap-3">
-          <h3 className="line-clamp-1 text-lg font-black text-slate-950 transition group-hover:text-primary dark:text-white dark:group-hover:text-blue-300">
+          <h3 className="line-clamp-1 text-lg font-black text-slate-950 transition group-hover:text-primary dark:text-white dark:hover:text-blue-300">
             {hotel.name}
           </h3>
           <span className="text-right text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -63,6 +64,9 @@ export default function HotelCard({ hotel, compact = false }) {
           </svg>
           {hotel.location}
         </div>
+        {showProvider && hotel.provider?.name && (
+          <p className="mb-2 text-xs font-bold text-primary">{hotel.provider.name}{hotel.provider.sellerId ? ` · ${hotel.provider.sellerId}` : ''}</p>
+        )}
 
         <p className={`mb-4 text-slate-600 dark:text-slate-300 ${compact ? 'line-clamp-2' : 'line-clamp-3'}`}>
           {hotel.description}

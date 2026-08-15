@@ -389,9 +389,10 @@ export const authApi = {
       body: { email, otp, newPassword },
       skipAuthRefresh: true,
     }),
-  completeProviderRegistration: (payload) =>
-    apiRequest("/api/auth/provider/complete-registration", {
+  changePassword: (token, payload) =>
+    apiRequest("/api/auth/change-password", {
       method: "POST",
+      token,
       body: payload,
       skipAuthRefresh: true,
     }),
@@ -400,6 +401,61 @@ export const authApi = {
       method: "POST",
       body: { acceptedTerms: true },
     }),
+  completeProviderRegistration: (payload) => {
+    const businessName = String(payload?.businessName || payload?.providerName || '').trim();
+    const payoutDetails = payload?.payoutDetails || {};
+    const method = payoutDetails.method === 'bank' ? 'bank' : 'momo';
+    const accountNumber = String(payoutDetails.accountNumber || payoutDetails.msisdn || '').trim();
+    return apiRequest("/api/auth/provider/complete-registration", {
+      method: "POST",
+      body: {
+        sellerId: payload.sellerId,
+        newPassword: payload.newPassword,
+        confirmPassword: payload.confirmPassword,
+        acceptedTerms: true,
+        providerName: businessName || undefined,
+        providerEmail: payload.providerEmail,
+        businessName,
+        payoutMethod: method,
+        payoutDetails: {
+          method,
+          providerId: String(payoutDetails.providerId || '').trim(),
+          accountName: String(payoutDetails.accountName || businessName).trim(),
+          accountNumber,
+          ...(method === 'momo' ? { msisdn: accountNumber } : {}),
+        },
+      },
+      skipAuthRefresh: true,
+    });
+  },
+  getProviderOnboarding: (sellerId) => {
+    const id = encodeURIComponent(String(sellerId || "").trim());
+    return apiRequest(`/api/auth/provider/onboarding?sellerId=${id}`, {
+      skipAuthRefresh: true,
+      token: null,
+    }).catch((error) => {
+      if (error?.status !== 404 && error?.status !== 400) throw error;
+      return apiRequest(`/api/auth/provider/onboarding/${id}`, {
+        skipAuthRefresh: true,
+        token: null,
+      });
+    });
+  },
+  acceptTerms: () =>
+    apiRequest("/api/auth/accept-terms", {
+      method: "POST",
+      body: { acceptedTerms: true },
+    }),
+};
+
+const buildQueryString = (query = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(query || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    params.set(key, String(value));
+  });
+  const text = params.toString();
+  return text ? `?${text}` : "";
 };
 
 export const adminApi = {
@@ -425,7 +481,16 @@ export const adminApi = {
   updateServiceBookingMode: (token, businessId, bookingMode) =>
     apiRequest(`/api/admin/businesses/${businessId}/booking-mode`, { method: "PUT", token, body: { bookingMode } }),
   verifyBooking: (token, lookup) => apiRequest(`/api/admin/booking-verification/${encodeURIComponent(lookup)}`, { token }),
-  getServices: (token) => apiRequest("/api/admin/services", { token }),
+  getServices: (token, query = {}) =>
+    apiRequest("/api/admin/services" + (typeof query === "string" ? query : buildQueryString(query)), { token }),
+  getService: (token, serviceId) =>
+    apiRequest(`/api/admin/services/${serviceId}`, { token }),
+  updateServiceApproval: (token, serviceId, payload) =>
+    apiRequest(`/api/admin/services/${serviceId}/approval`, {
+      method: "PUT",
+      token,
+      body: typeof payload === "string" ? { status: payload } : payload,
+    }),
   getTransactions: (token, query = "") => apiRequest("/api/admin/transactions" + query, { token }),
   getStorageOverview: (token) => apiRequest("/api/admin/storage/overview", { token }),
   getMongoStorage: (token) => apiRequest("/api/admin/storage/mongodb", { token }),
@@ -685,10 +750,24 @@ export const paymentsApi = {
 };
 
 export const publicApi = {
-  getHotels: () => apiRequest("/api/hotels"),
+  getHotels: (query = {}) => apiRequest("/api/hotels" + buildQueryString(query)),
   getAnnouncement: () => apiRequest("/api/announcement"),
   getMarketplaceSettings: () => apiRequest("/api/marketplace-settings"),
   verifyBooking: (token) => apiRequest(`/api/verify/${token}`),
+};
+
+export const geoApi = {
+  searchPlaces: (query) =>
+    apiRequest("/api/geo/search" + buildQueryString({ q: query, country: "rw" }), { skipAuthRefresh: true, token: null }),
+  reverseGeocode: (latitude, longitude) =>
+    apiRequest("/api/geo/reverse" + buildQueryString({ lat: latitude, lng: longitude }), { skipAuthRefresh: true, token: null }),
+  getRoute: (from, to) =>
+    apiRequest("/api/geo/route" + buildQueryString({
+      fromLat: from.latitude,
+      fromLng: from.longitude,
+      toLat: to.latitude,
+      toLng: to.longitude,
+    }), { skipAuthRefresh: true, token: null }),
 };
 
 export { API_BASE_URL };

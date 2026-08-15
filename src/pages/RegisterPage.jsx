@@ -7,7 +7,6 @@ import { getPostAuthRoute } from '../lib/dashboard';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import TermsCheckbox from '../components/TermsCheckbox';
-import PasswordInput from '../components/PasswordInput';
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({

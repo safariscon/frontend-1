@@ -6,12 +6,13 @@ import SearchBar from '../components/SearchBar';
 import HotelCard from '../components/HotelCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import DashboardLayout from '../components/DashboardLayout';
-import { publicApi } from '../lib/api';
+import { adminApi, getAuthData, publicApi } from '../lib/api';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { t } from '../lib/translations';
+import { serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 
 export default function HotelsPage() {
   const { isAuthenticated } = useAuth();
@@ -33,24 +34,47 @@ export default function HotelsPage() {
 function ServicesCatalog({ embedded = false }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
   const [allHotels, setAllHotels] = useState([]);
+  const [providers, setProviders] = useState([]);
+  const [providerId, setProviderId] = useState(searchParams.get('providerId') || '');
   const [sortBy, setSortBy] = useState('recommended');
-  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') || searchParams.get('type') || '');
   const [availableOnly, setAvailableOnly] = useState(false);
   const [mobileView, setMobileView] = useState('list');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const { language } = useLanguage();
 
-  const locationParam = searchParams.get('location');
-  const serviceParam = searchParams.get('service');
+  const locationParam = searchParams.get('location') || '';
+  const searchParam = searchParams.get('search') || searchParams.get('q') || searchParams.get('service') || '';
 
   const loadHotels = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     setLoadError('');
     try {
-      const response = await publicApi.getHotels();
-      setAllHotels(normalizeHotels(response.businesses || response.hotels || []));
+      const catalogResponse = await publicApi.getHotels({
+        category: categoryFilter || undefined,
+        type: categoryFilter || undefined,
+        location: locationParam || undefined,
+        search: searchParam || undefined,
+      });
+      let listings = withoutDrafts(normalizeHotels(catalogResponse.services || catalogResponse.businesses || catalogResponse.hotels || []));
+      if (isAdmin) {
+        const token = getAuthData()?.token;
+        const adminResponse = token ? await adminApi.getServices(token).catch(() => ({})) : {};
+        setProviders(adminResponse.providers || []);
+        if (providerId) {
+          listings = listings.filter((hotel) => matchesCatalogProvider(hotel, providerId));
+          if (!listings.length) {
+            const filteredAdmin = await adminApi.getServices(token, { providerId, approvalStatus: 'approved' }).catch(() => ({}));
+            listings = withoutDrafts(normalizeHotels(filteredAdmin.services || [])).filter((item) => serviceApprovalStatus(item) === 'approved' || !item.approvalStatus);
+          }
+        }
+      } else {
+        setProviders([]);
+      }
+      setAllHotels(listings);
     } catch (error) {
       setAllHotels([]);
       setLoadError(error.message || 'Unable to load services.');
@@ -70,42 +94,10 @@ function ServicesCatalog({ embedded = false }) {
       ],
       () => loadHotels({ silent: true })
     );
-  }, []);
+  }, [isAdmin, providerId, categoryFilter, locationParam, searchParam]);
 
   const filteredHotels = useMemo(() => {
     let result = [...allHotels];
-
-    if (locationParam) {
-      const locationQuery = locationParam.toLowerCase();
-      result = result.filter((hotel) =>
-        [hotel.location, hotel.district, hotel.address, hotel.destinationLocation]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(locationQuery)
-      );
-    }
-
-    if (serviceParam) {
-      const query = serviceParam.toLowerCase();
-      result = result.filter((hotel) => {
-        const serviceText = [
-          hotel.name,
-          hotel.type,
-          hotel.serviceCategory,
-          hotel.businessType,
-          hotel.description,
-          ...(hotel.services || []),
-        ]
-          .join(' ')
-          .toLowerCase();
-        return serviceText.includes(query);
-      });
-    }
-
-    if (categoryFilter && categoryFilter !== 'all') {
-      result = result.filter((hotel) => hotel.serviceCategory === categoryFilter);
-    }
 
     if (availableOnly) {
       result = result.filter((hotel) => Number(hotel.availableInventory ?? 1) > 0);
@@ -130,24 +122,15 @@ function ServicesCatalog({ embedded = false }) {
     }
 
     return result;
-  }, [allHotels, locationParam, serviceParam, categoryFilter, availableOnly, sortBy]);
+  }, [allHotels, availableOnly, sortBy]);
 
   const categoryOptions = useMemo(
     () => [...new Set(allHotels.map((hotel) => hotel.serviceCategory).filter(Boolean))].sort(),
     [allHotels]
   );
 
-  const serviceOptions = useMemo(
-    () =>
-      [...new Map(allHotels.map((hotel) => {
-        const category = hotel.serviceCategory || hotel.type;
-        return [category, { value: category, label: formatLabel(category) }];
-      })).values()].filter((option) => option.value).sort((a, b) => a.label.localeCompare(b.label)),
-    [allHotels]
-  );
-
   const locationOptions = useMemo(
-    () => [...new Set(allHotels.map((hotel) => hotel.destinationLocation).filter(Boolean))].sort(),
+    () => [...new Set(allHotels.flatMap((hotel) => [hotel.destinationLocation, hotel.district, hotel.location]).filter(Boolean))].sort(),
     [allHotels]
   );
 
@@ -185,7 +168,7 @@ function ServicesCatalog({ embedded = false }) {
 
       <div className="sticky top-16 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <SearchBar variant="compact" serviceOptions={serviceOptions} locationOptions={locationOptions}>
+          <SearchBar variant="compact" locationOptions={locationOptions} extraColumns={isAdmin ? 5 : 4}>
             <div className="hidden md:contents">
               <select
                 value={categoryFilter}
@@ -198,6 +181,21 @@ function ServicesCatalog({ embedded = false }) {
                   <option key={category} value={category}>{formatLabel(category)}</option>
                 ))}
               </select>
+              {isAdmin && (
+                <select
+                  value={providerId}
+                  onChange={(event) => setProviderId(event.target.value)}
+                  aria-label="Service provider"
+                  className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none dark:bg-slate-950 dark:text-slate-100"
+                >
+                  <option value="">All providers</option>
+                  {providers.map((provider) => {
+                    const id = provider.id || provider._id || '';
+                    const label = [provider.name, provider.sellerId || provider.email].filter(Boolean).join(' · ');
+                    return <option key={id} value={id}>{label || id}</option>;
+                  })}
+                </select>
+              )}
               <label className="inline-flex min-h-12 items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200">
                 <span>Available now</span>
                 <input type="checkbox" checked={availableOnly} onChange={(event) => setAvailableOnly(event.target.checked)} />
@@ -208,9 +206,9 @@ function ServicesCatalog({ embedded = false }) {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8">
-        {(locationParam || serviceParam) && (
+        {(locationParam || searchParam) && (
           <div className="mb-6 flex flex-wrap items-center gap-2">
-            {serviceParam && <FilterChip label={serviceParam} onRemove={() => removeParam(searchParams, navigate, 'service')} />}
+            {searchParam && <FilterChip label={searchParam} onRemove={() => removeParam(searchParams, navigate, 'search')} />}
             {locationParam && <FilterChip label={locationParam} onRemove={() => removeParam(searchParams, navigate, 'location')} />}
             <button type="button" onClick={() => navigate('/services')} className="text-sm font-bold text-slate-600 underline hover:text-primary dark:text-slate-400">
               Clear all
@@ -221,7 +219,7 @@ function ServicesCatalog({ embedded = false }) {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-              {filteredHotels.length} {filteredHotels.length === 1 ? 'Business Found' : 'Businesses Found'}
+              {filteredHotels.length} {filteredHotels.length === 1 ? t('serviceFound', language) : t('servicesFound', language)}
             </h2>
             {locationParam && (
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -268,12 +266,12 @@ function ServicesCatalog({ embedded = false }) {
                   <div>
                     <h3 className="text-xl font-black text-slate-950 dark:text-white">{formatLabel(category)}</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                      {hotels.length} {hotels.length === 1 ? 'Business Found' : 'Businesses Found'}
+                      {hotels.length} {hotels.length === 1 ? t('serviceFound', language) : t('servicesFound', language)}
                     </p>
                   </div>
                 </div>
                 <div className={`services-results-grid grid gap-6 md:grid-cols-2 xl:grid-cols-3 ${mobileView === 'list' ? 'mobile-list-view' : 'mobile-grid-view'}`}>
-                  {hotels.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} />)}
+                  {hotels.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} showProvider={isAdmin} />)}
                 </div>
               </section>
             ))}
@@ -281,7 +279,7 @@ function ServicesCatalog({ embedded = false }) {
         ) : (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-14 text-center dark:border-slate-700 dark:bg-slate-900">
             <NoResultsIcon />
-            <h3 className="mt-4 text-xl font-black text-slate-800 dark:text-white">No businesses found</h3>
+            <h3 className="mt-4 text-xl font-black text-slate-800 dark:text-white">{t('noServicesFound', language)}</h3>
             <p className="mt-2 text-slate-500 dark:text-slate-400">{t('tryAdjustingFilters', language)}</p>
           </div>
         )}
@@ -321,4 +319,22 @@ function formatLabel(value) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function matchesCatalogProvider(hotel, providerId) {
+  const wanted = String(providerId || '');
+  if (!wanted) return true;
+  const ids = [
+    hotel.providerId,
+    hotel.provider?.id,
+    hotel.provider?._id,
+    hotel.provider?.sellerId,
+    hotel.sellerId,
+    hotel.sellerUserId,
+    hotel.userId?._id,
+    hotel.userId,
+    hotel.businessId?._id,
+    hotel.businessId,
+  ];
+  return ids.some((id) => String(id || '') === wanted);
 }
