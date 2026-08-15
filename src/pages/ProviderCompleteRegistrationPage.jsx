@@ -7,7 +7,6 @@ import { useLanguage } from '../context/LanguageContext';
 import TermsCheckbox from '../components/TermsCheckbox';
 import { t } from '../lib/translations';
 
-
 export default function ProviderCompleteRegistrationPage() {
   const navigate = useNavigate();
   const location = useLocation();

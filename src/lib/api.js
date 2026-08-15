@@ -617,6 +617,7 @@ export const hotelApi = {
       body: payload,
     }),
   getMyServices: (token) => apiRequest("/api/hotel/services", { token }),
+  getService: (token, serviceId) => apiRequest(`/api/hotel/services/${serviceId}`, { token }),
   uploadServiceImages: (token, files = []) => {
     const formData = new FormData();
     files.slice(0, 3).forEach((file) => formData.append("images", file));

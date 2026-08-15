@@ -10,6 +10,7 @@ import { formatRwf } from '../lib/currency';
 import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES } from '../data/serviceCategories';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
+import ServiceDetailsView from '../components/ServiceDetailsView';
 import OptionDetailsModal from '../components/OptionDetailsModal';
 import { DAY_OPTIONS, TIME_REQUIREMENT_OPTIONS, parseOptionAvailability, toggleAvailableDay } from '../lib/availability';
 
@@ -323,6 +324,7 @@ export default function HotelDashboard() {
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [showEditor, setShowEditor] = useState(false);
+  const [viewingService, setViewingService] = useState(null);
   const [bookingSubTab, setBookingSubTab] = useState('bookings');
   const [financeSubTab, setFinanceSubTab] = useState('finance');
   const [serviceStatusFilter, setServiceStatusFilter] = useState('all');
@@ -389,7 +391,10 @@ export default function HotelDashboard() {
   }, [token, user]);
 
   useEffect(() => {
-    if (view !== 'services') setShowEditor(false);
+    if (view !== 'services') {
+      setShowEditor(false);
+      setViewingService(null);
+    }
   }, [view]);
 
   const stats = useMemo(() => {
@@ -454,6 +459,7 @@ export default function HotelDashboard() {
       bookingMode: service.bookingMode || 'manual',
     });
     setShowEditor(true);
+    setViewingService(null);
     if (view !== 'services') navigate(`${basePath}/services`);
   };
 
@@ -461,6 +467,20 @@ export default function HotelDashboard() {
     setEditingService(null);
     setForm(EMPTY_FORM);
     setShowEditor(false);
+    setViewingService(null);
+  };
+
+  const openViewDetails = async (service) => {
+    setShowEditor(false);
+    setViewingService(service);
+    if (token) {
+      try {
+        const response = await hotelApi.getService(token, service._id || service.id);
+        setViewingService(response.service || response);
+      } catch {
+        setViewingService(service);
+      }
+    }
   };
 
   const saveService = async (event) => {
@@ -665,6 +685,13 @@ export default function HotelDashboard() {
             </div>
           )}
 
+          {view === 'services' && viewingService && !showEditor ? (
+            <div>
+              <button type="button" onClick={() => setViewingService(null)} className="mb-4 text-sm font-semibold text-primary">Back to services</button>
+              <h2 className="mb-4 text-2xl font-black text-slate-950">{viewingService.title || viewingService.name || 'Service details'}</h2>
+              <ServiceDetailsView service={viewingService} />
+            </div>
+          ) : (
           <section className="seller-dashboard-content bg-white rounded-2xl shadow-sm p-4">
             {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
             {!loading && view === 'dashboard' && <Analytics stats={stats} services={services} />}
@@ -674,6 +701,7 @@ export default function HotelDashboard() {
                 statusFilter={serviceStatusFilter}
                 setStatusFilter={setServiceStatusFilter}
                 onAdd={openAddService}
+                onView={openViewDetails}
                 onEdit={startEdit}
                 onDelete={deleteService}
                 onStatus={updateStatus}
@@ -691,6 +719,7 @@ export default function HotelDashboard() {
             {!loading && view === 'finance' && financeSubTab === 'finance' && <FinancePanel finance={finance} />}
             {!loading && view === 'finance' && financeSubTab === 'payout' && <PayoutDetailsForm token={token} initial={payoutDetails} onSaved={() => loadData({ silent: true })} />}
           </section>
+          )}
         </div>
       </main>
       {approvalBooking && <SellerBookingApprovalModal booking={approvalBooking} onClose={() => setApprovalBooking(null)} onSubmit={(payload) => updateBookingStatus(approvalBooking._id || approvalBooking.id, payload)} />}
@@ -706,7 +735,7 @@ function canSellerReviewBooking(booking) {
   return ['pending', 'reviewing', 'requested'].includes(String(booking.status || '').toLowerCase());
 }
 
-function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onEdit, onDelete, onStatus }) {
+function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, onEdit, onDelete, onStatus }) {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -768,6 +797,7 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onEdit, o
                 </p>
               )}
               <div className="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => onView(service)} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white">View details</button>
                 <button type="button" onClick={() => onEdit(service)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Edit</button>
                 <button type="button" onClick={() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available')} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{service.status === 'available' ? 'Set Not Available' : 'Set Available'}</button>
                 <button type="button" onClick={() => onDelete(service._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Delete</button>
