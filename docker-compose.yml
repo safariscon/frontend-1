@@ -1,0 +1,11 @@
+services:
+  web:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://umuhuzaback.onrender.com}
+    image: safariscon-web:latest
+    container_name: safariscon-web
+    restart: unless-stopped
+    ports:
+      - "4174:80"
