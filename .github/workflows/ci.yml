@@ -75,5 +75,5 @@ jobs:
             docker run -d \
               --name safariscon-web \
               --restart unless-stopped \
-              -p 4174:80 \
+              -p 4175:80 \
               safariscon-web:latest

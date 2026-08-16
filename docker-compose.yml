@@ -8,4 +8,4 @@ services:
     container_name: safariscon-web
     restart: unless-stopped
     ports:
-      - "4174:80"
+      - "${APP_PORT:-4175}:80"
