@@ -119,7 +119,7 @@ export default function EmailVerificationPage() {
             >
               {resending ? 'Sending...' : 'Send a new code'}
             </button>
-            <Link to="/login" className="text-gray-600 hover:text-primary">
+            <Link to={location.state?.loginSearch ? `/login?${location.state.loginSearch}` : '/login'} className="text-gray-600 hover:text-primary">
               Back to sign in
             </Link>
           </div>

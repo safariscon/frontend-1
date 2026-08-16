@@ -22,6 +22,8 @@ import {
   parseOptionAvailability,
   validateOptionSchedule,
 } from '../lib/availability';
+import AdministrativeLocationFields from './AdministrativeLocationFields';
+import { emptyLocationDetails, formatLocationLine, isAdministrativeLocationComplete, normalizeLocationDetails } from '../lib/places';
 
 const TODAY = new Date().toISOString().split('T')[0];
 const OUTDATED_RULE = /30%|remaining balance is paid|advance money is not refunded|pay the 30%/i;
@@ -52,26 +54,12 @@ const BASE_VALUES = {
   endTime: '',
   numberOfPeople: '1',
   customerLocation: '',
-  customerLocationDetails: {
-    province: '',
-    district: '',
-    sector: '',
-    cell: '',
-    village: '',
-  },
+  customerLocationDetails: emptyLocationDetails(),
   paymentMethod: 'mobile-money',
   agreeToTerms: false,
   packageType: '',
   quantity: '1',
 };
-
-const RWANDA_PROVINCES = ['Kigali City', 'Northern Province', 'Southern Province', 'Eastern Province', 'Western Province'];
-
-const RWANDA_DISTRICTS = [
-  'Bugesera', 'Burera', 'Gakenke', 'Gasabo', 'Gatsibo', 'Gicumbi', 'Gisagara', 'Huye', 'Kamonyi', 'Karongi',
-  'Kayonza', 'Kicukiro', 'Kirehe', 'Muhanga', 'Musanze', 'Ngoma', 'Ngororero', 'Nyabihu', 'Nyagatare', 'Nyamagabe',
-  'Nyamasheke', 'Nyanza', 'Nyarugenge', 'Nyaruguru', 'Rubavu', 'Ruhango', 'Rulindo', 'Rusizi', 'Rutsiro', 'Rwamagana',
-];
 
 export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [searchParams] = useSearchParams();
@@ -184,13 +172,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     });
   }, [optionSchedule.sameDayOnly, optionSchedule.requiresEndDate, selectedOffer]);
 
-  const updateCustomerLocation = (key, value) => {
+  const updateCustomerLocation = (next) => {
     setValues((prev) => ({
       ...prev,
-      customerLocationDetails: {
-        ...prev.customerLocationDetails,
-        [key]: value,
-      },
+      customerLocationDetails: normalizeLocationDetails(next),
     }));
   };
 
@@ -205,15 +190,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (scheduleError) return scheduleError;
     if (Number(values.numberOfPeople) < 1) return 'Number of people must be at least 1.';
     if (Number(values.quantity) < 1) return 'Quantity / units must be at least 1.';
-    const customerLocationFields = [
-      ['province', 'Province'],
-      ['district', 'District'],
-      ['sector', 'Sector'],
-      ['cell', 'Cell'],
-      ['village', 'Village'],
-    ];
-    const missingLocation = customerLocationFields.find(([key]) => !String(values.customerLocationDetails?.[key] || '').trim());
-    if (missingLocation) return `Please complete customer ${missingLocation[1]}.`;
+    if (!isAdministrativeLocationComplete(values.customerLocationDetails)) return 'Please select the customer country and city.';
     if (!values.agreeToTerms) return 'Please agree to the terms and conditions.';
     if (useRebook && !rebookId.trim()) return 'Enter your Re-book ID.';
     if (useRebook && verifiedRebookId !== rebookId.trim().toUpperCase()) return 'Verify the Re-book ID before submitting.';
@@ -258,21 +235,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
     setLoading(true);
     try {
-      const customerLocationDetails = {
-        province: values.customerLocationDetails.province.trim(),
-        district: values.customerLocationDetails.district.trim(),
-        sector: values.customerLocationDetails.sector.trim(),
-        cell: values.customerLocationDetails.cell.trim(),
-        village: values.customerLocationDetails.village.trim(),
-      };
-      const customerLocationText = [
-        customerLocationDetails.village,
-        customerLocationDetails.cell,
-        customerLocationDetails.sector,
-        customerLocationDetails.district,
-        customerLocationDetails.province,
-        'Rwanda',
-      ].filter(Boolean).join(', ');
+      const customerLocationDetails = normalizeLocationDetails(values.customerLocationDetails);
+      const customerLocationText = formatLocationLine(customerLocationDetails);
       const numberOfPeople = Math.max(1, Number(values.numberOfPeople) || 1);
       const quantity = Math.max(1, Number(values.quantity) || 1);
       const response = await bookingApi.bookService(authData.token, {
@@ -563,25 +527,9 @@ function CustomerLocationFields({ location, onChange }) {
   return (
     <fieldset className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:col-span-2">
       <legend className="px-1 text-sm font-black text-blue-950">Customer location</legend>
-      <p className="mt-1 text-xs font-semibold text-blue-800">Enter the customer address so the provider can know the exact service location before confirming the booking.</p>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Province *</span>
-          <select required value={location.province} onChange={(event) => onChange('province', event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3">
-            <option value="">Select province</option>
-            {RWANDA_PROVINCES.map((province) => <option key={province} value={province}>{province}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">District *</span>
-          <select required value={location.district} onChange={(event) => onChange('district', event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3">
-            <option value="">Select district</option>
-            {RWANDA_DISTRICTS.map((district) => <option key={district} value={district}>{district}</option>)}
-          </select>
-        </label>
-        <FixedInput label="Sector" value={location.sector} onChange={(value) => onChange('sector', value)} required />
-        <FixedInput label="Cell" value={location.cell} onChange={(value) => onChange('cell', value)} required />
-        <FixedInput label="Village" value={location.village} onChange={(value) => onChange('village', value)} required />
+      <p className="mt-1 text-xs font-semibold text-blue-800">Select the country, then the region and city, so the provider knows where the service is needed.</p>
+      <div className="mt-4">
+        <AdministrativeLocationFields value={location} onChange={onChange} />
       </div>
     </fieldset>
   );

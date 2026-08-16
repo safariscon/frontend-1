@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import loadLeaflet, { DEFAULT_RWANDA_CENTER, isInsideRwanda, leafletMarkerIcon } from '../lib/leafletMap';
+import AdministrativeLocationFields from './AdministrativeLocationFields';
+import loadLeaflet, { DEFAULT_MAP_CENTER, leafletMarkerIcon } from '../lib/leafletMap';
 import { reverseGeocode, searchPlaces } from '../lib/geo';
+import { getCountryByNameOrCode, normalizeLocationDetails } from '../lib/places';
 
-export default function ServiceLocationPicker({ value, onChange, districts = [] }) {
+export default function ServiceLocationPicker({ value, onChange }) {
   const location = useMemo(() => ({
-    country: 'Rwanda',
-    province: value?.province || '',
-    district: value?.district || '',
-    sector: value?.sector || '',
-    cell: value?.cell || '',
-    village: value?.village || '',
+    ...normalizeLocationDetails(value),
     placeName: value?.placeName || '',
     fullAddress: value?.fullAddress || value?.formattedAddress || '',
     formattedAddress: value?.formattedAddress || value?.fullAddress || '',
@@ -27,19 +24,19 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
 
-  const update = (patch) => onChange({
-    ...location,
-    ...patch,
-    country: 'Rwanda',
-    formattedAddress: patch.formattedAddress ?? patch.fullAddress ?? location.formattedAddress,
-    fullAddress: patch.fullAddress ?? patch.formattedAddress ?? location.fullAddress,
-  });
+  const update = (patch) => {
+    const nextAdmin = normalizeLocationDetails({ ...location, ...patch });
+    onChange({
+      ...location,
+      ...patch,
+      ...nextAdmin,
+      formattedAddress: patch.formattedAddress ?? patch.fullAddress ?? location.formattedAddress,
+      fullAddress: patch.fullAddress ?? patch.formattedAddress ?? location.fullAddress,
+    });
+  };
 
   const applyCoordinates = async (latitude, longitude, source, extras = {}) => {
-    if (!isInsideRwanda(latitude, longitude)) {
-      setMessage('Please choose a location inside Rwanda.');
-      return;
-    }
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
     setMessage('');
     update({
       latitude,
@@ -61,6 +58,10 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
           formattedAddress: place.formattedAddress,
           fullAddress: place.formattedAddress,
           placeId: extras.placeId || place.placeId,
+          country: location.country || place.country,
+          countryCode: location.countryCode || place.countryCode,
+          state: location.state || place.state,
+          city: location.city || place.city,
           province: location.province || place.province,
           district: location.district || place.district,
           sector: location.sector || place.sector,
@@ -93,8 +94,8 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     loadLeaflet()
       .then((leaflet) => {
         if (cancelled || !mapNodeRef.current || mapRef.current) return;
-        const start = [location.latitude || DEFAULT_RWANDA_CENTER.latitude, location.longitude || DEFAULT_RWANDA_CENTER.longitude];
-        mapRef.current = leaflet.map(mapNodeRef.current).setView(start, location.latitude ? 16 : 8);
+        const start = [location.latitude || DEFAULT_MAP_CENTER.latitude, location.longitude || DEFAULT_MAP_CENTER.longitude];
+        mapRef.current = leaflet.map(mapNodeRef.current).setView(start, location.latitude ? 16 : 2);
         leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; OpenStreetMap contributors',
         }).addTo(mapRef.current);
@@ -110,6 +111,18 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!mapRef.current || location.latitude || !location.country) return undefined;
+    let cancelled = false;
+    getCountryByNameOrCode(location.country).then((country) => {
+      if (cancelled || !country?.latitude || !mapRef.current) return;
+      mapRef.current.setView([country.latitude, country.longitude], 5);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.country, location.latitude]);
+
   const runSearch = async (event) => {
     event?.preventDefault?.();
     const text = query.trim();
@@ -120,7 +133,14 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     setSearching(true);
     setMessage('');
     try {
-      const results = await searchPlaces(text);
+      const country = await getCountryByNameOrCode(location.country).catch(() => null);
+      const results = await searchPlaces(text, {
+        country: location.countryCode || country?.code,
+        countryCode: location.countryCode || country?.code,
+        countryName: location.country,
+        latitude: location.latitude || country?.latitude,
+        longitude: location.longitude || country?.longitude,
+      });
       setSearchResults(results);
       if (!results.length) setMessage('No matching place. Pin the exact spot on the map instead.');
     } catch {
@@ -152,6 +172,10 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
       formattedAddress: result.formattedAddress || result.label,
       fullAddress: result.formattedAddress || result.label,
       placeId: result.placeId,
+      country: location.country || result.country,
+      countryCode: location.countryCode || result.countryCode,
+      state: location.state || result.state,
+      city: location.city || result.city,
       province: location.province || result.province,
       district: location.district || result.district,
       sector: location.sector || result.sector,
@@ -162,45 +186,40 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
     <section className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
       <div className="mb-4">
         <h3 className="font-bold text-blue-950">Service location</h3>
-        <p className="mt-1 text-sm text-blue-800">Search a known place, or drop a pin if the business is not listed. Customers will get the road from their GPS to this point.</p>
+        <p className="mt-1 text-sm text-blue-800">Choose the country, then the region and city. Search a known place or drop a pin so customers can get directions.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <PickerSelect label="Province" value={location.province} onChange={(province) => update({ province })} options={['', 'Kigali City', 'Northern Province', 'Southern Province', 'Eastern Province', 'Western Province']} required />
-        <PickerSelect label="District" value={location.district} onChange={(district) => update({ district })} options={['', ...districts]} required />
-        <PickerInput label="Sector" value={location.sector} onChange={(sector) => update({ sector })} required />
-        <PickerInput label="Cell" value={location.cell} onChange={(cell) => update({ cell })} />
-        <PickerInput label="Village" value={location.village} onChange={(village) => update({ village })} />
-        <div className="relative">
-          <label className="block">
-            <span className="text-sm font-semibold text-blue-950">Place name / address</span>
-            <div className="mt-1 flex gap-2">
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    runSearch();
-                  }
-                }}
-                placeholder="Kigali Heights, Nyamirambo, Mama Jane Hair Salon"
-                className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3"
-              />
-              <button type="button" onClick={runSearch} className="shrink-0 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white">{searching ? '...' : 'Search'}</button>
-            </div>
-          </label>
-          {(searching || searchResults.length > 0) && (
-            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
-              {searching && <p className="p-3 text-sm text-slate-500">Searching Rwanda...</p>}
-              {searchResults.map((result) => (
-                <button key={`${result.latitude}-${result.longitude}-${result.label}`} type="button" onClick={() => selectResult(result)} className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-blue-50">
-                  {result.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      <AdministrativeLocationFields value={location} onChange={update} />
+
+      <div className="relative mt-4">
+        <label className="block">
+          <span className="text-sm font-semibold text-blue-950">Search place / address</span>
+          <div className="mt-1 flex gap-2">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  runSearch();
+                }
+              }}
+              placeholder="Hotel name, street, landmark..."
+              className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3"
+            />
+            <button type="button" onClick={runSearch} className="shrink-0 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white">{searching ? '...' : 'Search'}</button>
+          </div>
+        </label>
+        {(searching || searchResults.length > 0) && (
+          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+            {searching && <p className="p-3 text-sm text-slate-500">Searching places...</p>}
+            {searchResults.map((result) => (
+              <button key={`${result.latitude}-${result.longitude}-${result.label}`} type="button" onClick={() => selectResult(result)} className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-blue-50">
+                {result.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-4 overflow-hidden rounded-xl border border-blue-200 bg-white">
@@ -223,25 +242,5 @@ export default function ServiceLocationPicker({ value, onChange, districts = [] 
         {message && <span className="text-sm font-semibold text-amber-700">{message}</span>}
       </div>
     </section>
-  );
-}
-
-function PickerInput({ label, value, onChange, required = false, placeholder = '' }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-semibold text-blue-950">{label}{required && <span className="text-red-500"> *</span>}</span>
-      <input required={required} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="mt-1 w-full rounded-xl border border-blue-200 bg-white px-4 py-3" />
-    </label>
-  );
-}
-
-function PickerSelect({ label, value, onChange, options, required = false }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-semibold text-blue-950">{label}{required && <span className="text-red-500"> *</span>}</span>
-      <select required={required} value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-xl border border-blue-200 bg-white px-4 py-3">
-        {options.map((option) => <option key={option || 'empty'} value={option}>{option || `Select ${label.toLowerCase()}`}</option>)}
-      </select>
-    </label>
   );
 }

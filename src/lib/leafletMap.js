@@ -28,6 +28,7 @@ const loadLeaflet = () => new Promise((resolve, reject) => {
   document.body.appendChild(script);
 });
 
+export const DEFAULT_MAP_CENTER = { latitude: 0, longitude: 20 };
 export const DEFAULT_RWANDA_CENTER = { latitude: -1.9441, longitude: 30.0619 };
 
 export const RWANDA_BOUNDS = {

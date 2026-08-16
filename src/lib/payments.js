@@ -71,6 +71,11 @@ export const paymentErrorMessage = (error) => {
   if (error?.status === 409 && /payout/i.test(message)) {
     return 'This listing cannot accept payment yet.';
   }
+  if (error?.status === 401) {
+    return message && !/unauthorized/i.test(message)
+      ? message
+      : 'Payment could not start. Check the Mobile Money number and try again. You are still signed in.';
+  }
   if (code === 'PAYMENT_FAILED' || error?.status === 402) return message;
   return message;
 };

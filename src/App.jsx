@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { InstallProvider } from './context/InstallContext';
 import { useTheme } from './context/ThemeContext';
@@ -60,7 +60,13 @@ function TermsGate({ children }) {
   if (OPEN_PATHS.includes(location.pathname) || location.pathname.startsWith('/hotel/') || location.pathname.startsWith('/business/') || location.pathname.startsWith('/verify/')) {
     return children;
   }
-  return <Navigate to="/terms" replace state={{ requireAcceptance: true }} />;
+  return <Navigate to="/terms" replace state={{ requireAcceptance: true, afterRedirect: `${location.pathname}${location.search}` }} />;
+}
+
+function CustomerBookingsRedirect() {
+  const [params] = useSearchParams();
+  const qs = params.toString();
+  return <Navigate to={qs ? `/dashboard?${qs}` : '/dashboard'} replace />;
 }
 
 class DashboardErrorBoundary extends Component {
@@ -138,6 +144,7 @@ function AppContent() {
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/provider-register" element={<ProviderCompleteRegistrationPage />} />
             <Route path="/business-register" element={<BusinessRegisterPage />} />
+            <Route path="/dashboard/bookings" element={<CustomerBookingsRedirect />} />
             <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />
             <Route path="/dashboard/seller" element={<SellerDashboard />} />
             <Route path="/dashboard/seller/:section" element={<SellerDashboard />} />

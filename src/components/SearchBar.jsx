@@ -56,7 +56,7 @@ export default function SearchBar({ variant = 'compact', locationOptions = [], c
           onChange={(event) => setLocation(event.target.value)}
           className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
         >
-          <option value="">Select District</option>
+          <option value="">City / area</option>
           {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       </div>

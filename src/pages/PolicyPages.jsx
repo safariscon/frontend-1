@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardRoute, needsTermsAcceptance } from '../lib/dashboard';
+import { getDashboardRoute, getSafeRedirectPath, needsTermsAcceptance } from '../lib/dashboard';
 import { HOW_IT_WORKS_STEPS, SUPPORT_EMAIL, SUPPORT_PHONE } from '../lib/policyCopy';
 import { useState } from 'react';
 
@@ -239,7 +239,8 @@ function TermsAcceptancePanel() {
       setError(result.error);
       return;
     }
-    navigate(getDashboardRoute(result.user || user), { replace: true });
+    const nextPath = getSafeRedirectPath(location.state?.afterRedirect) || getDashboardRoute(result.user || user);
+    navigate(nextPath, { replace: true });
   };
 
   const decline = async () => {

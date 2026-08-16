@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
-import { getPostAuthRoute } from '../lib/dashboard';
+import { getPostAuthRoute, getSafeRedirectPath, needsTermsAcceptance, withQueryParam } from '../lib/dashboard';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 
@@ -19,6 +19,12 @@ const formatCountdown = (totalSeconds) => {
 
 export default function LoginPage() {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const safeRedirect = withQueryParam(
+    getSafeRedirectPath(searchParams.get('redirect') || searchParams.get('next')),
+    'bookingId',
+    searchParams.get('bookingId'),
+  );
   const [email, setEmail] = useState(location.state?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,16 +36,19 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const { login, verifyLoginOtp, resendLoginOtp, user } = useAuth();
+  const { login, verifyLoginOtp, resendLoginOtp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [message, setMessage] = useState(location.state?.message || '');
   const { language } = useLanguage();
 
   useEffect(() => {
-    if (user) {
-      navigate(getPostAuthRoute(user), { state: { requireAcceptance: true } });
+    if (!user) return;
+    if (needsTermsAcceptance(user)) {
+      navigate('/terms', { replace: true, state: { requireAcceptance: true, afterRedirect: safeRedirect } });
+      return;
     }
-  }, [user, navigate]);
+    navigate(safeRedirect || getPostAuthRoute(user), { replace: true, state: { requireAcceptance: true } });
+  }, [user, navigate, safeRedirect]);
 
   useEffect(() => {
     if (step !== 'otp') return undefined;
@@ -63,6 +72,7 @@ export default function LoginPage() {
       state: {
         email: resultEmail || email,
         message: resultError || 'Please verify your email before logging in.',
+        loginSearch: searchParams.toString(),
       },
     });
   };
@@ -127,6 +137,14 @@ export default function LoginPage() {
     setOtpSecondsLeft(DEFAULT_OTP_MINUTES * 60);
     setResendSecondsLeft(0);
   };
+
+  if (authLoading || user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <p className="text-sm font-semibold text-slate-600">Redirecting…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">

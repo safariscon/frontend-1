@@ -138,6 +138,36 @@ export const expireAuthSession = () => {
 const shouldSkipAuthRefresh = (path) =>
   AUTH_REFRESH_SKIP_PREFIXES.some((prefix) => path.startsWith(prefix));
 
+const AUTH_SESSION_ERROR_CODES = new Set([
+  "UNAUTHENTICATED",
+  "TOKEN_EXPIRED",
+  "INVALID_TOKEN",
+  "JWT_EXPIRED",
+  "ACCESS_TOKEN_EXPIRED",
+  "SESSION_EXPIRED",
+  "AUTH_REQUIRED",
+]);
+
+const isPaymentOrGatewayPath = (path) =>
+  path.startsWith("/api/payments/") ||
+  /\/pay(?:ment)?(?:-status)?(?:\/|$|\?)/.test(path) ||
+  path.includes("/payment-status");
+
+const isJwtAuthError = (error) => {
+  const code = String(error?.code || error?.payload?.code || "").toUpperCase();
+  if (AUTH_SESSION_ERROR_CODES.has(code)) return true;
+  const message = String(error?.message || error?.payload?.message || "").toLowerCase();
+  return /jwt|jsonwebtoken|access token|refresh token|token expired|invalid token|malformed token|not authenticated|authentication required|please (log|sign) in|session expired/.test(
+    message
+  );
+};
+
+const shouldEndSessionOn401 = (path, options, error) => {
+  if (options?.skipAuthRefresh || shouldSkipAuthRefresh(path) || !getAuthData()) return false;
+  if (isPaymentOrGatewayPath(path) && !isJwtAuthError(error)) return false;
+  return true;
+};
+
 const buildHeaders = (token, customHeaders = {}) => {
   const headers = { ...customHeaders };
   if (!headers["Content-Type"] && !(customHeaders instanceof FormData)) {
@@ -199,7 +229,8 @@ const retryAfterRefresh = async (path, options, error) => {
     error.status === 401 &&
     !options.skipAuthRefresh &&
     !shouldSkipAuthRefresh(path) &&
-    Boolean(getAuthData()?.refreshToken);
+    Boolean(getAuthData()?.refreshToken) &&
+    (!isPaymentOrGatewayPath(path) || isJwtAuthError(error));
 
   if (!canRefresh) return null;
 
@@ -248,7 +279,7 @@ export const apiRequest = async (path, { method = "GET", body, token, headers, s
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("auth:terms-required", { detail: error.payload }));
       }
-    } else if (error.status === 401 && !shouldSkipAuthRefresh(path) && getAuthData()) {
+    } else if (error.status === 401 && shouldEndSessionOn401(path, { skipAuthRefresh }, error)) {
       expireAuthSession();
     }
     throw error;
@@ -304,7 +335,7 @@ export const uploadRequest = async (path, { method = "POST", formData, token, sk
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("auth:terms-required", { detail: error.payload }));
       }
-    } else if (error.status === 401 && getAuthData()) {
+    } else if (error.status === 401 && shouldEndSessionOn401(path, { skipAuthRefresh }, error)) {
       expireAuthSession();
     }
 
@@ -746,8 +777,8 @@ export const rebookApi = {
 };
 
 export const paymentsApi = {
-  getMethods: () => apiRequest("/api/payments/methods", { skipAuthRefresh: true, token: null }),
-  getProviders: () => apiRequest("/api/payments/providers", { skipAuthRefresh: true, token: null }),
+  getMethods: () => apiRequest("/api/payments/methods", { skipAuthRefresh: true }),
+  getProviders: () => apiRequest("/api/payments/providers", { skipAuthRefresh: true }),
 };
 
 export const publicApi = {
@@ -758,8 +789,8 @@ export const publicApi = {
 };
 
 export const geoApi = {
-  searchPlaces: (query) =>
-    apiRequest("/api/geo/search" + buildQueryString({ q: query, country: "rw" }), { skipAuthRefresh: true, token: null }),
+  searchPlaces: (query, { country } = {}) =>
+    apiRequest("/api/geo/search" + buildQueryString({ q: query, country: country || undefined }), { skipAuthRefresh: true, token: null }),
   reverseGeocode: (latitude, longitude) =>
     apiRequest("/api/geo/reverse" + buildQueryString({ lat: latitude, lng: longitude }), { skipAuthRefresh: true, token: null }),
   getRoute: (from, to) =>

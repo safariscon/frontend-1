@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { bookingApi, getAuthData } from '../lib/api';
+import { findBookingByFocusId } from '../lib/dashboard';
+import { formatLocationLine } from '../lib/places';
 import { formatRwf } from '../lib/currency';
 import { amountDueNow, canPayBooking, completeBookingPayment, formatCancelUntil, isPaid, paidSuccessCopy, paymentErrorMessage, remainingAtVenue } from '../lib/payments';
 import DepositPaymentModal from '../components/DepositPaymentModal';
@@ -24,8 +26,11 @@ const statusStyle = {
 };
 
 export default function UserDashboard() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const focusBookingId = searchParams.get('bookingId');
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -34,11 +39,13 @@ export default function UserDashboard() {
   const [changeBookingId, setChangeBookingId] = useState('');
   const [changeRequestsVersion, setChangeRequestsVersion] = useState(0);
   const [cancelBooking, setCancelBooking] = useState(null);
+  const openedFocusId = useRef('');
   const { language } = useLanguage();
 
   useEffect(() => {
+    if (authLoading) return undefined;
     if (!user) {
-      navigate('/login');
+      navigate(`/login?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`, { replace: true });
       return undefined;
     }
 
@@ -60,7 +67,17 @@ export default function UserDashboard() {
     Promise.resolve().then(() => loadData());
     joinRealtimeChannel('user', authData.user?.id || authData.user?._id || user.id || user._id);
     return subscribeToRealtime(REALTIME_EVENTS.BOOKING_CHANGED, loadData);
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    const match = findBookingByFocusId(bookings, focusBookingId);
+    if (!match) return;
+    const key = String(match._id || match.id || focusBookingId);
+    if (openedFocusId.current === key) return;
+    openedFocusId.current = key;
+    if (canPayBooking(match)) setPaymentBooking(match);
+    else setSelectedBooking(match);
+  }, [bookings, focusBookingId]);
 
   const refreshBookings = async () => {
     const authData = getAuthData();
@@ -403,7 +420,7 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
   const submittedRows = getBookingDetailRows(booking.bookingDetails);
   const summaryLocation = locationUnlocked
     ? address
-    : [serviceLocation.province, serviceLocation.district, serviceLocation.sector].filter(Boolean).join(', ') || formatDestination(booking);
+    : formatLocationLine(serviceLocation) || formatDestination(booking);
 
   return (
     <Modal title="Booking Details" onClose={onClose}>
@@ -446,12 +463,12 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
       <h3 className="mt-5 font-bold text-gray-900">Provider Information</h3>
       <DetailGrid data={{
         Business: providerUnlocked ? business?.businessName || business?.name || '-' : business?.anonymousName || booking.anonymousBusinessName || 'Hidden until paid',
-        Province: serviceLocation.province || business?.locationDetails?.province || '-',
-        District: serviceLocation.district || business?.locationDetails?.district || '-',
-        Sector: serviceLocation.sector || business?.locationDetails?.sector || '-',
+        Country: serviceLocation.country || business?.locationDetails?.country || '-',
+        'State / region': serviceLocation.state || serviceLocation.province || business?.locationDetails?.province || '-',
+        City: serviceLocation.city || serviceLocation.district || business?.locationDetails?.district || '-',
         ...(locationUnlocked ? {
           'Full address / place name': address,
-          Village: serviceLocation.village || business?.locationDetails?.village || '-',
+          Area: serviceLocation.sector || business?.locationDetails?.sector || '-',
         } : {
           Message: 'Pay in full to unlock exact location and directions.',
         }),
@@ -669,14 +686,7 @@ function UnlockedProvider({ business }) {
 }
 
 function formatFullLocation(locationDetails, fallback) {
-  const details = locationDetails || {};
-  const rows = [
-    ['District', details.district],
-    ['Sector', details.sector],
-    ['Cell', details.cell],
-    ['Village', details.village],
-  ].filter(([, value]) => value);
-  return rows.length ? rows.map(([label, value]) => `${label}: ${value}`).join(', ') : fallback;
+  return formatLocationLine(locationDetails) || fallback;
 }
 
 function normalizeWhatsApp(value) {

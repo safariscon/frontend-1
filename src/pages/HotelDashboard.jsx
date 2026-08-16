@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardRoute, isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
+import { findBookingByFocusId, getDashboardRoute, isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 import { getAuthData, hotelApi, paymentsApi, publicApi } from '../lib/api';
 import { payoutStatusLabel } from '../lib/payments';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
@@ -13,17 +13,13 @@ import ServiceLocationPicker from '../components/ServiceLocationPicker';
 import ServiceDetailsView from '../components/ServiceDetailsView';
 import OptionDetailsModal from '../components/OptionDetailsModal';
 import { DAY_OPTIONS, TIME_REQUIREMENT_OPTIONS, parseOptionAvailability, toggleAvailableDay } from '../lib/availability';
+import { emptyLocationDetails, isAdministrativeLocationComplete, normalizeLocationDetails } from '../lib/places';
 
 const EMPTY_FORM = {
   title: '',
   description: '',
   serviceLocation: {
-    country: 'Rwanda',
-    province: '',
-    district: '',
-    sector: '',
-    cell: '',
-    village: '',
+    ...emptyLocationDetails(),
     fullAddress: '',
     formattedAddress: '',
     placeName: '',
@@ -33,7 +29,7 @@ const EMPTY_FORM = {
     locationSource: 'map_click',
     isExactLocationVerified: false,
   },
-  locationDetails: { province: '', district: '', sector: '', cell: '', village: '' },
+  locationDetails: emptyLocationDetails(),
   category: 'hotel-rooms',
   payoutDetails: { method: 'mobile-money', accountName: '', accountNumber: '', instructions: '' },
   contactDetails: { phone: '', whatsapp: '' },
@@ -79,47 +75,6 @@ const EMPTY_FORM = {
   },
 };
 
-const RWANDA_DISTRICTS = [
-  'Bugesera', 'Burera', 'Gakenke', 'Gasabo', 'Gatsibo', 'Gicumbi', 'Gisagara', 'Huye', 'Kamonyi', 'Karongi',
-  'Kayonza', 'Kicukiro', 'Kirehe', 'Muhanga', 'Musanze', 'Ngoma', 'Ngororero', 'Nyabihu', 'Nyagatare', 'Nyamagabe',
-  'Nyamasheke', 'Nyanza', 'Nyarugenge', 'Nyaruguru', 'Rubavu', 'Ruhango', 'Rulindo', 'Rusizi', 'Rutsiro', 'Rwamagana',
-];
-
-const RWANDA_PROVINCE_BY_DISTRICT = {
-  Bugesera: 'Eastern Province',
-  Burera: 'Northern Province',
-  Gakenke: 'Northern Province',
-  Gasabo: 'Kigali City',
-  Gatsibo: 'Eastern Province',
-  Gicumbi: 'Northern Province',
-  Gisagara: 'Southern Province',
-  Huye: 'Southern Province',
-  Kamonyi: 'Southern Province',
-  Karongi: 'Western Province',
-  Kayonza: 'Eastern Province',
-  Kicukiro: 'Kigali City',
-  Kirehe: 'Eastern Province',
-  Muhanga: 'Southern Province',
-  Musanze: 'Northern Province',
-  Ngoma: 'Eastern Province',
-  Ngororero: 'Western Province',
-  Nyabihu: 'Western Province',
-  Nyagatare: 'Eastern Province',
-  Nyamagabe: 'Southern Province',
-  Nyamasheke: 'Western Province',
-  Nyanza: 'Southern Province',
-  Nyarugenge: 'Kigali City',
-  Nyaruguru: 'Southern Province',
-  Rubavu: 'Western Province',
-  Ruhango: 'Southern Province',
-  Rulindo: 'Northern Province',
-  Rusizi: 'Western Province',
-  Rutsiro: 'Western Province',
-  Rwamagana: 'Eastern Province',
-};
-
-const inferProvinceFromDistrict = (district) => RWANDA_PROVINCE_BY_DISTRICT[district] || '';
-
 const makeId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 const normalizeTableForForm = (table) => {
@@ -134,34 +89,16 @@ const normalizeTableForForm = (table) => {
   return { columns, rows, updatedAt: table?.updatedAt || null };
 };
 
-const normalizeLocationForForm = (service) => {
-  if (service.locationDetails?.district) {
-    return {
-      ...service.locationDetails,
-      province: service.locationDetails.province || service.serviceLocation?.province || inferProvinceFromDistrict(service.locationDetails.district),
-    };
-  }
-  const parts = String(service.location || '').split(',').map((part) => part.trim()).filter(Boolean);
-  const district = parts.at(-1) === 'Rwanda' ? parts.at(-2) || '' : parts.at(-1) || '';
-  return {
-    province: service.serviceLocation?.province || service.locationDetails?.province || inferProvinceFromDistrict(district),
-    village: parts.length >= 4 ? parts.at(-4) : '',
-    cell: parts.length >= 3 ? parts.at(-3) : '',
-    sector: parts.length >= 2 ? parts.at(-2) : '',
-    district,
-  };
-};
+const normalizeLocationForForm = (service) => normalizeLocationDetails({
+  ...service.locationDetails,
+  ...service.serviceLocation,
+});
 
 const normalizeServiceLocationForForm = (service) => {
-  const legacy = normalizeLocationForForm(service);
   const source = service.serviceLocation || {};
+  const admin = normalizeLocationDetails({ ...service.locationDetails, ...source });
   return {
-    country: 'Rwanda',
-    province: source.province || legacy.province || '',
-    district: source.district || legacy.district || '',
-    sector: source.sector || legacy.sector || '',
-    cell: source.cell || legacy.cell || '',
-    village: source.village || legacy.village || '',
+    ...admin,
     fullAddress: source.fullAddress || source.formattedAddress || service.contactDetails?.exactAddress || service.location || '',
     formattedAddress: source.formattedAddress || source.fullAddress || '',
     placeName: source.placeName || '',
@@ -317,6 +254,7 @@ const normalizeBookingFormForForm = (bookingForm) => ({
 export default function HotelDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { section } = useParams();
   const view = ['services', 'bookings', 'finance'].includes(section) ? section : 'dashboard';
   const basePath = getDashboardRoute(user) || '/dashboard/seller';
@@ -368,7 +306,7 @@ export default function HotelDashboard() {
 
   useEffect(() => {
     if (!user) {
-      navigate('/login');
+      navigate(`/login?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`, { replace: true });
       return;
     }
     if (!isSellerRole(user.role)) {
@@ -504,13 +442,7 @@ export default function HotelDashboard() {
     const normalizedStatus = form.status === 'unavailable' ? 'unavailable' : 'available';
     const availabilityText = form.status === 'custom' ? form.customAvailability : form.remainingQuantity;
     const quantityMatch = String(form.remainingQuantity || form.customAvailability || '').replace(/,/g, '').match(/\d+(\.\d+)?/);
-    const locationDetails = {
-      province: form.serviceLocation.province,
-      district: form.serviceLocation.district,
-      sector: form.serviceLocation.sector,
-      cell: form.serviceLocation.cell,
-      village: form.serviceLocation.village,
-    };
+    const locationDetails = normalizeLocationDetails(form.serviceLocation);
     const payload = {
       title: form.title,
       description: form.description,
@@ -555,7 +487,7 @@ export default function HotelDashboard() {
   const updateStatus = async (service, status) => {
     const structuredLocation = normalizeLocationForForm(service);
     const serviceLocation = normalizeServiceLocationForForm(service);
-    const hasLocation = serviceLocation.province && serviceLocation.district && serviceLocation.sector && serviceLocation.latitude && serviceLocation.longitude;
+    const hasLocation = isAdministrativeLocationComplete(serviceLocation) && serviceLocation.latitude && serviceLocation.longitude;
     const hasPayout = payoutDetails?.accountName && (payoutDetails?.accountNumber || payoutDetails?.msisdn);
     const hasPriceRows = service.availabilityTable?.rows?.some((row) => row.cells?.service && row.cells?.price);
     if (!hasLocation || !hasPayout || !hasPriceRows) {
@@ -887,6 +819,20 @@ function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
 
 function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('bookingId');
+  const openedFocusId = useRef('');
+
+  useEffect(() => {
+    const match = findBookingByFocusId(bookings, focusId);
+    if (!match) return;
+    const key = String(match._id || match.id || focusId);
+    if (openedFocusId.current === key) return;
+    openedFocusId.current = key;
+    if (canSellerReviewBooking(match)) onApproveBooking(match);
+    else setSelectedBooking(match);
+  }, [bookings, focusId, onApproveBooking]);
+
   if (!bookings.length) return <p className="p-4 text-gray-600">No bookings yet.</p>;
   return (
     <>
@@ -894,12 +840,32 @@ function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Booking ID</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Booking</th><th className="py-3 px-2 text-left">Payment</th><th className="py-3 px-2 text-left">Paid</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
-          <tbody>{bookings.map((booking) => <tr key={booking._id} className="border-b border-gray-100"><td className="py-3 px-2 font-mono text-xs text-slate-600">{booking._id}</td><td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td><td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td><td className="py-3 px-2">{booking.quantity || 1}</td><td className="py-3 px-2">{booking.status}</td><td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td><td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td><td className="py-3 px-2 text-right space-x-2"><button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>{canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="text-green-700 hover:underline">Review</button>}{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="text-primary hover:underline">cancelled</button>}</td></tr>)}</tbody>
+          <tbody>{bookings.map((booking) => {
+            const focused = String(booking._id) === String(focusId) || String(booking.id) === String(focusId) || String(booking.bookingCode || '') === String(focusId);
+            return (
+              <tr key={booking._id} className={`border-b border-gray-100 ${focused ? 'bg-blue-50' : ''}`}>
+                <td className="py-3 px-2 font-mono text-xs text-slate-600">{booking._id}</td>
+                <td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td>
+                <td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td>
+                <td className="py-3 px-2">{booking.quantity || 1}</td>
+                <td className="py-3 px-2">{booking.status}</td>
+                <td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td>
+                <td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td>
+                <td className="py-3 px-2 text-right space-x-2">
+                  <button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>
+                  {canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="text-green-700 hover:underline">Review</button>}
+                  {booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="text-primary hover:underline">cancelled</button>}
+                </td>
+              </tr>
+            );
+          })}</tbody>
         </table>
       </div>
       <div className="grid gap-3 md:hidden">
-        {bookings.map((booking) => (
-          <article key={booking._id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        {bookings.map((booking) => {
+          const focused = String(booking._id) === String(focusId) || String(booking.id) === String(focusId) || String(booking.bookingCode || '') === String(focusId);
+          return (
+          <article key={booking._id} className={`rounded-xl border bg-white p-4 shadow-sm ${focused ? 'border-blue-400 ring-2 ring-blue-200' : 'border-slate-200'}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-primary">Booking ID {String(booking._id || '').slice(-8) || '-'}</p><h3 className="mt-1 truncate font-black text-slate-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</h3><p className="mt-1 text-sm text-slate-500">{booking.touristId?.name || 'Customer'}</p></div>
               <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700">{booking.status}</span>
@@ -907,7 +873,8 @@ function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Payment</span><strong>{booking.paymentStatus || 'unpaid'}</strong></p><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Paid</span><strong>{formatRwf(booking.amountPaid || 0)}</strong></p></div>
             <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">View</button>{canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white">Review</button>}{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">cancelled</button>}</div>
           </article>
-        ))}
+          );
+        })}
       </div>
       {selectedBooking && <BookingDetailModal booking={selectedBooking} onClose={() => setSelectedBooking(null)} />}
     </>
@@ -934,17 +901,8 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setServiceLocation = (serviceLocation) => setForm((prev) => ({
     ...prev,
-    serviceLocation: {
-      ...serviceLocation,
-      province: serviceLocation.province || inferProvinceFromDistrict(serviceLocation.district),
-    },
-    locationDetails: {
-      province: serviceLocation.province || inferProvinceFromDistrict(serviceLocation.district),
-      district: serviceLocation.district || '',
-      sector: serviceLocation.sector || '',
-      cell: serviceLocation.cell || '',
-      village: serviceLocation.village || '',
-    },
+    serviceLocation,
+    locationDetails: normalizeLocationDetails(serviceLocation),
   }));
   const setContact = (key, value) => setForm((prev) => ({ ...prev, contactDetails: { ...prev.contactDetails, [key]: value } }));
   const setPromotion = (key, value) => setForm((prev) => ({ ...prev, promotion: { ...prev.promotion, [key]: value } }));
@@ -958,7 +916,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
         <p className="text-sm font-black text-blue-950">Booking mode: <span className="capitalize">{globalBookingMode === 'service-level' ? form.bookingMode : globalBookingMode}</span></p>
         <p className="mt-1 text-xs leading-5 text-blue-800">Booking mode is controlled by the administrator. Sellers can update service information, prices, availability, and customer questions, but cannot change this setting.</p>
       </div>
-      <ServiceLocationPicker value={form.serviceLocation} onChange={setServiceLocation} districts={RWANDA_DISTRICTS} />
+      <ServiceLocationPicker value={form.serviceLocation} onChange={setServiceLocation} />
       <Select label="Availability" value={form.status} onChange={(value) => set('status', value)} options={[['available', 'Available'], ['unavailable', 'Not Available'], ['custom', 'Custom']]} />
       {form.status === 'custom' ? (
         <Input label="Custom Availability" value={form.customAvailability} onChange={(value) => set('customAvailability', value)} placeholder="Example: Weekends only" required />
