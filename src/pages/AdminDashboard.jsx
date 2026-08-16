@@ -13,12 +13,6 @@ const EMPTY_PROVIDER_FORM = {
   providerEmail: '',
 };
 
-export const DEFAULT_ANNOUNCEMENT = {
-  enabled: true,
-  intervalSeconds: 5,
-  items: [{ text: 'Niba ushaka guhindura ururimi kanda ahanditse English', linkUrl: '', linkLabel: '' }],
-};
-
 const DEFAULT_TRANSACTION_FILTERS = {
   page: 1,
   limit: 25,
@@ -42,7 +36,6 @@ export default function AdminDashboard() {
   const { section } = useParams();
   const view = ['users', 'services', 'bookings', 'revenue'].includes(section) ? section : 'dashboard';
   const [stats, setStats] = useState(null);
-  const [businesses, setBusinesses] = useState([]);
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -65,7 +58,6 @@ export default function AdminDashboard() {
   const [warning, setWarning] = useState('');
   const [onboardingCredentials, setOnboardingCredentials] = useState(null);
   const [providerForm, setProviderForm] = useState(EMPTY_PROVIDER_FORM);
-  const [announcementForm, setAnnouncementForm] = useState(DEFAULT_ANNOUNCEMENT);
   const [marketplaceSettings, setMarketplaceSettings] = useState({ defaultCommissionPercentage: 10, bookingMode: 'manual', bookingRules: [] });
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
@@ -73,9 +65,6 @@ export default function AdminDashboard() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [updatingModeId, setUpdatingModeId] = useState('');
   const [modeErrors, setModeErrors] = useState({});
-  const [storageOverview, setStorageOverview] = useState(null);
-  const [storageLoading, setStorageLoading] = useState(false);
-  const [storageError, setStorageError] = useState('');
   const [financeSummary, setFinanceSummary] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [payoutStatusFilter, setPayoutStatusFilter] = useState('pending');
@@ -87,7 +76,7 @@ export default function AdminDashboard() {
     setError('');
     setInfo('');
     try {
-      const [statsResp, businessResp, serviceResp, bookingResp, userResp, transactionResp, financeResp, payoutsResp] = await Promise.all([
+      const [statsResp, , serviceResp, bookingResp, userResp, transactionResp, financeResp, payoutsResp] = await Promise.all([
         adminApi.getStats(token),
         adminApi.getBusinesses(token),
         adminApi.getServices(token),
@@ -98,7 +87,6 @@ export default function AdminDashboard() {
         adminApi.getPayouts(token, `?page=1&limit=25&payoutStatus=${encodeURIComponent(payoutStatusFilter || '')}`).catch(() => ({ payouts: [] })),
       ]);
       setStats(statsResp);
-      setBusinesses(businessResp.businesses || businessResp.hotels || []);
       setServices(withoutDrafts(serviceResp.services || []));
       setProviders(serviceResp.providers || []);
       setBookings(bookingResp.bookings || []);
@@ -111,23 +99,10 @@ export default function AdminDashboard() {
       setFinanceSummary(financeResp?.summary || null);
       setPayouts(payoutsResp.payouts || payoutsResp.transactions || []);
       try {
-        const [announcementResp, settingsResp] = await Promise.all([
-          publicApi.getAnnouncement(),
-          publicApi.getMarketplaceSettings(),
-        ]);
-        const items = announcementResp.announcements?.length
-          ? announcementResp.announcements
-          : announcementResp.announcement?.text
-            ? [announcementResp.announcement]
-            : DEFAULT_ANNOUNCEMENT.items;
-        setAnnouncementForm({
-          enabled: announcementResp.enabled ?? announcementResp.announcement?.enabled ?? true,
-          intervalSeconds: announcementResp.intervalSeconds || 5,
-          items: items.slice(0, 5),
-        });
+        const settingsResp = await publicApi.getMarketplaceSettings();
         setMarketplaceSettings(settingsResp.settings || { defaultCommissionPercentage: 10, bookingMode: 'manual', bookingRules: [] });
       } catch {
-        setAnnouncementForm(DEFAULT_ANNOUNCEMENT);
+        /* keep current marketplace settings */
       }
     } catch (requestError) {
       setError(requestError.message);
@@ -197,19 +172,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const deleteBusiness = async (businessId) => {
-    if (!token || !window.confirm('Delete this business from the database?')) return;
-    setError('');
-    setInfo('');
-    try {
-      const response = await adminApi.deleteBusiness(token, businessId);
-      setInfo(response.message);
-      await loadData({ silent: true });
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
   const approveBooking = async (booking, decision) => {
     if (!token) return;
     const businessId = booking.preferredHotelId?._id || booking.hotelId?._id || booking.businessId?._id;
@@ -243,46 +205,6 @@ export default function AdminDashboard() {
       setInfo(response.message);
       setSelectedBooking(null);
       await loadData({ silent: true });
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
-  const loadStorageOverview = async () => {
-    if (!token) return;
-    setStorageLoading(true);
-    setStorageError('');
-    try {
-      const response = await adminApi.getStorageOverview(token);
-      setStorageOverview(response);
-    } catch (requestError) {
-      setStorageError(requestError.message);
-    } finally {
-      setStorageLoading(false);
-    }
-  };
-
-  const saveMarketplaceSettings = async (event) => {
-    event.preventDefault();
-    setError('');
-    try {
-      const response = await adminApi.updateMarketplaceSettings(token, marketplaceSettings);
-      setMarketplaceSettings(response.settings);
-      setInfo(response.message);
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
-  const saveGlobalBookingMode = async (bookingMode) => {
-    const nextSettings = { ...marketplaceSettings, bookingMode };
-    setMarketplaceSettings(nextSettings);
-    setError('');
-    try {
-      const response = await adminApi.updateMarketplaceSettings(token, nextSettings);
-      setMarketplaceSettings(response.settings);
-      await loadData({ silent: true });
-      setInfo(response.message);
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -389,19 +311,6 @@ export default function AdminDashboard() {
       setError(requestError.message);
     } finally {
       setSavingService(false);
-    }
-  };
-
-  const saveAnnouncement = async (event) => {
-    event.preventDefault();
-    if (!token) return;
-    setError('');
-    setInfo('');
-    try {
-      const response = await adminApi.updateAnnouncement(token, announcementForm);
-      setInfo(response.message);
-    } catch (requestError) {
-      setError(requestError.message);
     }
   };
 

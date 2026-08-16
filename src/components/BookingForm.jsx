@@ -151,6 +151,11 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     return [...defaults, ...extras];
   }, [business, service, marketplaceRules]);
 
+  const alignedEndBookingDate = (optionSchedule.sameDayOnly || !optionSchedule.requiresEndDate) && values.bookingDate
+    ? values.bookingDate
+    : values.endBookingDate;
+  const bookingValues = { ...values, endBookingDate: alignedEndBookingDate };
+
   const updateValue = (key, value) => {
     setValues((prev) => {
       const next = { ...prev, [key]: value };
@@ -160,17 +165,6 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       return next;
     });
   };
-
-  useEffect(() => {
-    setValues((prev) => {
-      if (!prev.bookingDate) return prev;
-      if (optionSchedule.sameDayOnly || !optionSchedule.requiresEndDate) {
-        if (prev.endBookingDate === prev.bookingDate) return prev;
-        return { ...prev, endBookingDate: prev.bookingDate };
-      }
-      return prev;
-    });
-  }, [optionSchedule.sameDayOnly, optionSchedule.requiresEndDate, selectedOffer]);
 
   const updateCustomerLocation = (next) => {
     setValues((prev) => ({
@@ -186,7 +180,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (!values.fullName.trim()) return 'Please complete Full name.';
     if (!isValidPhoneNumber(values.phone)) return 'Please enter a valid phone number for the selected country.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return 'Please enter a valid email address.';
-    const scheduleError = validateOptionSchedule(optionSchedule, values, TODAY);
+    const scheduleError = validateOptionSchedule(optionSchedule, bookingValues, TODAY);
     if (scheduleError) return scheduleError;
     if (Number(values.numberOfPeople) < 1) return 'Number of people must be at least 1.';
     if (Number(values.quantity) < 1) return 'Quantity / units must be at least 1.';
@@ -247,8 +241,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         totalConsumptionUnits: numberOfPeople * quantity,
         totalPrice: 0,
         startDate: values.bookingDate,
-        endDate: values.endBookingDate || values.bookingDate,
-        endBookingDate: values.endBookingDate || values.bookingDate,
+        endDate: bookingValues.endBookingDate || values.bookingDate,
+        endBookingDate: bookingValues.endBookingDate || values.bookingDate,
         startTime: values.startTime || undefined,
         endTime: values.endTime || undefined,
         destinationPlace: values.destinationPlace,
@@ -267,7 +261,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           email: values.email,
           phone: values.phone,
           bookingDate: values.bookingDate,
-          endBookingDate: values.endBookingDate || values.bookingDate,
+          endBookingDate: bookingValues.endBookingDate || values.bookingDate,
           startTime: values.startTime || '',
           endTime: values.endTime || '',
           numberOfPeople,
@@ -405,7 +399,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             type="date"
             min={values.bookingDate || dateMin}
             max={dateMax || undefined}
-            value={values.endBookingDate}
+            value={alignedEndBookingDate}
             onChange={(value) => updateValue('endBookingDate', value)}
             required={optionSchedule.requiresEndDate}
             hint={optionSchedule.sameDayOnly ? 'This option is same-day only.' : 'Must stay inside this option’s available dates.'}

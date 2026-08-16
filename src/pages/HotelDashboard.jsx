@@ -328,13 +328,6 @@ export default function HotelDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user]);
 
-  useEffect(() => {
-    if (view !== 'services') {
-      setShowEditor(false);
-      setViewingService(null);
-    }
-  }, [view]);
-
   const stats = useMemo(() => {
     const activeServices = services.filter((service) => service.status === 'available' && service.isActive !== false);
     const completedBookings = bookings.filter((booking) => booking.status === 'completed');
@@ -649,7 +642,14 @@ export default function HotelDashboard() {
             {!loading && view === 'bookings' && bookingSubTab === 'rebook-requests' && <SellerRebookRequests />}
             {!loading && view === 'bookings' && bookingSubTab === 'verification' && <SellerBookingVerification token={token} />}
             {!loading && view === 'finance' && financeSubTab === 'finance' && <FinancePanel finance={finance} />}
-            {!loading && view === 'finance' && financeSubTab === 'payout' && <PayoutDetailsForm token={token} initial={payoutDetails} onSaved={() => loadData({ silent: true })} />}
+            {!loading && view === 'finance' && financeSubTab === 'payout' && (
+              <PayoutDetailsForm
+                key={`${payoutDetails?.method || ''}-${payoutDetails?.accountNumber || payoutDetails?.msisdn || ''}-${payoutDetails?.accountName || ''}`}
+                token={token}
+                initial={payoutDetails}
+                onSaved={() => loadData({ silent: true })}
+              />
+            )}
           </section>
           )}
         </div>
@@ -825,12 +825,15 @@ function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
 
   useEffect(() => {
     const match = findBookingByFocusId(bookings, focusId);
-    if (!match) return;
+    if (!match) return undefined;
     const key = String(match._id || match.id || focusId);
-    if (openedFocusId.current === key) return;
+    if (openedFocusId.current === key) return undefined;
     openedFocusId.current = key;
-    if (canSellerReviewBooking(match)) onApproveBooking(match);
-    else setSelectedBooking(match);
+    const timer = window.setTimeout(() => {
+      if (canSellerReviewBooking(match)) onApproveBooking(match);
+      else setSelectedBooking(match);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [bookings, focusId, onApproveBooking]);
 
   if (!bookings.length) return <p className="p-4 text-gray-600">No bookings yet.</p>;
@@ -1618,15 +1621,6 @@ function PayoutDetailsForm({ token, initial, onSaved }) {
   useEffect(() => {
     paymentsApi.getMethods().then(setCatalog).catch(() => setCatalog(null));
   }, []);
-
-  useEffect(() => {
-    setForm({
-      method: initial?.method === 'bank' ? 'bank' : 'momo',
-      providerId: initial?.providerId || '',
-      accountName: initial?.accountName || '',
-      accountNumber: initial?.accountNumber || initial?.msisdn || '',
-    });
-  }, [initial]);
 
   const providers = form.method === 'bank' ? catalog?.bankProviders || [] : catalog?.mobileMoneyProviders || [];
 

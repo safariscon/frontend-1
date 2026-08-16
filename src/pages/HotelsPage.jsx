@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -49,7 +49,7 @@ function ServicesCatalog({ embedded = false }) {
   const locationParam = searchParams.get('location') || '';
   const searchParam = searchParams.get('search') || searchParams.get('q') || searchParams.get('service') || '';
 
-  const loadHotels = async ({ silent = false } = {}) => {
+  const loadHotels = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     setLoadError('');
     try {
@@ -81,7 +81,7 @@ function ServicesCatalog({ embedded = false }) {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [categoryFilter, isAdmin, locationParam, providerId, searchParam]);
 
   useEffect(() => {
     Promise.resolve().then(() => loadHotels());
@@ -94,7 +94,7 @@ function ServicesCatalog({ embedded = false }) {
       ],
       () => loadHotels({ silent: true })
     );
-  }, [isAdmin, providerId, categoryFilter, locationParam, searchParam]);
+  }, [loadHotels]);
 
   const filteredHotels = useMemo(() => {
     let result = [...allHotels];

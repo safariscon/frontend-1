@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   DEFAULT_PHONE_COUNTRY,
   PHONE_COUNTRIES,
@@ -19,16 +19,17 @@ export default function PhoneNumberField({
   required = false,
   disabled = false,
 }) {
-  const detected = useMemo(() => detectPhoneCountry(value), [value]);
-  const [iso, setIso] = useState(detected.iso);
+  const [iso, setIso] = useState(() => detectPhoneCountry(value).iso);
+  const [seenValue, setSeenValue] = useState(value);
+  if (value !== seenValue) {
+    setSeenValue(value);
+    if (value) {
+      const nextIso = detectPhoneCountry(value).iso;
+      if (nextIso !== iso) setIso(nextIso);
+    }
+  }
   const country = countryByIso(iso);
   const national = toNationalNumber(value, country);
-
-  useEffect(() => {
-    if (!value) return;
-    const next = detectPhoneCountry(value);
-    setIso((current) => (current === next.iso ? current : next.iso));
-  }, [value]);
 
   const emit = (nextIso, nextNational) => {
     const nextCountry = countryByIso(nextIso);

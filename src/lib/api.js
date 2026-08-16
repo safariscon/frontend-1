@@ -472,11 +472,6 @@ export const authApi = {
       });
     });
   },
-  acceptTerms: () =>
-    apiRequest("/api/auth/accept-terms", {
-      method: "POST",
-      body: { acceptedTerms: true },
-    }),
 };
 
 const buildQueryString = (query = {}) => {

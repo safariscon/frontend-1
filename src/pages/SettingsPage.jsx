@@ -10,7 +10,8 @@ import { supportedLanguages } from '../lib/translations';
 import { isSellerRole } from '../lib/dashboard';
 import { adminApi, getAuthData, hotelApi, publicApi } from '../lib/api';
 import { HowItWorksPage, PaymentsPolicyPage, PrivacyPage, TermsPage } from './PolicyPages';
-import { AnnouncementForm, DEFAULT_ANNOUNCEMENT, MarketplaceSettingsForm } from './AdminDashboard';
+import { AnnouncementForm, MarketplaceSettingsForm } from './AdminDashboard';
+import { DEFAULT_ANNOUNCEMENT } from '../lib/announcementDefaults';
 
 const DOCS = [
   ['how-it-works', 'How it works'],

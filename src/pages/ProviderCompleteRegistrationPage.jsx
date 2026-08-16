@@ -92,7 +92,9 @@ export default function ProviderCompleteRegistrationPage() {
   }, []);
 
   useEffect(() => {
-    if (querySellerId) loadOnboarding(querySellerId);
+    if (!querySellerId) return undefined;
+    const timer = window.setTimeout(() => loadOnboarding(querySellerId), 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once from the invite URL
   }, [querySellerId]);
 

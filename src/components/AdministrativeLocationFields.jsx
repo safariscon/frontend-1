@@ -10,11 +10,9 @@ export default function AdministrativeLocationFields({
 }) {
   const location = useMemo(() => normalizeLocationDetails(value), [value]);
   const [countries, setCountries] = useState([]);
-  const [states, setStates] = useState([]);
-  const [cities, setCities] = useState([]);
+  const [stateBundle, setStateBundle] = useState({ country: '', items: [] });
+  const [cityBundle, setCityBundle] = useState({ country: '', state: '', items: [] });
   const [loadingCountries, setLoadingCountries] = useState(true);
-  const [loadingStates, setLoadingStates] = useState(false);
-  const [loadingCities, setLoadingCities] = useState(false);
   const [error, setError] = useState('');
 
   const emit = (patch) => {
@@ -24,7 +22,6 @@ export default function AdministrativeLocationFields({
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingCountries(true);
     listCountries()
       .then((items) => {
         if (!cancelled) setCountries(items);
@@ -41,23 +38,15 @@ export default function AdministrativeLocationFields({
   }, []);
 
   useEffect(() => {
-    if (!location.country) {
-      setStates([]);
-      setCities([]);
-      return undefined;
-    }
+    const country = location.country;
+    if (!country) return undefined;
     let cancelled = false;
-    setLoadingStates(true);
-    setError('');
-    listStates(location.country)
+    listStates(country)
       .then((items) => {
-        if (!cancelled) setStates(items);
+        if (!cancelled) setStateBundle({ country, items });
       })
       .catch(() => {
-        if (!cancelled) setStates([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingStates(false);
+        if (!cancelled) setStateBundle({ country, items: [] });
       });
     return () => {
       cancelled = true;
@@ -65,26 +54,32 @@ export default function AdministrativeLocationFields({
   }, [location.country]);
 
   useEffect(() => {
-    if (!location.country) {
-      setCities([]);
-      return undefined;
-    }
+    const country = location.country;
+    const state = location.state;
+    if (!country) return undefined;
     let cancelled = false;
-    setLoadingCities(true);
-    listCities(location.country, location.state)
+    listCities(country, state)
       .then((items) => {
-        if (!cancelled) setCities(items);
+        if (!cancelled) setCityBundle({ country, state, items });
       })
       .catch(() => {
-        if (!cancelled) setCities([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingCities(false);
+        if (!cancelled) setCityBundle({ country, state, items: [] });
       });
     return () => {
       cancelled = true;
     };
   }, [location.country, location.state]);
+
+  const states = useMemo(
+    () => (stateBundle.country === location.country ? stateBundle.items : []),
+    [location.country, stateBundle.country, stateBundle.items],
+  );
+  const cities = useMemo(
+    () => (cityBundle.country === location.country && cityBundle.state === location.state ? cityBundle.items : []),
+    [cityBundle.country, cityBundle.items, cityBundle.state, location.country, location.state],
+  );
+  const loadingStates = Boolean(location.country) && stateBundle.country !== location.country;
+  const loadingCities = Boolean(location.country) && (cityBundle.country !== location.country || cityBundle.state !== location.state);
 
   const countryOptions = useMemo(() => {
     if (location.country && !countries.some((item) => item.name === location.country)) {

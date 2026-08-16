@@ -26,7 +26,6 @@ export default function AdminRebookRequests() {
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   useEffect(() => { Promise.resolve().then(() => load()); }, [load]);

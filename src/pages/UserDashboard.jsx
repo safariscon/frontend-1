@@ -67,16 +67,19 @@ export default function UserDashboard() {
     Promise.resolve().then(() => loadData());
     joinRealtimeChannel('user', authData.user?.id || authData.user?._id || user.id || user._id);
     return subscribeToRealtime(REALTIME_EVENTS.BOOKING_CHANGED, loadData);
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     const match = findBookingByFocusId(bookings, focusBookingId);
-    if (!match) return;
+    if (!match) return undefined;
     const key = String(match._id || match.id || focusBookingId);
-    if (openedFocusId.current === key) return;
+    if (openedFocusId.current === key) return undefined;
     openedFocusId.current = key;
-    if (canPayBooking(match)) setPaymentBooking(match);
-    else setSelectedBooking(match);
+    const timer = window.setTimeout(() => {
+      if (canPayBooking(match)) setPaymentBooking(match);
+      else setSelectedBooking(match);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [bookings, focusBookingId]);
 
   const refreshBookings = async () => {
@@ -537,14 +540,6 @@ function DetailGrid({ data }) {
 
 function SummaryRow({ label, value, strong = false }) {
   return <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"><span className="font-semibold text-slate-600">{label}</span><span className={strong ? 'font-black text-emerald-700' : 'font-black text-slate-950'}>{value}</span></div>;
-}
-
-function hasDepositPaid(booking) {
-  return isPaid(booking);
-}
-
-function canPayDeposit(booking) {
-  return canPayBooking(booking);
 }
 
 function CancelBookingDialog({ booking, onClose, onConfirm }) {
