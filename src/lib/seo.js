@@ -33,6 +33,7 @@ export const organizationSchema = (origin = getOrigin()) => ({
   name: SEO_SITE_NAME,
   alternateName: ['Safaris Con', 'SafarisConnect', 'Safaris Connect', 'Safari Connect', 'SafariCon'],
   url: `${origin}/`,
+  sameAs: ['https://eserveconn.com/products'],
   logo: absoluteUrl('/favicon.svg', origin),
   email: SEO_EMAIL,
   telephone: SEO_PHONE,
@@ -120,9 +121,9 @@ export const matchServiceIntent = (query = '') =>
 export const getHomeSeo = () => {
   const origin = getOrigin();
   return {
-    title: 'SafarisCon | Book services in Rwanda',
+    title: 'SafarisCon | Official Rwanda booking platform',
     description:
-      'SafarisCon is a Rwanda service marketplace. Find hotels, tours, transport, and local providers in Kigali and across Rwanda, then book online.',
+      'SafarisCon is the official Rwanda service marketplace at safariscon.eserveconn.com. Find hotels, tours, transport, and local providers in Kigali, then book online.',
     path: '/',
     jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), {
       '@type': 'FAQPage',
