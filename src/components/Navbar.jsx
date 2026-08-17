@@ -38,7 +38,7 @@ export default function Navbar() {
 
       <div className="mx-auto max-w-7xl px-4">
         <div className="flex min-h-20 items-center justify-between gap-4">
-          <Link to="/" className="brand-mark flex items-center gap-3" aria-label="safariscon home">
+          <Link to="/" className="brand-mark flex items-center gap-3" aria-label="SafarisCon home">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-base font-black text-white shadow-sm">S</span>
             <span className="text-lg font-black tracking-tight text-slate-950 dark:text-white">safariscon</span>
           </Link>

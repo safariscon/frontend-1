@@ -5,6 +5,9 @@ import { useAuth } from '../context/AuthContext';
 import { getDashboardRoute, getSafeRedirectPath, needsTermsAcceptance } from '../lib/dashboard';
 import { HOW_IT_WORKS_STEPS, SUPPORT_EMAIL, SUPPORT_PHONE } from '../lib/policyCopy';
 import { useState } from 'react';
+import SeoHead from '../components/SeoHead';
+import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
+import { getPolicySeo } from '../lib/seo';
 
 const NAV = [
   ['How it works', '/how-it-works'],
@@ -158,6 +161,8 @@ export function PaymentsPolicyPage({ embedded = false }) {
 }
 
 function PolicyShell({ title, lead, children, embedded = false }) {
+  const location = useLocation();
+  const seo = getPolicySeo(location.pathname);
   const body = (
     <>
       {!embedded && <p className="text-xs font-black uppercase tracking-wide text-primary">SafarisCon policies</p>}
@@ -180,7 +185,9 @@ function PolicyShell({ title, lead, children, embedded = false }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      <SeoHead {...seo} />
       <Navbar />
+      <SeoBreadcrumbs items={[{ label: 'Home', to: '/' }, { label: title }]} />
       <main className="flex-1 px-4 py-10">
         <div className="mx-auto max-w-3xl">{body}</div>
       </main>

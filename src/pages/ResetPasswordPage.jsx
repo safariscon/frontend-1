@@ -4,6 +4,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi } from '../lib/api';
 import PasswordInput from '../components/PasswordInput';
+import SeoHead from '../components/SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 export default function ResetPasswordPage() {
   const location = useLocation();
@@ -44,6 +46,13 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      <SeoHead
+        {...noindexSeo({
+          title: 'Reset password | SafarisCon',
+          description: 'Choose a new SafarisCon password using the code sent to your email.',
+          path: '/reset-password',
+        })}
+      />
       <Navbar />
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">

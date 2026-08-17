@@ -1,0 +1,29 @@
+User-agent: *
+Allow: /
+Allow: /services
+Allow: /about
+Allow: /contact
+Allow: /how-it-works
+Allow: /terms
+Allow: /privacy
+Allow: /payments
+Allow: /provider-register
+Allow: /business-register
+Allow: /business/
+
+Disallow: /dashboard
+Disallow: /admin-dashboard
+Disallow: /hotel-dashboard
+Disallow: /settings
+Disallow: /profile
+Disallow: /notifications
+Disallow: /login
+Disallow: /register
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /booking/
+Disallow: /verify/
+Disallow: /hotels
+
+Sitemap: https://safariscon.eserveconn.com/sitemap.xml

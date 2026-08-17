@@ -9,6 +9,8 @@ import { t } from '../lib/translations';
 import { useEffect } from 'react';
 import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
+import SeoHead from '../components/SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 export default function BookingPage() {
   const { hotelId } = useParams();
@@ -30,6 +32,13 @@ export default function BookingPage() {
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col">
+        <SeoHead
+          {...noindexSeo({
+            title: 'Login to book on SafarisCon',
+            description: 'Sign in to complete your SafarisCon booking for services in Rwanda.',
+            path: `/booking/${hotelId}`,
+          })}
+        />
         <Navbar />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center p-8">
@@ -49,6 +58,13 @@ export default function BookingPage() {
 
   return (
     <DashboardLayout>
+      <SeoHead
+        {...noindexSeo({
+          title: 'Complete your SafarisCon booking',
+          description: 'Complete your SafarisCon service booking in Rwanda. Enter dates and pay in the app after login.',
+          path: `/booking/${hotelId}`,
+        })}
+      />
       <main className="py-8">
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-8">

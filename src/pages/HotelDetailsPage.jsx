@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import DashboardLayout from '../components/DashboardLayout';
@@ -11,6 +11,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
 import { formatRwf } from '../lib/currency';
+import SeoHead from '../components/SeoHead';
+import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
+import { getServiceDetailSeo, noindexSeo } from '../lib/seo';
 
 export default function HotelDetailsPage() {
   const { id } = useParams();
@@ -44,6 +47,7 @@ export default function HotelDetailsPage() {
   if (loading) {
     return (
       <CatalogShell authenticated={isAuthenticated}>
+        <SeoHead {...noindexSeo({ title: 'Loading service | SafarisCon', description: 'Loading a SafarisCon service listing in Rwanda.', path: `/business/${id}` })} />
         <div className="flex min-h-[50vh] items-center justify-center">
           <LoadingSpinner size="lg" />
         </div>
@@ -54,12 +58,13 @@ export default function HotelDetailsPage() {
   if (!hotel) {
     return (
       <CatalogShell authenticated={isAuthenticated}>
+        <SeoHead {...noindexSeo({ title: 'Service not found | SafarisCon', description: 'This SafarisCon service listing is unavailable.', path: `/business/${id}` })} />
         <div className="flex min-h-[50vh] items-center justify-center">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('hotelNotFound', language)}</h2>
-            <button onClick={() => navigate('/services')} className="text-primary hover:underline">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">{t('hotelNotFound', language)}</h1>
+            <Link to="/services" className="text-primary hover:underline">
               {t('backToServices', language)}
-            </button>
+            </Link>
           </div>
         </div>
       </CatalogShell>
@@ -85,9 +90,21 @@ export default function HotelDetailsPage() {
     });
   const inventoryLabel = getInventoryLabel(hotel.inventoryStatus, isNotAvailable);
   const promotion = getVisiblePromotion(hotel.promotion);
+  const seo = getServiceDetailSeo(hotel);
+  const imageAlt = `${hotel.name} — ${hotel.serviceCategory || hotel.type || 'service'} in ${hotel.location || 'Rwanda'}`;
 
   return (
     <CatalogShell authenticated={isAuthenticated}>
+      <SeoHead {...seo} />
+      {!isAuthenticated && (
+        <SeoBreadcrumbs
+          items={[
+            { label: 'Home', to: '/' },
+            { label: 'Services', to: '/services' },
+            { label: hotel.name },
+          ]}
+        />
+      )}
 
       <main className="flex-1">
         {images.length > 0 && (
@@ -104,7 +121,7 @@ export default function HotelDetailsPage() {
             }}
           >
             <button type="button" onClick={() => setLightboxOpen(true)} className="h-full w-full">
-              <img src={images[selectedImage] || images[0]} alt={hotel.name} className="h-full w-full object-cover" />
+              <img src={images[selectedImage] || images[0]} alt={imageAlt} className="h-full w-full object-cover" />
             </button>
             {images.length > 1 && (
               <>
@@ -139,7 +156,7 @@ export default function HotelDetailsPage() {
                   onClick={() => setSelectedImage(index)}
                   className={`h-24 overflow-hidden rounded-lg border ${selectedImage === index ? 'border-primary' : 'border-gray-200'}`}
                 >
-                  <img src={image} alt={`${hotel.name} ${index + 1}`} className="h-full w-full object-cover" />
+                  <img src={image} alt={`${imageAlt} photo ${index + 1}`} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -231,6 +248,9 @@ export default function HotelDetailsPage() {
                 <p className="text-xs text-gray-500 text-center mt-3">
                   Admin or the provider confirms your exact RWF quote. Pay the full amount in the app to unlock provider details. Each listing shows its own cancel window and fee.
                 </p>
+                <Link to="/services" className="mt-3 block text-center text-sm font-bold text-primary hover:underline">
+                  Browse more services in Rwanda
+                </Link>
               </div>
             </div>
           </div>
@@ -247,7 +267,7 @@ export default function HotelDetailsPage() {
               Back
             </button>
           )}
-          <img src={images[selectedImage] || images[0]} alt={hotel.name} className="max-h-[85vh] max-w-full object-contain" />
+          <img src={images[selectedImage] || images[0]} alt={imageAlt} className="max-h-[85vh] max-w-full object-contain" />
           {images.length > 1 && (
             <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white px-4 py-3 font-semibold text-gray-900">
               Next

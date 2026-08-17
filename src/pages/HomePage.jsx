@@ -12,7 +12,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import MarketplaceGuide from '../components/MarketplaceGuide';
 import PaymentMethods from '../components/PaymentMethods';
+import SeoHead from '../components/SeoHead';
 import { HOME_TRUST_LEAD, HOME_TRUST_LINE, HOW_IT_WORKS_STEPS } from '../lib/policyCopy';
+import { getHomeSeo } from '../lib/seo';
 
 const SERVICE_AREAS = [
   ['Hotels and stays', 'Verified rooms, lodges, guesthouses, and retreats.', '/services?service=hotel'],
@@ -86,15 +88,20 @@ export default function HomePage() {
     );
   }, []);
 
+  const seo = getHomeSeo();
+
   return (
     <div className="min-h-screen flex flex-col bg-white text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+      <SeoHead {...seo} />
       <Navbar />
 
+      <main>
       <section className="public-hero relative overflow-hidden">
         <img
           src="/safariscon-hero-services.png"
-          alt="SafarisCon service booking across hotels, transport, cafes, and travel experiences"
+          alt="SafarisCon service booking across hotels, transport, cafes, and travel experiences in Rwanda"
           className="absolute inset-0 h-full w-full object-cover"
+          fetchPriority="high"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-950/62 to-slate-950/18" />
         <div className="absolute inset-y-0 left-0 w-[58%] bg-slate-950/20" />
@@ -104,7 +111,7 @@ export default function HomePage() {
               Rwanda service marketplace
             </p>
             <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-6xl">
-              SafarisCon service marketplace
+              SafarisCon: book services in Rwanda
             </h1>
             <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-lg">
               Find trusted hotels, cafes, car rentals, venues, tours, and destination services from verified providers. Browse publicly, then create an account when you are ready to book and manage your service.
@@ -138,7 +145,7 @@ export default function HomePage() {
       <section className="section-block bg-white dark:bg-slate-950">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-900">
-            <img src="/safariscon-about-services.png" alt="Service providers collaborating through SafarisCon" className="h-full min-h-[340px] w-full object-cover" />
+            <img src="/safariscon-about-services.png" alt="SafarisCon service providers collaborating on hotels, tours, and transport in Rwanda" className="h-full min-h-[340px] w-full object-cover" loading="lazy" />
           </div>
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-primary">For customers and providers</p>
@@ -193,7 +200,7 @@ export default function HomePage() {
       <section className="section-block bg-slate-50 dark:bg-slate-900">
         <div className="mx-auto max-w-6xl px-4">
           <p className="text-xs font-black uppercase tracking-wide text-primary">Trust & how we work</p>
-          <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">How SafarisCon works</h2>
+          <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">Book services online with SafarisCon</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">{HOME_TRUST_LEAD}</p>
           <ol className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {HOW_IT_WORKS_STEPS.map(([title, body], index) => (
@@ -219,7 +226,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl px-4">
           <div className="text-center">
             <p className="text-xs font-black uppercase tracking-wide text-primary">FAQs</p>
-            <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">How SafarisCon works</h2>
+            <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">Questions about booking with SafarisCon</h2>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             {FAQS.map(([question, answer]) => (
@@ -235,6 +242,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      </main>
 
       <Footer />
     </div>

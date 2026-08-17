@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import SeoHead from '../components/SeoHead';
+import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
+import { getContactSeo } from '../lib/seo';
 
 const CONTACT_OPTIONS = [
   ['Customer support', 'Questions about booking, payments, confirmations, or provider details.', 'info@safariscon.rw'],
@@ -9,9 +12,12 @@ const CONTACT_OPTIONS = [
 ];
 
 export default function ContactPage() {
+  const seo = getContactSeo();
   return (
     <div className="min-h-screen bg-white text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+      <SeoHead {...seo} />
       <Navbar />
+      <SeoBreadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Contact' }]} />
       <main>
         <section className="bg-slate-50 dark:bg-slate-900">
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 lg:grid-cols-[0.9fr_1.1fr]">

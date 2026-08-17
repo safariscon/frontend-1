@@ -26,13 +26,16 @@ export default function Footer() {
               safariscon
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-6 text-blue-100/80">
-              A Rwanda service marketplace for hotels, cafes, car rentals, tours, venues, and travel-related providers.
+              SafarisCon is a Rwanda service marketplace for hotels, safari tours, car rentals, cafes, venues, and local providers you can book online.
             </p>
           </div>
 
           <FooterColumn title="Quick Links" links={[
             ['Home', '/'],
             ['Services', '/services'],
+            ['Hotels in Rwanda', '/services?search=hotel'],
+            ['Tours in Rwanda', '/services?search=tour'],
+            ['Transport in Rwanda', '/services?search=car rental'],
             ['About Us', '/about'],
             ['Contact', '/contact'],
             ['FAQs', '/#faqs'],

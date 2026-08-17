@@ -22,7 +22,7 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
         {hotel.image ? (
           <img
             src={hotel.image}
-            alt={hotel.name}
+            alt={`${hotel.name}${hotel.location ? ` in ${hotel.location}` : ''} on SafarisCon`}
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (

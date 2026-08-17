@@ -6,6 +6,9 @@ import { authApi, paymentsApi } from '../lib/api';
 import { useLanguage } from '../context/LanguageContext';
 import TermsCheckbox from '../components/TermsCheckbox';
 import { t } from '../lib/translations';
+import SeoHead from '../components/SeoHead';
+import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
+import { getProviderRegisterSeo } from '../lib/seo';
 
 export default function ProviderCompleteRegistrationPage() {
   const navigate = useNavigate();
@@ -167,7 +170,9 @@ export default function ProviderCompleteRegistrationPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      <SeoHead {...getProviderRegisterSeo()} />
       <Navbar />
+      <SeoBreadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Become a provider' }]} />
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">

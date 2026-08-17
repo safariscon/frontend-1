@@ -1,7 +1,8 @@
 {
-  "name": "safariscon",
-  "short_name": "safariscon",
-  "description": "Discover and book trusted travel services across Rwanda.",
+  "name": "SafarisCon",
+  "short_name": "SafarisCon",
+  "description": "SafarisCon is a Rwanda service marketplace to find providers and book hotels, tours, transport, and local services online.",
+  "lang": "en",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

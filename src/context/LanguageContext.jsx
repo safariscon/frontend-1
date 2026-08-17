@@ -12,6 +12,7 @@ export function LanguageProvider({ children }) {
 
   useEffect(() => {
     localStorage.setItem('preferredLanguage', language);
+    document.documentElement.lang = language === 'rw' ? 'rw' : language === 'fr' ? 'fr' : 'en';
   }, [language]);
 
   const value = {

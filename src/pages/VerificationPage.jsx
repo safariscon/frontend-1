@@ -4,6 +4,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { publicApi } from '../lib/api';
 import { formatRwf } from '../lib/currency';
+import SeoHead from '../components/SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 export default function VerificationPage() {
   const { token } = useParams();
@@ -25,6 +27,13 @@ export default function VerificationPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      <SeoHead
+        {...noindexSeo({
+          title: 'Booking verification | SafarisCon',
+          description: 'Verify a SafarisCon booking code. This page is for confirmed bookings and is not indexed.',
+          path: `/verify/${token || ''}`,
+        })}
+      />
       <Navbar />
       <main className="flex-1 py-10">
         <div className="mx-auto max-w-3xl px-4">

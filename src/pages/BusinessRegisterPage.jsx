@@ -5,6 +5,9 @@ import Footer from '../components/Footer';
 import { authApi, saveAuthData } from '../lib/api';
 import { SERVICE_CATEGORY_GROUPS as SERVICE_CATEGORIES } from '../data/serviceCategories';
 import PasswordInput from '../components/PasswordInput';
+import SeoHead from '../components/SeoHead';
+import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
+import { getBusinessRegisterSeo } from '../lib/seo';
 
 const initialForm = {
   businessName: '',
@@ -52,7 +55,9 @@ export default function BusinessRegisterPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <SeoHead {...getBusinessRegisterSeo()} />
       <Navbar />
+      <SeoBreadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Register a business' }]} />
       <main className="container mx-auto px-4 py-10">
         <div className="mx-auto max-w-3xl">
           <p className="text-sm font-bold uppercase tracking-wide text-primary">Business Owner</p>

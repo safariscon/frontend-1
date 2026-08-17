@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi } from '../lib/api';
+import SeoHead from '../components/SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -32,6 +34,13 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      <SeoHead
+        {...noindexSeo({
+          title: 'Forgot password | SafarisCon',
+          description: 'Reset your SafarisCon account password to continue booking services in Rwanda.',
+          path: '/forgot-password',
+        })}
+      />
       <Navbar />
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">

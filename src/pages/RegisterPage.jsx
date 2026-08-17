@@ -8,6 +8,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import TermsCheckbox from '../components/TermsCheckbox';
 import PasswordInput from '../components/PasswordInput';
+import SeoHead from '../components/SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({
@@ -78,6 +80,13 @@ export default function RegisterPage() {
 
    return (
      <div className="min-h-screen flex flex-col">
+       <SeoHead
+         {...noindexSeo({
+           title: 'Create a SafarisCon account',
+           description: 'Register on SafarisCon to book hotels, tours, transport, and local services in Rwanda.',
+           path: '/register',
+         })}
+       />
        <Navbar />
 
        <main className="flex-1 flex items-center justify-center py-12 px-4">

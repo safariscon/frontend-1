@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { formatDisplayRole } from '../lib/dashboard';
 import AnnouncementBar from './AnnouncementBar';
+import SeoHead from './SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 const storageKey = 'safariscon_sidebar_collapsed';
 
@@ -61,9 +63,19 @@ export default function DashboardLayout({ children }) {
   };
 
   const activeLabel = navItems.find((item) => isActivePath(location.pathname, item))?.label || 'Dashboard';
+  const isPublicCatalogPath = /^(?:\/services|\/hotels|\/hotel\/|\/business\/|\/booking\/)/.test(location.pathname);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-slate-950 dark:text-slate-100">
+      {!isPublicCatalogPath && (
+        <SeoHead
+          {...noindexSeo({
+            title: `${activeLabel} | SafarisCon`,
+            description: 'Private SafarisCon account area for bookings, listings, and settings.',
+            path: location.pathname,
+          })}
+        />
+      )}
       <AnnouncementBar />
       <aside className={`fixed bottom-0 left-0 top-8 z-50 hidden border-r border-slate-200 bg-white shadow-sm transition-all duration-200 dark:border-slate-800 dark:bg-slate-900 lg:flex lg:flex-col ${collapsed ? 'w-20' : 'w-72'}`}>
         <SidebarContent collapsed={collapsed} navItems={navItems} pathname={location.pathname} onToggle={() => setCollapsed((value) => !value)} onLogout={handleLogout} />

@@ -1,13 +1,19 @@
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import SeoHead from '../components/SeoHead';
+import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
+import { getAboutSeo } from '../lib/seo';
 
 const PROVIDERS = ['Hotels and lodges', 'Cafes and restaurants', 'Car rental teams', 'Tour and experience operators', 'Event venues', 'Travel support services'];
 
 export default function AboutPage() {
+  const seo = getAboutSeo();
   return (
     <div className="min-h-screen bg-white text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+      <SeoHead {...seo} />
       <Navbar />
+      <SeoBreadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'About SafarisCon' }]} />
       <main>
         <section className="relative overflow-hidden bg-slate-50 dark:bg-slate-900">
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 lg:grid-cols-[0.95fr_1.05fr]">
@@ -23,7 +29,7 @@ export default function AboutPage() {
               </div>
             </div>
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
-              <img src="/safariscon-about-services.png" alt="SafarisCon service provider collaboration" className="h-full min-h-[360px] w-full object-cover" />
+              <img src="/safariscon-about-services.png" alt="SafarisCon marketplace connecting travelers with service providers in Rwanda" className="h-full min-h-[360px] w-full object-cover" />
             </div>
           </div>
         </section>

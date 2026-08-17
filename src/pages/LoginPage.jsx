@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { getPostAuthRoute, getSafeRedirectPath, needsTermsAcceptance, withQueryParam } from '../lib/dashboard';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import SeoHead from '../components/SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 const DEFAULT_OTP_MINUTES = 10;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -148,6 +150,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SeoHead
+        {...noindexSeo({
+          title: 'Login | SafarisCon',
+          description: 'Sign in to SafarisCon to book services, manage bookings, and connect with providers in Rwanda.',
+          path: '/login',
+        })}
+      />
       <Navbar />
 
       <main className="flex-1 flex items-center justify-center py-12 px-4">

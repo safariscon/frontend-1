@@ -4,6 +4,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { getPostAuthRoute } from '../lib/dashboard';
+import SeoHead from '../components/SeoHead';
+import { noindexSeo } from '../lib/seo';
 
 export default function EmailVerificationPage() {
   const location = useLocation();
@@ -60,6 +62,13 @@ export default function EmailVerificationPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
+      <SeoHead
+        {...noindexSeo({
+          title: 'Verify email | SafarisCon',
+          description: 'Enter the email verification code to activate your SafarisCon account.',
+          path: '/verify-email',
+        })}
+      />
       <Navbar />
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">

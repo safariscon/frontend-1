@@ -13,6 +13,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { t } from '../lib/translations';
 import { serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
+import SeoHead from '../components/SeoHead';
+import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
+import { getServicesSeo } from '../lib/seo';
 
 export default function HotelsPage() {
   const { isAuthenticated } = useAuth();
@@ -145,11 +148,20 @@ function ServicesCatalog({ embedded = false }) {
     [filteredHotels]
   );
 
+  const seo = getServicesSeo({ location: locationParam, search: searchParam });
+  const breadcrumbItems = [
+    { label: 'Home', to: '/' },
+    { label: 'Services', to: '/services' },
+    ...(locationParam || searchParam ? [{ label: seo.h1 }] : []),
+  ];
+
   return (
     <main className={`flex-1 bg-white dark:bg-slate-950 ${embedded ? 'min-h-screen' : ''}`}>
+      <SeoHead {...seo} />
+      {!embedded && <SeoBreadcrumbs items={breadcrumbItems} />}
       <div className="relative overflow-hidden border-b border-slate-200 bg-slate-50 py-8 dark:border-slate-800 dark:bg-slate-900">
         <div className="absolute inset-y-0 right-0 hidden w-1/2 opacity-70 md:block">
-          <img src="/safariscon-hero-services.png" alt="" className="h-full w-full object-cover" />
+          <img src="/safariscon-hero-services.png" alt="SafarisCon services across Rwanda including hotels, tours, and transport" className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-50 via-slate-50/80 to-slate-50/20 dark:from-slate-900 dark:via-slate-900/85 dark:to-slate-900/20" />
         </div>
         <div className="relative z-10 mx-auto flex max-w-7xl items-center gap-4 px-4">
@@ -158,9 +170,9 @@ function ServicesCatalog({ embedded = false }) {
           </span>
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-primary">Service catalog</p>
-            <h1 className="mt-1 text-2xl font-black text-slate-950 dark:text-white md:text-4xl">Explore Services</h1>
+            <h1 className="mt-1 text-2xl font-black text-slate-950 dark:text-white md:text-4xl">{seo.h1}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Find accommodation, transport, food, tours, events, and trusted destination services across Rwanda.
+              {seo.description}
             </p>
           </div>
         </div>
