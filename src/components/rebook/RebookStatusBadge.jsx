@@ -1,3 +1,6 @@
+import { useLanguage } from '../../context/LanguageContext';
+import { t } from '../../lib/translations';
+
 const STYLES = {
   pending: 'bg-amber-100 text-amber-800',
   approved: 'bg-emerald-100 text-emerald-800',
@@ -10,20 +13,22 @@ const STYLES = {
   rejected: 'bg-red-100 text-red-800',
 };
 
-const LABELS = {
-  pending: 'Pending review',
-  approved: 'Approved',
-  rebook_id_generated: 'Re-book ID generated',
-  used: 'Used',
-  cancel_requested: 'Cancel requested',
-  refund_requested: 'Refund requested',
-  refund_approved: 'Refund approved',
-  expired: 'Expired',
-  rejected: 'Rejected',
+const LABEL_KEYS = {
+  pending: 'rebook.pending',
+  approved: 'rebook.approved',
+  rebook_id_generated: 'rebook.rebookIdGenerated',
+  used: 'rebook.used',
+  cancel_requested: 'rebook.cancelRequested',
+  refund_requested: 'rebook.refundRequested',
+  refund_approved: 'rebook.refundApproved',
+  expired: 'rebook.expired',
+  rejected: 'rebook.rejected',
 };
 
 export default function RebookStatusBadge({ status }) {
-  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${STYLES[status] || 'bg-gray-100 text-gray-700'}`}>{LABELS[status] || status}</span>;
+  const { language } = useLanguage();
+  const label = LABEL_KEYS[status] ? t(LABEL_KEYS[status], language) : status;
+  return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${STYLES[status] || 'bg-gray-100 text-gray-700'}`}>{label}</span>;
 }
 
-export { LABELS as REBOOK_STATUS_LABELS };
+export { LABEL_KEYS as REBOOK_STATUS_LABELS };

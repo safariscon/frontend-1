@@ -8,11 +8,11 @@ import { supportedLanguages, t } from '../lib/translations';
 import InstallButton from './InstallButton';
 import AnnouncementBar from './AnnouncementBar';
 
-const PUBLIC_LINKS = [
-  ['Home', '/'],
-  ['Services', '/services'],
-  ['About', '/about'],
-  ['Contact', '/contact'],
+const PUBLIC_LINK_KEYS = [
+  ['navigation.home', '/'],
+  ['navigation.services', '/services'],
+  ['navigation.about', '/about'],
+  ['navigation.contact', '/contact'],
 ];
 
 export default function Navbar() {
@@ -38,15 +38,15 @@ export default function Navbar() {
 
       <div className="mx-auto max-w-7xl px-4">
         <div className="flex min-h-20 items-center justify-between gap-4">
-          <Link to="/" className="brand-mark flex items-center gap-3" aria-label="SafarisCon home">
+          <Link to="/" className="brand-mark flex items-center gap-3" aria-label={t('navigation.brandHome', language)}>
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-base font-black text-white shadow-sm">S</span>
             <span className="text-lg font-black tracking-tight text-slate-950 dark:text-white">safariscon</span>
           </Link>
 
           <div className="hidden items-center gap-2 lg:flex">
-            {PUBLIC_LINKS.map(([label, to]) => (
+            {PUBLIC_LINK_KEYS.map(([key, to]) => (
               <Link key={to} to={to} className={`nav-link ${isActive(location.pathname, to) ? 'nav-link-active' : ''}`}>
-                {label}
+                {t(key, language)}
               </Link>
             ))}
           </div>
@@ -91,9 +91,9 @@ export default function Navbar() {
         {isOpen && (
           <div className="mobile-menu border-t border-slate-200 py-4 dark:border-slate-800 md:hidden">
             <div className="grid gap-2">
-              {PUBLIC_LINKS.map(([label, to]) => (
+              {PUBLIC_LINK_KEYS.map(([key, to]) => (
                 <Link key={to} to={to} onClick={closeMenu} className={`mobile-nav-link ${isActive(location.pathname, to) ? 'mobile-nav-link-active' : ''}`}>
-                  {label}
+                  {t(key, language)}
                 </Link>
               ))}
 
@@ -133,15 +133,15 @@ export default function Navbar() {
       </div>
 
       <div className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-[65] grid grid-cols-4 border-t border-slate-200 bg-white px-2 pb-[max(.45rem,env(safe-area-inset-bottom))] pt-2 dark:border-slate-800 dark:bg-slate-950 md:hidden">
-        <MobileBottomLink to="/" label="Home" icon="home" active={location.pathname === '/'} />
-        <MobileBottomLink to="/services" label="Services" icon="grid" active={['/services', '/hotels'].includes(location.pathname)} />
-        <MobileBottomLink to={isAuthenticated ? dashboardRoute : '/login'} label="Dashboard" icon="calendar" active={location.pathname.includes('dashboard')} />
+        <MobileBottomLink to="/" label={t('navigation.home', language)} icon="home" active={location.pathname === '/'} />
+        <MobileBottomLink to="/services" label={t('services', language)} icon="grid" active={['/services', '/hotels'].includes(location.pathname)} />
+        <MobileBottomLink to={isAuthenticated ? dashboardRoute : '/login'} label={t('dashboard', language)} icon="calendar" active={location.pathname.includes('dashboard')} />
         {isAuthenticated ? (
-          <MobileBottomLink to="/settings" label="Settings" icon="user" active={location.pathname === '/settings'} />
+          <MobileBottomLink to="/settings" label={t('settings', language)} icon="user" active={location.pathname === '/settings'} />
         ) : (
           <button type="button" onClick={() => setSettingsOpen(true)} className={`flex flex-col items-center gap-1 text-[11px] font-semibold ${settingsOpen ? 'text-primary' : 'text-slate-500 dark:text-blue-300'}`}>
             <SettingsIcon />
-            Settings
+            {t('settings', language)}
           </button>
         )}
       </div>
@@ -151,18 +151,18 @@ export default function Navbar() {
           <div className="absolute inset-x-3 bottom-20 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-primary">Preferences</p>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">Settings</h2>
+                <p className="text-xs font-bold uppercase tracking-wide text-primary">{t('preferences', language)}</p>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">{t('settings', language)}</h2>
               </div>
-              <button type="button" onClick={() => setSettingsOpen(false)} className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200">Close</button>
+              <button type="button" onClick={() => setSettingsOpen(false)} className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-200">{t('close', language)}</button>
             </div>
             <div className="grid gap-3">
               <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <p className="mb-2 text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Language</p>
+                <p className="mb-2 text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{t('language', language)}</p>
                 <LanguageSelect language={language} onChange={setLanguage} id="settings-language-select" fullWidth />
               </div>
               <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <p className="mb-2 text-xs font-bold uppercase text-slate-500 dark:text-slate-400">Display mode</p>
+                <p className="mb-2 text-xs font-bold uppercase text-slate-500 dark:text-slate-400">{t('displayMode', language)}</p>
                 <ThemeButton darkMode={darkMode} language={language} onClick={toggleDarkMode} showLabel fullWidth />
               </div>
             </div>

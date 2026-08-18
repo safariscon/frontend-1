@@ -6,10 +6,13 @@ import { authApi } from '../lib/api';
 import PasswordInput from '../components/PasswordInput';
 import SeoHead from '../components/SeoHead';
 import { noindexSeo } from '../lib/seo';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function ResetPasswordPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [email, setEmail] = useState(location.state?.email || '');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -23,7 +26,7 @@ export default function ResetPasswordPage() {
     setError('');
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('passwordMismatch', language));
       return;
     }
 
@@ -34,7 +37,7 @@ export default function ResetPasswordPage() {
         replace: true,
         state: {
           email: email.trim(),
-          message: result.message || 'Password reset successfully. You can now login with the new password.',
+          message: result.message || t('passwordResetSuccess', language),
         },
       });
     } catch (requestError) {
@@ -48,8 +51,8 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <SeoHead
         {...noindexSeo({
-          title: 'Reset password | SafarisCon',
-          description: 'Choose a new SafarisCon password using the code sent to your email.',
+          title: t('seo.resetTitle', language),
+          description: t('seo.resetDescription', language),
           path: '/reset-password',
         })}
       />
@@ -57,8 +60,8 @@ export default function ResetPasswordPage() {
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Reset password</h1>
-            <p className="text-gray-600">Enter the code from your email and choose a new password.</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('resetPassword', language)}</h1>
+            <p className="text-gray-600">{t('resetPasswordLead', language)}</p>
           </div>
 
           {message && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">{message}</div>}
@@ -89,7 +92,7 @@ export default function ResetPasswordPage() {
               required
               minLength={8}
               inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
-              placeholder="New password"
+              placeholder={t('newPassword', language)}
             />
             <PasswordInput
               value={confirmPassword}
@@ -97,7 +100,7 @@ export default function ResetPasswordPage() {
               required
               minLength={8}
               inputClassName="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
-              placeholder="Confirm new password"
+              placeholder={t('confirmNewPassword', language)}
             />
 
             <button
@@ -105,14 +108,14 @@ export default function ResetPasswordPage() {
               disabled={loading}
               className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50"
             >
-              {loading ? 'Resetting...' : 'Reset password'}
+              {loading ? t('resetting', language) : t('resetPassword', language)}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-600">
-            Need a new code?{' '}
+            {t('needNewCode', language)}{' '}
             <Link to="/forgot-password" className="font-semibold text-primary hover:underline">
-              Request another
+              {t('requestAnother', language)}
             </Link>
           </p>
         </div>

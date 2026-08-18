@@ -1,7 +1,9 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatDisplayRole } from '../lib/dashboard';
+import { t } from '../lib/translations';
 import AnnouncementBar from './AnnouncementBar';
 import SeoHead from './SeoHead';
 import { noindexSeo } from '../lib/seo';
@@ -10,6 +12,7 @@ const storageKey = 'safariscon_sidebar_collapsed';
 
 export default function DashboardLayout({ children }) {
   const { user, logout, isAdmin, isSeller, isCustomer, dashboardRoute } = useAuth();
+  const { language } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(storageKey) === 'true');
@@ -22,47 +25,47 @@ export default function DashboardLayout({ children }) {
   const navItems = useMemo(() => {
     if (isAdmin) {
       return [
-        { to: '/admin-dashboard', label: 'Analytics', icon: 'dashboard', match: ['/admin-dashboard'], exact: true },
-        { to: '/admin-dashboard/users', label: 'Users', icon: 'user', match: ['/admin-dashboard/users'] },
-        { to: '/admin-dashboard/services', label: 'Services', icon: 'services', match: ['/admin-dashboard/services'] },
-        { to: '/admin-dashboard/bookings', label: 'Bookings', icon: 'bookings', match: ['/admin-dashboard/bookings'] },
-        { to: '/admin-dashboard/revenue', label: 'Revenue', icon: 'revenue', match: ['/admin-dashboard/revenue'] },
-        { to: '/services', label: 'Browse services', icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
-        { to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] },
-        { to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] },
-        { to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] },
+        { to: '/admin-dashboard', label: t('dash.analytics', language), icon: 'dashboard', match: ['/admin-dashboard'], exact: true },
+        { to: '/admin-dashboard/users', label: t('dash.users', language), icon: 'user', match: ['/admin-dashboard/users'] },
+        { to: '/admin-dashboard/services', label: t('dash.services', language), icon: 'services', match: ['/admin-dashboard/services'] },
+        { to: '/admin-dashboard/bookings', label: t('dash.bookings', language), icon: 'bookings', match: ['/admin-dashboard/bookings'] },
+        { to: '/admin-dashboard/revenue', label: t('dash.revenue', language), icon: 'revenue', match: ['/admin-dashboard/revenue'] },
+        { to: '/services', label: t('dash.browseServices', language), icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
+        { to: '/profile', label: t('dash.profile', language), icon: 'user', match: ['/profile'] },
+        { to: '/notifications', label: t('dash.notifications', language), icon: 'bell', match: ['/notifications'] },
+        { to: '/settings', label: t('dash.settings', language), icon: 'settings', match: ['/settings'] },
       ];
     }
 
     if (isSeller) {
       return [
-        { to: dashboardRoute || '/dashboard/seller', label: 'Analytics', icon: 'dashboard', match: ['/dashboard/seller', '/hotel-dashboard'], exact: true },
-        { to: `${dashboardRoute || '/dashboard/seller'}/services`, label: 'Services', icon: 'services', match: ['/dashboard/seller/services', '/hotel-dashboard/services'] },
-        { to: `${dashboardRoute || '/dashboard/seller'}/bookings`, label: 'Bookings', icon: 'bookings', match: ['/dashboard/seller/bookings', '/hotel-dashboard/bookings'] },
-        { to: `${dashboardRoute || '/dashboard/seller'}/finance`, label: 'Finance', icon: 'revenue', match: ['/dashboard/seller/finance', '/hotel-dashboard/finance'] },
-        { to: '/services', label: 'Browse services', icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
-        { to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] },
-        { to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] },
-        { to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] },
+        { to: dashboardRoute || '/dashboard/seller', label: t('dash.analytics', language), icon: 'dashboard', match: ['/dashboard/seller', '/hotel-dashboard'], exact: true },
+        { to: `${dashboardRoute || '/dashboard/seller'}/services`, label: t('dash.services', language), icon: 'services', match: ['/dashboard/seller/services', '/hotel-dashboard/services'] },
+        { to: `${dashboardRoute || '/dashboard/seller'}/bookings`, label: t('dash.bookings', language), icon: 'bookings', match: ['/dashboard/seller/bookings', '/hotel-dashboard/bookings'] },
+        { to: `${dashboardRoute || '/dashboard/seller'}/finance`, label: t('dash.finance', language), icon: 'revenue', match: ['/dashboard/seller/finance', '/hotel-dashboard/finance'] },
+        { to: '/services', label: t('dash.browseServices', language), icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
+        { to: '/profile', label: t('dash.profile', language), icon: 'user', match: ['/profile'] },
+        { to: '/notifications', label: t('dash.notifications', language), icon: 'bell', match: ['/notifications'] },
+        { to: '/settings', label: t('dash.settings', language), icon: 'settings', match: ['/settings'] },
       ];
     }
 
     const items = [
-      { to: '/dashboard', label: isCustomer ? 'My bookings' : 'Dashboard', icon: isCustomer ? 'bookings' : 'dashboard', match: ['/dashboard'], exact: true },
-      { to: '/services', label: 'Browse services', icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
-      { to: '/profile', label: 'Profile', icon: 'user', match: ['/profile'] },
-      { to: '/notifications', label: 'Notifications', icon: 'bell', match: ['/notifications'] },
-      { to: '/settings', label: 'Settings', icon: 'settings', match: ['/settings'] },
+      { to: '/dashboard', label: isCustomer ? t('dash.myBookings', language) : t('dash.dashboard', language), icon: isCustomer ? 'bookings' : 'dashboard', match: ['/dashboard'], exact: true },
+      { to: '/services', label: t('dash.browseServices', language), icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },
+      { to: '/profile', label: t('dash.profile', language), icon: 'user', match: ['/profile'] },
+      { to: '/notifications', label: t('dash.notifications', language), icon: 'bell', match: ['/notifications'] },
+      { to: '/settings', label: t('dash.settings', language), icon: 'settings', match: ['/settings'] },
     ];
     return items;
-  }, [dashboardRoute, isAdmin, isCustomer, isSeller]);
+  }, [dashboardRoute, isAdmin, isCustomer, isSeller, language]);
 
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
 
-  const activeLabel = navItems.find((item) => isActivePath(location.pathname, item))?.label || 'Dashboard';
+  const activeLabel = navItems.find((item) => isActivePath(location.pathname, item))?.label || t('dash.dashboard', language);
   const isPublicCatalogPath = /^(?:\/services|\/hotels|\/hotel\/|\/business\/|\/booking\/)/.test(location.pathname);
 
   return (
@@ -70,8 +73,8 @@ export default function DashboardLayout({ children }) {
       {!isPublicCatalogPath && (
         <SeoHead
           {...noindexSeo({
-            title: `${activeLabel} | SafarisCon`,
-            description: 'Private SafarisCon account area for bookings, listings, and settings.',
+            title: t('dash.seoTitle', language, { label: activeLabel }),
+            description: t('dash.seoDescription', language),
             path: location.pathname,
           })}
         />
@@ -93,14 +96,14 @@ export default function DashboardLayout({ children }) {
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
-              <button type="button" onClick={() => setMobileOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 lg:hidden" aria-label="Open sidebar">
+              <button type="button" onClick={() => setMobileOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 lg:hidden" aria-label={t('openSidebar', language)}>
                 <Icon name="menu" />
               </button>
               <h1 className="truncate text-lg font-black text-slate-950 dark:text-slate-50 sm:text-xl">{activeLabel}</h1>
             </div>
-            <Link to="/profile" className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-1 text-right hover:bg-slate-50 dark:hover:bg-slate-900" title="Open profile">
+            <Link to="/profile" className="flex min-w-0 items-center gap-3 rounded-xl px-2 py-1 text-right hover:bg-slate-50 dark:hover:bg-slate-900" title={t('openProfile', language)}>
               <div className="min-w-0">
-                <p className="truncate text-sm font-black text-slate-950 dark:text-slate-50">{user?.name || 'User'}</p>
+                <p className="truncate text-sm font-black text-slate-950 dark:text-slate-50">{user?.name || t('userFallback', language)}</p>
                 <p className="truncate text-xs font-semibold text-slate-500">{formatDisplayRole(user?.role)}</p>
               </div>
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-sm font-black text-white">
@@ -116,6 +119,7 @@ export default function DashboardLayout({ children }) {
 }
 
 function SidebarContent({ collapsed, navItems, pathname, onToggle, onLogout, mobile = false }) {
+  const { language } = useLanguage();
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center justify-between gap-3 border-b border-slate-200 px-4 dark:border-slate-800">
@@ -124,11 +128,11 @@ function SidebarContent({ collapsed, navItems, pathname, onToggle, onLogout, mob
           {!collapsed && (
             <div className="min-w-0">
               <p className="truncate text-lg font-black tracking-tight text-slate-950 dark:text-slate-50">safariscon</p>
-              <p className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">Professional dashboard</p>
+              <p className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{t('professionalDashboard', language)}</p>
             </div>
           )}
         </Link>
-        <button type="button" onClick={onToggle} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-blue-300" aria-label={mobile ? 'Close sidebar' : 'Toggle sidebar'}>
+        <button type="button" onClick={onToggle} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-blue-300" aria-label={mobile ? t('closeSidebar', language) : t('toggleSidebar', language)}>
           <Icon name={mobile ? 'close' : collapsed ? 'panelOpen' : 'panelClose'} />
         </button>
       </div>
@@ -153,7 +157,7 @@ function SidebarContent({ collapsed, navItems, pathname, onToggle, onLogout, mob
       <div className="border-t border-slate-200 p-3 dark:border-slate-800">
         <button type="button" onClick={onLogout} className={`flex w-full items-center justify-center gap-3 rounded-xl bg-red-50 px-3 py-3 text-sm font-black text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-950/70 ${collapsed ? '' : 'justify-start'}`}>
           <Icon name="logout" />
-          {!collapsed && <span>Logout</span>}
+          {!collapsed && <span>{t('logout', language)}</span>}
         </button>
       </div>
     </div>

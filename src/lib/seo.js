@@ -1,3 +1,5 @@
+import { t } from './translations';
+
 export const SEO_SITE_NAME = 'SafarisCon';
 export const SEO_DEFAULT_ORIGIN = 'https://safariscon.eserveconn.com';
 export const SEO_DEFAULT_IMAGE = '/safariscon-hero-services.png';
@@ -48,12 +50,12 @@ export const organizationSchema = (origin = getOrigin()) => ({
   },
 });
 
-export const websiteSchema = (origin = getOrigin()) => ({
+export const websiteSchema = (origin = getOrigin(), language = 'en') => ({
   '@type': 'WebSite',
   '@id': `${origin}/#website`,
   name: SEO_SITE_NAME,
   url: `${origin}/`,
-  inLanguage: 'en',
+  inLanguage: language || 'en',
   publisher: { '@id': `${origin}/#organization` },
   potentialAction: {
     '@type': 'SearchAction',
@@ -78,131 +80,78 @@ export const withGraph = (...nodes) => ({
 });
 
 const SERVICE_INTENTS = [
-  {
-    test: /safari|wildlife|game.?drive/i,
-    title: 'Rwanda safari booking | SafarisCon',
-    description:
-      'Browse Rwanda safari tours and travel experiences on SafarisCon. Compare providers and book safari services online in Rwanda.',
-    h1: 'Rwanda safari tours and bookings',
-  },
-  {
-    test: /hotel|accommodation|lodge|guest.?house|stay|resort/i,
-    title: 'Hotel booking Rwanda | SafarisCon',
-    description:
-      'Find hotels, lodges, and accommodation in Rwanda and Kigali. Compare stays and book accommodation online with SafarisCon.',
-    h1: 'Hotels and accommodation in Rwanda',
-  },
-  {
-    test: /car.?rental|taxi|airport|transport|transfer/i,
-    title: 'Transport booking Rwanda | SafarisCon',
-    description:
-      'Book transport in Rwanda including car hire, taxi booking, and Kigali airport transfers through verified SafarisCon providers.',
-    h1: 'Transport and car hire in Rwanda',
-  },
-  {
-    test: /tour|activit|experience|things to do/i,
-    title: 'Tours and activities in Rwanda | SafarisCon',
-    description:
-      'Discover things to do in Rwanda and Kigali. Book tours, activities, and local experiences online with SafarisCon.',
-    h1: 'Tours and activities in Rwanda',
-  },
-  {
-    test: /cafe|restaurant|food|bakery/i,
-    title: 'Food and cafe services in Rwanda | SafarisCon',
-    description:
-      'Find cafes, restaurants, and food services in Rwanda. Browse local providers and book through SafarisCon.',
-    h1: 'Cafes and food services in Rwanda',
-  },
+  { test: /safari|wildlife|game.?drive/i, key: 'safari' },
+  { test: /hotel|accommodation|lodge|guest.?house|stay|resort/i, key: 'hotel' },
+  { test: /car.?rental|taxi|airport|transport|transfer/i, key: 'transport' },
+  { test: /tour|activit|experience|things to do/i, key: 'tours' },
+  { test: /cafe|restaurant|food|bakery/i, key: 'food' },
 ];
+
+const intentCopy = (key, language) => ({
+  title: t(`seo.${key}Title`, language),
+  description: t(`seo.${key}Description`, language),
+  h1: t(`seo.${key}H1`, language),
+});
 
 export const matchServiceIntent = (query = '') =>
   SERVICE_INTENTS.find((intent) => intent.test.test(String(query || ''))) || null;
 
-export const getHomeSeo = () => {
+export const getHomeSeo = (language) => {
   const origin = getOrigin();
   return {
-    title: 'SafarisCon | Official Rwanda booking platform',
-    description:
-      'SafarisCon is the official Rwanda service marketplace at safariscon.eserveconn.com. Find hotels, tours, transport, and local providers in Kigali, then book online.',
+    title: t('seo.homeTitle', language),
+    description: t('seo.homeDescription', language),
     path: '/',
-    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), {
+    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), {
       '@type': 'FAQPage',
-      mainEntity: [
-        {
-          '@type': 'Question',
-          name: 'Can visitors browse services without an account?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'Yes. Public visitors can search and view available service providers before deciding to log in or register.',
-          },
+      mainEntity: [1, 2, 3, 4].map((n) => ({
+        '@type': 'Question',
+        name: t(`home.faq${n}q`, language),
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: t(`home.faq${n}a`, language),
         },
-        {
-          '@type': 'Question',
-          name: 'When do I need an account?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'You need an account when you want to book, pay, manage requests, or unlock provider contact details.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'Who can join as a provider?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'Hotels, cafes, restaurants, car rental teams, tour operators, venues, and other travel-related service providers can register.',
-          },
-        },
-        {
-          '@type': 'Question',
-          name: 'How does SafarisCon protect bookings?',
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: 'The booking flow keeps provider details structured, records payment steps, and gives customers confirmation documents for their service.',
-          },
-        },
-      ],
+      })),
     }),
   };
 };
 
-export const getServicesSeo = ({ location = '', search = '' } = {}) => {
+export const getServicesSeo = ({ location = '', search = '', language } = {}) => {
   const origin = getOrigin();
   const loc = String(location || '').trim();
   const query = String(search || '').trim();
-  const intent = matchServiceIntent(query);
+  const matched = matchServiceIntent(query);
+  const intent = matched ? intentCopy(matched.key, language) : null;
   const params = new URLSearchParams();
   if (query) params.set('search', query);
   if (loc) params.set('location', loc);
   const suffix = params.toString();
   const path = suffix ? `/services?${suffix}` : '/services';
   const crumbs = [
-    { label: 'Home', to: '/' },
-    { label: 'Services', to: '/services' },
+    { label: t('navigation.home', language), to: '/' },
+    { label: t('navigation.services', language), to: '/services' },
   ];
 
   if (loc && intent) {
-    crumbs.push({ label: `${intent.h1} in ${loc}` });
+    const h1 = t('seo.intentInLocationH1', language, { h1: intent.h1.replace(/ in Rwanda$/i, ''), location: loc });
+    crumbs.push({ label: h1 });
     return {
-      title: `${intent.h1.replace(' in Rwanda', '')} in ${loc} | SafarisCon`,
-      description: truncateMeta(
-        `Find ${query} services in ${loc}, Rwanda. Browse verified providers and book online with SafarisCon.`
-      ),
+      title: t('seo.intentInLocationTitle', language, { h1: intent.h1.replace(/ in Rwanda$/i, ''), location: loc }),
+      description: truncateMeta(t('seo.intentInLocationDescription', language, { query, location: loc })),
       path,
-      h1: `${intent.h1.replace(' in Rwanda', '')} in ${loc}`,
-      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+      h1,
+      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
     };
   }
 
   if (loc) {
-    crumbs.push({ label: `Services in ${loc}` });
+    crumbs.push({ label: t('seo.servicesInLocationH1', language, { location: loc }) });
     return {
-      title: `Services in ${loc} | SafarisCon`,
-      description: truncateMeta(
-        `Find and book hotels, tours, transport, and local services in ${loc} on SafarisCon, the Rwanda service marketplace.`
-      ),
+      title: t('seo.servicesInLocationTitle', language, { location: loc }),
+      description: truncateMeta(t('seo.servicesInLocationDescription', language, { location: loc })),
       path,
-      h1: `Services in ${loc}`,
-      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+      h1: t('seo.servicesInLocationH1', language, { location: loc }),
+      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
     };
   }
 
@@ -213,143 +162,132 @@ export const getServicesSeo = ({ location = '', search = '' } = {}) => {
       description: intent.description,
       path,
       h1: intent.h1,
-      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
     };
   }
 
   if (query) {
     crumbs.push({ label: query });
     return {
-      title: `${query} services in Rwanda | SafarisCon`,
-      description: truncateMeta(
-        `Search ${query} services in Rwanda on SafarisCon. Compare providers and book online across Kigali and other destinations.`
-      ),
+      title: t('seo.queryTitle', language, { query }),
+      description: truncateMeta(t('seo.queryDescription', language, { query })),
       path,
-      h1: `Find ${query} services in Rwanda`,
-      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+      h1: t('seo.queryH1', language, { query }),
+      jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
     };
   }
 
-  crumbs.push({ label: 'All services' });
+  crumbs.push({ label: t('seo.allServices', language) });
   return {
-    title: 'Find services in Rwanda | SafarisCon',
-    description:
-      'Browse hotels, tours, transport, cafes, and local service providers on SafarisCon. Book services online across Rwanda and Kigali.',
+    title: t('seo.servicesTitle', language),
+    description: t('seo.servicesDescription', language),
     path: '/services',
-    h1: 'Find and book services in Rwanda',
-    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+    h1: t('seo.servicesH1', language),
+    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
   };
 };
 
-export const getAboutSeo = () => {
+export const getAboutSeo = (language) => {
   const origin = getOrigin();
   const crumbs = [
-    { label: 'Home', to: '/' },
-    { label: 'About SafarisCon' },
+    { label: t('navigation.home', language), to: '/' },
+    { label: t('seo.aboutSafariscon', language) },
   ];
   return {
-    title: 'About SafarisCon | Rwanda service marketplace',
-    description:
-      'SafarisCon connects travelers with hotels, tours, transport, and local service providers in Rwanda. Learn how the marketplace helps customers and businesses book in one place.',
+    title: t('seo.aboutTitle', language),
+    description: t('seo.aboutDescription', language),
     path: '/about',
-    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
   };
 };
 
-export const getContactSeo = () => {
+export const getContactSeo = (language) => {
   const origin = getOrigin();
   const crumbs = [
-    { label: 'Home', to: '/' },
-    { label: 'Contact' },
+    { label: t('navigation.home', language), to: '/' },
+    { label: t('navigation.contact', language) },
   ];
   return {
-    title: 'Contact SafarisCon | Booking and provider support',
-    description:
-      'Contact SafarisCon for booking help, provider onboarding, and marketplace questions in Rwanda. Reach the Kigali team about services, payments, and accounts.',
+    title: t('seo.contactTitle', language),
+    description: t('seo.contactDescription', language),
     path: '/contact',
-    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
   };
 };
 
-export const getPolicySeo = (pathname = '') => {
+export const getPolicySeo = (pathname = '', language) => {
   const origin = getOrigin();
   const pages = {
     '/how-it-works': {
-      title: 'How SafarisCon booking works | Online booking Rwanda',
-      description:
-        'Learn how SafarisCon online booking works in Rwanda: browse services, request a booking, pay in the app, and unlock provider details after payment.',
+      title: t('seo.howTitle', language),
+      description: t('seo.howDescription', language),
     },
     '/terms': {
-      title: 'Terms of use | SafarisCon',
-      description:
-        'Read the SafarisCon terms of use for guests and service providers booking hotels, tours, transport, and other services in Rwanda.',
+      title: t('seo.termsTitle', language),
+      description: t('seo.termsDescription', language),
     },
     '/privacy': {
-      title: 'Privacy policy | SafarisCon',
-      description:
-        'See how SafarisCon handles account, booking, and payment data for customers and service providers in Rwanda.',
+      title: t('seo.privacyTitle', language),
+      description: t('seo.privacyDescription', language),
     },
     '/payments': {
-      title: 'Payments and cancellations | SafarisCon',
-      description:
-        'Understand SafarisCon payments, refunds, and cancellation windows for service bookings in Rwanda.',
+      title: t('seo.paymentsTitle', language),
+      description: t('seo.paymentsDescription', language),
     },
   };
   const page = pages[pathname] || pages['/how-it-works'];
   const crumbs = [
-    { label: 'Home', to: '/' },
+    { label: t('navigation.home', language), to: '/' },
     { label: page.title.split('|')[0].trim() },
   ];
   return {
     ...page,
     path: pathname,
-    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
   };
 };
 
-export const getProviderRegisterSeo = () => {
+export const getProviderRegisterSeo = (language) => {
   const origin = getOrigin();
   const crumbs = [
-    { label: 'Home', to: '/' },
-    { label: 'Become a provider' },
+    { label: t('navigation.home', language), to: '/' },
+    { label: t('seo.providerCrumbs', language) },
   ];
   return {
-    title: 'Offer services on SafarisCon | Providers in Rwanda',
-    description:
-      'Complete your SafarisCon provider account to list hotels, tours, transport, or local services in Rwanda and connect with customers online.',
+    title: t('seo.providerTitle', language),
+    description: t('seo.providerDescription', language),
     path: '/provider-register',
-    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
   };
 };
 
-export const getBusinessRegisterSeo = () => {
+export const getBusinessRegisterSeo = (language) => {
   const origin = getOrigin();
   const crumbs = [
-    { label: 'Home', to: '/' },
-    { label: 'Register a business' },
+    { label: t('navigation.home', language), to: '/' },
+    { label: t('seo.businessCrumbs', language) },
   ];
   return {
-    title: 'Register your business | SafarisCon Rwanda',
-    description:
-      'Add your business to SafarisCon and offer services online in Rwanda. Publish listings for hotels, tours, transport, food, and other local services.',
+    title: t('seo.businessTitle', language),
+    description: t('seo.businessDescription', language),
     path: '/business-register',
-    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin), breadcrumbSchema(crumbs, origin)),
+    jsonLd: withGraph(organizationSchema(origin), websiteSchema(origin, language), breadcrumbSchema(crumbs, origin)),
   };
 };
 
-export const getServiceDetailSeo = (hotel = {}) => {
+export const getServiceDetailSeo = (hotel = {}, language) => {
   const origin = getOrigin();
-  const name = hotel.name || 'Service';
+  const name = hotel.name || t('verify.service', language);
   const location = hotel.location || hotel.destinationLocation || 'Rwanda';
   const category = hotel.serviceCategory || hotel.type || 'service';
   const description = truncateMeta(
     hotel.description ||
-      `Book ${name} in ${location} on SafarisCon. Compare ${category} providers and complete your booking online in Rwanda.`
+      t('seo.serviceDetailDescription', language, { name, location, category })
   );
   const path = `/business/${hotel.id || hotel._id || ''}`;
   const crumbs = [
-    { label: 'Home', to: '/' },
-    { label: 'Services', to: '/services' },
+    { label: t('navigation.home', language), to: '/' },
+    { label: t('navigation.services', language), to: '/services' },
     { label: name },
   ];
   const offer = Number(hotel.price || hotel.basePrice)
@@ -362,13 +300,13 @@ export const getServiceDetailSeo = (hotel = {}) => {
     : undefined;
 
   return {
-    title: truncateMeta(`${name} in ${location} | Book on SafarisCon`, 60),
+    title: truncateMeta(t('seo.serviceDetailTitle', language, { name, location }), 60),
     description,
     path,
     image: hotel.image || hotel.images?.[0] || SEO_DEFAULT_IMAGE,
     jsonLd: withGraph(
       organizationSchema(origin),
-      websiteSchema(origin),
+      websiteSchema(origin, language),
       breadcrumbSchema(crumbs, origin),
       {
         '@type': 'Service',

@@ -42,7 +42,7 @@ export default function RegisterPage() {
      setError('');
 
      if (!acceptedTerms) {
-       setError('You must accept the Terms of use and Privacy policy before creating an account.');
+       setError(t('mustAcceptTerms', language));
        return;
      }
      if (formData.password !== formData.confirmPassword) {
@@ -69,7 +69,7 @@ export default function RegisterPage() {
        navigate('/verify-email', {
          state: {
            email: result.user?.email || formData.email,
-           message: 'Account created. Enter the verification code sent to your email.',
+           message: t('accountCreatedVerify', language),
          },
        });
      } else {
@@ -82,8 +82,8 @@ export default function RegisterPage() {
      <div className="min-h-screen flex flex-col">
        <SeoHead
          {...noindexSeo({
-           title: 'Create a SafarisCon account',
-           description: 'Register on SafarisCon to book hotels, tours, transport, and local services in Rwanda.',
+           title: t('seo.registerTitle', language),
+           description: t('seo.registerDescription', language),
            path: '/register',
          })}
        />

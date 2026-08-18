@@ -47,7 +47,7 @@ export default function HotelDetailsPage() {
   if (loading) {
     return (
       <CatalogShell authenticated={isAuthenticated}>
-        <SeoHead {...noindexSeo({ title: 'Loading service | SafarisCon', description: 'Loading a SafarisCon service listing in Rwanda.', path: `/business/${id}` })} />
+        <SeoHead {...noindexSeo({ title: t('details.loadingTitle', language), description: t('details.loadingDescription', language), path: `/business/${id}` })} />
         <div className="flex min-h-[50vh] items-center justify-center">
           <LoadingSpinner size="lg" />
         </div>
@@ -58,7 +58,7 @@ export default function HotelDetailsPage() {
   if (!hotel) {
     return (
       <CatalogShell authenticated={isAuthenticated}>
-        <SeoHead {...noindexSeo({ title: 'Service not found | SafarisCon', description: 'This SafarisCon service listing is unavailable.', path: `/business/${id}` })} />
+        <SeoHead {...noindexSeo({ title: t('details.notFoundTitle', language), description: t('details.notFoundDescription', language), path: `/business/${id}` })} />
         <div className="flex min-h-[50vh] items-center justify-center">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">{t('hotelNotFound', language)}</h1>
@@ -88,10 +88,10 @@ export default function HotelDetailsPage() {
         sensitivity: 'base',
       });
     });
-  const inventoryLabel = getInventoryLabel(hotel.inventoryStatus, isNotAvailable);
+  const inventoryLabel = getInventoryLabel(hotel.inventoryStatus, isNotAvailable, language);
   const promotion = getVisiblePromotion(hotel.promotion);
-  const seo = getServiceDetailSeo(hotel);
-  const imageAlt = `${hotel.name} — ${hotel.serviceCategory || hotel.type || 'service'} in ${hotel.location || 'Rwanda'}`;
+  const seo = getServiceDetailSeo(hotel, language);
+  const imageAlt = `${hotel.name} — ${hotel.serviceCategory || hotel.type || t('details.serviceOption', language)} · ${hotel.location || 'Rwanda'}`;
 
   return (
     <CatalogShell authenticated={isAuthenticated}>
@@ -99,8 +99,8 @@ export default function HotelDetailsPage() {
       {!isAuthenticated && (
         <SeoBreadcrumbs
           items={[
-            { label: 'Home', to: '/' },
-            { label: 'Services', to: '/services' },
+            { label: t('navigation.home', language), to: '/' },
+            { label: t('navigation.services', language), to: '/services' },
             { label: hotel.name },
           ]}
         />
@@ -126,17 +126,17 @@ export default function HotelDetailsPage() {
             {images.length > 1 && (
               <>
                 <button type="button" onClick={showPreviousImage} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">
-                  Back
+                  {t('back', language)}
                 </button>
                 <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">
-                  Next
+                  {t('next', language)}
                 </button>
                 <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
                   {images.map((_, idx) => (
                     <button
                       key={idx}
                       type="button"
-                      aria-label={`Show image ${idx + 1}`}
+                      aria-label={t('details.showImage', language, { n: idx + 1 })}
                       onClick={() => setSelectedImage(idx)}
                       className={`h-2.5 w-2.5 rounded-full transition ${selectedImage === idx ? 'bg-white' : 'bg-white/50'}`}
                     />
@@ -156,7 +156,7 @@ export default function HotelDetailsPage() {
                   onClick={() => setSelectedImage(index)}
                   className={`h-24 overflow-hidden rounded-lg border ${selectedImage === index ? 'border-primary' : 'border-gray-200'}`}
                 >
-                  <img src={image} alt={`${imageAlt} photo ${index + 1}`} className="h-full w-full object-cover" />
+                  <img src={image} alt={`${imageAlt} ${t('catalog.photoN', language, { n: index + 1 })}`} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -174,7 +174,7 @@ export default function HotelDetailsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    {hotel.location} District
+                    {t('details.districtLine', language, { location: hotel.location })}
                   </div>
                 </div>
               </div>
@@ -185,21 +185,21 @@ export default function HotelDetailsPage() {
               </div>
 
               <div className="mb-8 grid gap-4 md:grid-cols-3">
-                <InfoTile label="Category" value={hotel.type || hotel.category || 'Service'} />
+                <InfoTile label={t('details.category', language)} value={hotel.type || hotel.category || t('services', language)} />
                 {promotion ? (
                   <div className="md:col-span-2 overflow-hidden rounded-xl border border-amber-300 bg-amber-50">
-                    <div className="bg-amber-400 px-4 py-2 text-xs font-black uppercase tracking-wider text-amber-950">★ Promotion</div>
+                    <div className="bg-amber-400 px-4 py-2 text-xs font-black uppercase tracking-wider text-amber-950">★ {t('details.promotion', language)}</div>
                     <div className="p-4">
                       <h3 className="text-lg font-black text-amber-700">{promotion.title}</h3>
-                      <p className="mt-1 text-sm text-slate-800">Save {promotion.percent}% on this service.</p>
+                      <p className="mt-1 text-sm text-slate-800">{t('details.savePercent', language, { percent: promotion.percent })}</p>
                       {promotion.note && <p className="mt-1 text-sm text-slate-700">{promotion.note}</p>}
-                      <p className="mt-2 text-xs font-bold text-orange-600">Valid {formatPromotionDate(promotion.startAt)} – {formatPromotionDate(promotion.endAt)}</p>
+                      <p className="mt-2 text-xs font-bold text-orange-600">{t('details.valid', language, { start: formatPromotionDate(promotion.startAt, language), end: formatPromotionDate(promotion.endAt, language) })}</p>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <InfoTile label="Seller" value="Verified marketplace seller" />
-                    <InfoTile label="Inventory" value={inventoryLabel} />
+                    <InfoTile label={t('details.seller', language)} value={t('details.verifiedSeller', language)} />
+                    <InfoTile label={t('details.inventory', language)} value={inventoryLabel} />
                   </>
                 )}
               </div>
@@ -212,6 +212,7 @@ export default function HotelDetailsPage() {
                 setSearch={setTableSearch}
                 sortColumn={sortColumn}
                 setSortColumn={setSortColumn}
+                language={language}
               />
 
               <div className="mb-8">
@@ -233,7 +234,7 @@ export default function HotelDetailsPage() {
               <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-24">
                 <div className="border-t border-gray-200 pt-4 mb-4">
                   <p className={`text-sm font-semibold ${isNotAvailable ? 'text-red-700' : 'text-primary'}`}>
-                    {isNotAvailable ? inventoryLabel : 'Available'}
+                    {isNotAvailable ? inventoryLabel : t('details.available', language)}
                   </p>
                 </div>
 
@@ -242,14 +243,14 @@ export default function HotelDetailsPage() {
                   disabled={isNotAvailable}
                   className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
-                  {isNotAvailable ? 'Not Available' : t('requestBooking', language)}
+                  {isNotAvailable ? t('catalog.notAvailable', language) : t('requestBooking', language)}
                 </button>
 
                 <p className="text-xs text-gray-500 text-center mt-3">
-                  Admin or the provider confirms your exact RWF quote. Pay the full amount in the app to unlock provider details. Each listing shows its own cancel window and fee.
+                  {t('details.bookingNote', language)}
                 </p>
                 <Link to="/services" className="mt-3 block text-center text-sm font-bold text-primary hover:underline">
-                  Browse more services in Rwanda
+                  {t('details.browseMore', language)}
                 </Link>
               </div>
             </div>
@@ -260,17 +261,17 @@ export default function HotelDetailsPage() {
       {lightboxOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
           <button type="button" onClick={() => setLightboxOpen(false)} className="absolute right-4 top-4 rounded-full bg-white px-4 py-2 font-semibold text-gray-900">
-            Close
+            {t('close', language)}
           </button>
           {images.length > 1 && (
             <button type="button" onClick={showPreviousImage} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white px-4 py-3 font-semibold text-gray-900">
-              Back
+              {t('back', language)}
             </button>
           )}
           <img src={images[selectedImage] || images[0]} alt={imageAlt} className="max-h-[85vh] max-w-full object-contain" />
           {images.length > 1 && (
             <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white px-4 py-3 font-semibold text-gray-900">
-              Next
+              {t('next', language)}
             </button>
           )}
         </div>
@@ -313,18 +314,18 @@ function getVisiblePromotion(promotion) {
   return { ...promotion, percent, note: promotion.note || promotion.description || '' };
 }
 
-function formatPromotionDate(value) {
+function formatPromotionDate(value, language) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'as scheduled';
+  if (Number.isNaN(date.getTime())) return t('catalog.asScheduled', language);
   return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortColumn, setSortColumn }) {
+function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortColumn, setSortColumn, language }) {
   if (!columns.length) {
     return (
       <div className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="text-xl font-bold text-gray-900">Availability</h2>
-        <p className="mt-2 text-sm text-gray-600">This seller has not published a custom availability table yet.</p>
+        <h2 className="text-xl font-bold text-gray-900">{t('details.availability', language)}</h2>
+        <p className="mt-2 text-sm text-gray-600">{t('details.noAvailabilityTable', language)}</p>
       </div>
     );
   }
@@ -335,31 +336,31 @@ function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortCo
     <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Availability</h2>
-          {updatedAt && <p className="mt-1 text-sm text-gray-500">Updated {new Date(updatedAt).toLocaleString()}</p>}
+          <h2 className="text-xl font-bold text-gray-900">{t('details.availability', language)}</h2>
+          {updatedAt && <p className="mt-1 text-sm text-gray-500">{t('details.updated', language, { date: new Date(updatedAt).toLocaleString() })}</p>}
         </div>
         <div className="grid gap-2 sm:grid-cols-2 md:min-w-[380px]">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search options" className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('details.searchOptions', language)} className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
           <select value={sortColumn} onChange={(event) => setSortColumn(event.target.value)} className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
-            <option value="">Original order</option>
-            {visibleSortColumns.map((column) => <option key={column.id} value={column.id}>Sort by {column.label}</option>)}
+            <option value="">{t('details.originalOrder', language)}</option>
+            {visibleSortColumns.map((column) => <option key={column.id} value={column.id}>{t('details.sortByColumn', language, { label: column.label })}</option>)}
           </select>
         </div>
       </div>
 
       <div className="grid gap-3">
         {rows.map((row, index) => (
-          <AvailabilityOptionCard key={row.id || index} row={row} columns={columns} />
+          <AvailabilityOptionCard key={row.id || index} row={row} columns={columns} language={language} />
         ))}
       </div>
-      {!rows.length && <p className="mt-3 text-sm text-gray-500">No matching availability rows.</p>}
+      {!rows.length && <p className="mt-3 text-sm text-gray-500">{t('details.noMatchingRows', language)}</p>}
     </div>
   );
 }
 
-function AvailabilityOptionCard({ row, columns }) {
+function AvailabilityOptionCard({ row, columns, language }) {
   const cells = row.cells || {};
-  const optionName = cells.service || cells.name || cells.option || 'Service option';
+  const optionName = cells.service || cells.name || cells.option || t('details.serviceOption', language);
   const price = Number(cells.price || 0);
   const priceType = String(cells.priceType || '').replace(/-/g, ' ');
   const details = cells.details || cells.amenities || '';
@@ -369,11 +370,11 @@ function AvailabilityOptionCard({ row, columns }) {
     <article className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-wide text-primary">Option {row.sortOrder ? row.sortOrder : ''}</p>
+          <p className="text-xs font-black uppercase tracking-wide text-primary">{t('details.option', language)} {row.sortOrder ? row.sortOrder : ''}</p>
           <h3 className="mt-1 break-words text-lg font-black text-gray-950">{optionName}</h3>
         </div>
         <div className="rounded-xl bg-white px-4 py-3 text-left shadow-sm sm:min-w-36 sm:text-right">
-          <p className="text-xs font-bold uppercase text-gray-500">Price</p>
+          <p className="text-xs font-bold uppercase text-gray-500">{t('details.price', language)}</p>
           <p className="mt-1 text-lg font-black text-primary">{price ? formatRwf(price) : '-'}</p>
           {priceType && <p className="text-xs font-semibold capitalize text-gray-500">{priceType}</p>}
         </div>
@@ -390,7 +391,7 @@ function AvailabilityOptionCard({ row, columns }) {
 
       {details && (
         <div className="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Details / amenities</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{t('details.detailsAmenities', language)}</p>
           <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-gray-700">{details}</p>
         </div>
       )}
@@ -398,14 +399,14 @@ function AvailabilityOptionCard({ row, columns }) {
   );
 }
 
-function getInventoryLabel(status, unavailable) {
-  if (unavailable) return 'Out of Stock';
+function getInventoryLabel(status, unavailable, language) {
+  if (unavailable) return t('details.outOfStock', language);
   const labels = {
-    available: 'Available',
-    limited: 'Limited Availability',
-    'fully-booked': 'Fully Booked',
-    'out-of-stock': 'Out of Stock',
-    'temporarily-unavailable': 'Temporarily Unavailable',
+    available: t('details.available', language),
+    limited: t('details.limited', language),
+    'fully-booked': t('details.fullyBooked', language),
+    'out-of-stock': t('details.outOfStock', language),
+    'temporarily-unavailable': t('details.temporarilyUnavailable', language),
   };
-  return labels[status] || 'Available';
+  return labels[status] || t('details.available', language);
 }

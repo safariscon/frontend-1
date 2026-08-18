@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
 import { publicApi } from '../lib/api';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
-
-const DEFAULT_ANNOUNCEMENTS = [
-  {
-    text: 'Book trusted travel, hospitality, transport, food, and experience services across Rwanda.',
-    linkUrl: '/services',
-    linkLabel: 'Browse services',
-  },
-];
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function AnnouncementBar() {
-  const [announcementFeed, setAnnouncementFeed] = useState({ enabled: true, items: DEFAULT_ANNOUNCEMENTS, intervalSeconds: 5 });
+  const { language } = useLanguage();
+  const defaultAnnouncements = [
+    {
+      text: t('announcement.defaultText', language),
+      linkUrl: '/services',
+      linkLabel: t('announcement.defaultLink', language),
+    },
+  ];
+  const [announcementFeed, setAnnouncementFeed] = useState({ enabled: true, items: defaultAnnouncements, intervalSeconds: 5 });
   const [announcementIndex, setAnnouncementIndex] = useState(0);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export default function AnnouncementBar() {
             ? [response.announcement]
             : [];
         const backendItems = response.enabled === false ? [] : receivedItems;
-        const items = [...DEFAULT_ANNOUNCEMENTS, ...backendItems].filter(
+        const items = [...defaultAnnouncements, ...backendItems].filter(
           (item, index, all) => item?.text && all.findIndex((entry) => entry?.text === item.text) === index
         );
         setAnnouncementFeed({
@@ -33,13 +35,13 @@ export default function AnnouncementBar() {
           intervalSeconds: Math.max(1, Number(response.intervalSeconds) || 5),
         });
       } catch {
-        setAnnouncementFeed({ enabled: true, items: DEFAULT_ANNOUNCEMENTS, intervalSeconds: 5 });
+        setAnnouncementFeed({ enabled: true, items: defaultAnnouncements, intervalSeconds: 5 });
       }
     };
 
     loadAnnouncement();
     return subscribeToRealtime([REALTIME_EVENTS.CATALOG_CHANGED, 'catalogChanged'], loadAnnouncement);
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     if (!announcementFeed.enabled || announcementFeed.items.length < 2) return undefined;
@@ -62,7 +64,7 @@ export default function AnnouncementBar() {
             <>
               {' '}
               <a href={announcement.linkUrl} className="font-black underline decoration-2 underline-offset-2">
-                {announcement.linkLabel || 'Learn more'}
+                {announcement.linkLabel || t('announcement.learnMore', language)}
               </a>
             </>
           )}

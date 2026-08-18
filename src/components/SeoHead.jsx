@@ -76,7 +76,9 @@ export default function SeoHead({
 
     upsertMeta('property', 'og:type', type);
     upsertMeta('property', 'og:site_name', SEO_SITE_NAME);
-    upsertMeta('property', 'og:locale', 'en_RW');
+    const OG_LOCALES = { en: 'en_RW', rw: 'rw_RW', fr: 'fr_RW', sw: 'sw_RW' };
+    const htmlLang = document.documentElement.lang || 'en';
+    upsertMeta('property', 'og:locale', OG_LOCALES[htmlLang] || 'en_RW');
     upsertMeta('property', 'og:title', fullTitle);
     upsertMeta('property', 'og:description', description);
     upsertMeta('property', 'og:url', canonical);

@@ -9,25 +9,24 @@ import { publicApi } from '../lib/api';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
-import { t } from '../lib/translations';
+import { t, translateCategory } from '../lib/translations';
 import MarketplaceGuide from '../components/MarketplaceGuide';
 import PaymentMethods from '../components/PaymentMethods';
 import SeoHead from '../components/SeoHead';
-import { HOME_TRUST_LEAD, HOME_TRUST_LINE, HOW_IT_WORKS_STEPS } from '../lib/policyCopy';
 import { getHomeSeo } from '../lib/seo';
 
 const SERVICE_AREAS = [
-  ['Hotels and stays', 'Verified rooms, lodges, guesthouses, and retreats.', '/services?service=hotel'],
-  ['Cafes and food', 'Book cafe, restaurant, bakery, and local food services.', '/services?service=cafe'],
-  ['Car rentals', 'Find transport, transfers, car rentals, and travel mobility.', '/services?service=car rental'],
-  ['Tours and experiences', 'Discover cultural visits, events, guides, and activities.', '/services?service=tour'],
+  ['home.hotelsAndStays', 'home.hotelsAndStaysDesc', '/services?service=hotel'],
+  ['home.cafesAndFood', 'home.cafesAndFoodDesc', '/services?service=cafe'],
+  ['home.carRentals', 'home.carRentalsDesc', '/services?service=car rental'],
+  ['home.toursAndExperiences', 'home.toursAndExperiencesDesc', '/services?service=tour'],
 ];
 
 const FAQS = [
-  ['Can visitors browse services without an account?', 'Yes. Public visitors can search and view available service providers before deciding to log in or register.'],
-  ['When do I need an account?', 'You need an account when you want to book, pay, manage requests, or unlock provider contact details.'],
-  ['Who can join as a provider?', 'Hotels, cafes, restaurants, car rental teams, tour operators, venues, and other travel-related service providers can register.'],
-  ['How does SafarisCon protect bookings?', 'The booking flow keeps provider details structured, records payment steps, and gives customers confirmation documents for their service.'],
+  ['home.faq1q', 'home.faq1a'],
+  ['home.faq2q', 'home.faq2a'],
+  ['home.faq3q', 'home.faq3a'],
+  ['home.faq4q', 'home.faq4a'],
 ];
 
 export default function HomePage() {
@@ -49,7 +48,7 @@ export default function HomePage() {
             hotel.serviceCategory || hotel.type,
             {
               value: hotel.serviceCategory || hotel.type,
-              label: formatLabel(hotel.serviceCategory || hotel.type),
+              label: translateCategory(hotel.serviceCategory || hotel.type, language),
             },
           ])
         ).values(),
@@ -68,7 +67,7 @@ export default function HomePage() {
       setHotels(normalizeHotels(response.businesses || response.hotels || []));
     } catch (error) {
       setHotels([]);
-      setServicesError(error.message || 'Unable to load registered services.');
+      setServicesError(error.message || t('unableToLoadServices', language));
     } finally {
       if (!silent) setLoadingHotels(false);
     }
@@ -88,7 +87,7 @@ export default function HomePage() {
     );
   }, []);
 
-  const seo = getHomeSeo();
+  const seo = getHomeSeo(language);
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-slate-950 dark:bg-slate-950 dark:text-slate-100">
@@ -108,32 +107,32 @@ export default function HomePage() {
         <div className="relative z-10 mx-auto grid min-h-[620px] max-w-7xl items-center gap-8 px-4 py-12 lg:grid-cols-[minmax(0,0.92fr)_minmax(22rem,0.58fr)]">
           <div className="max-w-3xl">
             <p className="inline-flex rounded-full border border-white/30 bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-wide text-blue-50 shadow-sm backdrop-blur">
-              Rwanda service marketplace
+              {t('home.badge', language)}
             </p>
             <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-6xl">
-              SafarisCon: book services in Rwanda
+              {t('home.heroTitle', language)}
             </h1>
             <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-lg">
-              Find trusted hotels, cafes, car rentals, venues, tours, and destination services from verified providers. Browse publicly, then create an account when you are ready to book and manage your service.
+              {t('home.heroLead', language)}
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link to="/services" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-primary-dark">
-                Browse available services
+                {t('home.browseAvailable', language)}
               </Link>
               <Link to="/register" className="rounded-xl border border-slate-900 bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-blue-500 dark:hover:text-blue-300">
-                Create account
+                {t('home.createAccount', language)}
               </Link>
               <Link to="/provider-register" className="rounded-xl border border-white/35 bg-white/18 px-5 py-3 text-sm font-black text-white shadow-sm backdrop-blur hover:bg-white/25">
-                Register as provider
+                {t('home.registerAsProvider', language)}
               </Link>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 md:p-8">
-            <p className="mb-3 text-sm font-black text-slate-900 dark:text-white">Search available providers</p>
+            <p className="mb-3 text-sm font-black text-slate-900 dark:text-white">{t('home.searchProviders', language)}</p>
             <SearchBar variant="hero" serviceOptions={serviceOptions} locationOptions={locationOptions} />
             <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
-              <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Accepted payment methods</p>
+              <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('home.acceptedPayments', language)}</p>
               <PaymentMethods compact />
             </div>
           </div>
@@ -148,16 +147,16 @@ export default function HomePage() {
             <img src="/safariscon-about-services.png" alt="SafarisCon service providers collaborating on hotels, tours, and transport in Rwanda" className="h-full min-h-[340px] w-full object-cover" loading="lazy" />
           </div>
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-primary">For customers and providers</p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 dark:text-white md:text-4xl">One organized place for Rwanda travel services</h2>
+            <p className="text-xs font-black uppercase tracking-wide text-primary">{t('home.forCustomersAndProviders', language)}</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 dark:text-white md:text-4xl">{t('home.onePlaceTitle', language)}</h2>
             <p className="mt-4 text-base leading-7 text-slate-600 dark:text-slate-300">
-              SafarisCon connects visitors with service providers who need a professional way to publish offers, receive bookings, and support customers. The platform is built for hotels, cafes, car rentals, tour teams, venues, food services, and travel experience providers.
+              {t('home.onePlaceLead', language)}
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {SERVICE_AREAS.map(([title, description, to]) => (
-                <Link key={title} to={to} className="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-primary hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-500 dark:hover:bg-slate-800">
-                  <strong className="block text-sm text-slate-950 dark:text-white">{title}</strong>
-                  <span className="mt-1 block text-sm leading-6 text-slate-600 dark:text-slate-400">{description}</span>
+              {SERVICE_AREAS.map(([titleKey, descriptionKey, to]) => (
+                <Link key={titleKey} to={to} className="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-primary hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-500 dark:hover:bg-slate-800">
+                  <strong className="block text-sm text-slate-950 dark:text-white">{t(titleKey, language)}</strong>
+                  <span className="mt-1 block text-sm leading-6 text-slate-600 dark:text-slate-400">{t(descriptionKey, language)}</span>
                 </Link>
               ))}
             </div>
@@ -169,7 +168,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4">
           <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-wide text-primary">Available services</p>
+              <p className="text-xs font-black uppercase tracking-wide text-primary">{t('home.availableServices', language)}</p>
               <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">
                 {t('allRegisteredServices', language)}
               </h2>
@@ -199,25 +198,25 @@ export default function HomePage() {
 
       <section className="section-block bg-slate-50 dark:bg-slate-900">
         <div className="mx-auto max-w-6xl px-4">
-          <p className="text-xs font-black uppercase tracking-wide text-primary">Trust & how we work</p>
-          <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">Book services online with SafarisCon</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">{HOME_TRUST_LEAD}</p>
+          <p className="text-xs font-black uppercase tracking-wide text-primary">{t('home.trustEyebrow', language)}</p>
+          <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">{t('home.bookOnlineTitle', language)}</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">{t('home.trustLead', language)}</p>
           <ol className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {HOW_IT_WORKS_STEPS.map(([title, body], index) => (
-              <li key={title} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-950">
-                <p className="text-xs font-black uppercase tracking-wide text-primary">{index + 1}</p>
-                <h3 className="mt-1 font-black text-slate-950 dark:text-white">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{body}</p>
+            {[1, 2, 3, 4, 5, 6].map((step) => (
+              <li key={step} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-950">
+                <p className="text-xs font-black uppercase tracking-wide text-primary">{step}</p>
+                <h3 className="mt-1 font-black text-slate-950 dark:text-white">{t(`howSteps.${step}title`, language)}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{t(`howSteps.${step}body`, language)}</p>
               </li>
             ))}
           </ol>
-          <p className="mt-6 text-sm font-semibold text-slate-700 dark:text-slate-200">{HOME_TRUST_LINE}</p>
-          <p className="mt-2 text-xs text-slate-500">Each listing shows its own cancel window and fee. Defaults are 6 hours and 20%.</p>
+          <p className="mt-6 text-sm font-semibold text-slate-700 dark:text-slate-200">{t('home.trustLine', language)}</p>
+          <p className="mt-2 text-xs text-slate-500">{t('home.cancelNote', language)}</p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link to="/terms" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white">Terms of use</Link>
-            <Link to="/privacy" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">Privacy</Link>
-            <Link to="/payments" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">Payments & refunds</Link>
-            <Link to="/how-it-works" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">How it works</Link>
+            <Link to="/terms" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white">{t('termsOfUse', language)}</Link>
+            <Link to="/privacy" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">{t('privacyPolicy', language)}</Link>
+            <Link to="/payments" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">{t('legal.paymentsTitle', language)}</Link>
+            <Link to="/how-it-works" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800">{t('footer.howItWorks', language)}</Link>
           </div>
         </div>
       </section>
@@ -225,20 +224,20 @@ export default function HomePage() {
       <section id="faqs" className="section-block bg-white dark:bg-slate-950">
         <div className="mx-auto max-w-5xl px-4">
           <div className="text-center">
-            <p className="text-xs font-black uppercase tracking-wide text-primary">FAQs</p>
-            <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">Questions about booking with SafarisCon</h2>
+            <p className="text-xs font-black uppercase tracking-wide text-primary">{t('home.faqEyebrow', language)}</p>
+            <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">{t('home.faqTitle', language)}</h2>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {FAQS.map(([question, answer]) => (
-              <article key={question} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
-                <h3 className="font-black text-slate-950 dark:text-white">{question}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{answer}</p>
+            {FAQS.map(([questionKey, answerKey]) => (
+              <article key={questionKey} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
+                <h3 className="font-black text-slate-950 dark:text-white">{t(questionKey, language)}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{t(answerKey, language)}</p>
               </article>
             ))}
           </div>
           <div className="mt-8 flex justify-center gap-3">
-            <Link to="/login" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">Login</Link>
-            <Link to="/register" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white hover:bg-primary-dark">Get started</Link>
+            <Link to="/login" className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-800 hover:border-primary hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">{t('login', language)}</Link>
+            <Link to="/register" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white hover:bg-primary-dark">{t('home.getStarted', language)}</Link>
           </div>
         </div>
       </section>
@@ -249,10 +248,3 @@ export default function HomePage() {
   );
 }
 
-function formatLabel(value) {
-  return String(value || 'service')
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}

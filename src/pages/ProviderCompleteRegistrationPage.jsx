@@ -71,7 +71,7 @@ export default function ProviderCompleteRegistrationPage() {
         if (redirectIfDone) {
           navigate('/login', {
             replace: true,
-            state: { message: 'This provider account is already completed. Sign in with your email and password.' },
+          state: { message: t('providerAlreadyCompleted', language) },
           });
         }
         return;
@@ -79,11 +79,11 @@ export default function ProviderCompleteRegistrationPage() {
       setLockedProfile(false);
       setLookupStatus('error');
       if (requestError.status === 404) {
-        setError('That seller ID was not found. Use the exact ID from your invite email.');
+        setError(t('sellerIdNotFound', language));
         return;
       }
       if (requestError.status === 400) {
-        setError('Enter the seller ID from your invite email to load your provider details.');
+        setError(t('enterSellerIdInvite', language));
         return;
       }
       setError(requestError.message);
@@ -105,7 +105,7 @@ export default function ProviderCompleteRegistrationPage() {
     event.preventDefault();
     setError('');
     if (!acceptedTerms) {
-      setError('You must accept the Terms of use and Privacy policy before creating an account.');
+      setError(t('mustAcceptTerms', language));
       return;
     }
     if (form.newPassword !== form.confirmPassword) {
@@ -113,7 +113,7 @@ export default function ProviderCompleteRegistrationPage() {
       return;
     }
     if (form.newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setError(t('passwordMinLength8', language));
       return;
     }
     const businessName = form.providerName.trim();
@@ -122,7 +122,7 @@ export default function ProviderCompleteRegistrationPage() {
     const providerId = String(payout.providerId || '').trim();
     const method = payout.method === 'bank' ? 'bank' : 'momo';
     if (!businessName || !method || !providerId || !accountName || !accountNumber) {
-      setError('Add your business name and MoMo or bank payout details so this provider can receive booking payments.');
+      setError(t('payoutRequired', language));
       return;
     }
 
@@ -156,7 +156,7 @@ export default function ProviderCompleteRegistrationPage() {
       if (requestError.code === 'ONBOARDING_ALREADY_COMPLETED' || requestError.status === 409) {
         navigate('/login', {
           replace: true,
-          state: { message: 'This provider account is already completed. Sign in with your email and password.' },
+          state: { message: t('providerAlreadyCompleted', language) },
         });
         return;
       }
@@ -170,9 +170,9 @@ export default function ProviderCompleteRegistrationPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <SeoHead {...getProviderRegisterSeo()} />
+      <SeoHead {...getProviderRegisterSeo(language)} />
       <Navbar />
-      <SeoBreadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Become a provider' }]} />
+      <SeoBreadcrumbs items={[{ label: t('navigation.home', language), to: '/' }, { label: t('becomeAProvider', language) }]} />
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
@@ -180,12 +180,12 @@ export default function ProviderCompleteRegistrationPage() {
           </h1>
           <div className="mb-4 p-3 bg-blue-50 text-blue-900 rounded-lg text-sm">
             {querySellerId
-              ? 'Confirm your seller ID, create a password, accept the terms, and add payout details. Name and email come from your admin invite.'
+              ? t('inviteWithPayout', language)
               : t('adminProviderDetails', language)}
           </div>
 
           {lookupStatus === 'loading' && (
-            <p className="mb-4 text-sm font-semibold text-blue-800">Loading your invite details...</p>
+            <p className="mb-4 text-sm font-semibold text-blue-800">{t('loadingInvite', language)}</p>
           )}
 
           {error && (
@@ -230,35 +230,35 @@ export default function ProviderCompleteRegistrationPage() {
                 }}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl"
               />
-              <span className="mt-1 block text-xs text-gray-500">Type the seller ID from your invite email to confirm it.</span>
+              <span className="mt-1 block text-xs text-gray-500">{t('sellerIdHint', language)}</span>
             </label>
             <input type="password" required minLength={8} placeholder={t('createPassword', language)} value={form.newPassword} onChange={updateField('newPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
             <input type="password" required minLength={8} placeholder={t('confirmPassword', language)} value={form.confirmPassword} onChange={updateField('confirmPassword')} className="w-full px-4 py-3 border border-gray-300 rounded-xl" />
 
             <fieldset className="space-y-3 rounded-xl border border-gray-200 p-4">
-              <legend className="px-1 text-sm font-bold text-gray-900">Payout details *</legend>
-              <p className="text-xs text-gray-600">Required so SafarisCon can pay you after the guest cancel window. Customers never see these details.</p>
+              <legend className="px-1 text-sm font-bold text-gray-900">{t('payoutDetailsLegend', language)}</legend>
+              <p className="text-xs text-gray-600">{t('payoutDetailsHelp', language)}</p>
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Payout method</span>
+                <span className="mb-1 block text-sm font-medium text-gray-700">{t('payoutMethod', language)}</span>
                 <select
                   required
                   value={payout.method}
                   onChange={(event) => setPayout((previous) => ({ ...previous, method: event.target.value, providerId: '' }))}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3"
                 >
-                  <option value="momo">Mobile Money</option>
-                  <option value="bank">Bank</option>
+                  <option value="momo">{t('mobileMoney', language)}</option>
+                  <option value="bank">{t('bank', language)}</option>
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Provider</span>
+                <span className="mb-1 block text-sm font-medium text-gray-700">{t('providerLabel', language)}</span>
                 <select
                   required
                   value={payout.providerId}
                   onChange={(event) => setPayout((previous) => ({ ...previous, providerId: event.target.value }))}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3"
                 >
-                  <option value="">Select provider</option>
+                  <option value="">{t('selectProvider', language)}</option>
                   {payoutProviders.map((provider) => {
                     const id = String(provider.id || provider.providerId || provider.code || '');
                     return <option key={id || provider.name} value={id}>{provider.name}</option>;
@@ -268,7 +268,7 @@ export default function ProviderCompleteRegistrationPage() {
               <input
                 type="text"
                 required
-                placeholder="Account name"
+                placeholder={t('accountName', language)}
                 value={payout.accountName}
                 onChange={(event) => setPayout((previous) => ({ ...previous, accountName: event.target.value }))}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl"
@@ -276,7 +276,7 @@ export default function ProviderCompleteRegistrationPage() {
               <input
                 type="text"
                 required
-                placeholder={payout.method === 'bank' ? 'Account number' : 'MoMo number'}
+                placeholder={payout.method === 'bank' ? t('accountNumber', language) : t('payment.momoNumber', language)}
                 value={payout.accountNumber}
                 onChange={(event) => setPayout((previous) => ({ ...previous, accountNumber: event.target.value }))}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl"

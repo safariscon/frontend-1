@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { t } from '../lib/translations';
+import { t, translateCategory } from '../lib/translations';
 import { guestCancelCopy } from '../lib/payments';
 
 export default function HotelCard({ hotel, compact = false, showProvider = false }) {
@@ -9,8 +9,8 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
   const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
   const isNotAvailable = hotel.status === 'unavailable';
   const availabilityText = isNotAvailable
-    ? 'Not Available'
-    : hotel.primaryService?.availabilityText || 'Available';
+    ? t('catalog.notAvailable', language)
+    : hotel.primaryService?.availabilityText || t('details.available', language);
   const promotion = getVisiblePromotion(hotel.promotion);
 
   return (
@@ -22,12 +22,12 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
         {hotel.image ? (
           <img
             src={hotel.image}
-            alt={`${hotel.name}${hotel.location ? ` in ${hotel.location}` : ''} on SafarisCon`}
+            alt={`${hotel.name}${hotel.location ? `, ${hotel.location}` : ''} · SafarisCon`}
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-slate-400">
-            No seller image uploaded
+            {t('catalog.noImage', language)}
           </div>
         )}
         {hotel.isFeatured && (
@@ -37,12 +37,12 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
         )}
         {isNotAvailable && (
           <div className="absolute left-3 top-3 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
-            Not Available
+            {t('catalog.notAvailable', language)}
           </div>
         )}
         {promotion && (
           <div className="service-promotion-badge absolute right-3 top-3 rounded-full border border-amber-400 bg-amber-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-amber-700 shadow-lg dark:border-amber-500/70 dark:bg-amber-950 dark:text-amber-200">
-            Promotion
+            {t('catalog.promotion', language)}
           </div>
         )}
       </div>
@@ -53,7 +53,7 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
             {hotel.name}
           </h3>
           <span className="text-right text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {formatBusinessType(hotel.type)}
+            {translateCategory(hotel.type, language)}
           </span>
         </div>
 
@@ -80,9 +80,9 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
               </span>
               <div>
                 <h4 className="font-black text-amber-700 dark:text-amber-200">{promotion.title}</h4>
-                <p className="mt-1 text-sm text-slate-800 dark:text-amber-50">Save {promotion.percent}% on this service.</p>
+                <p className="mt-1 text-sm text-slate-800 dark:text-amber-50">{t('details.savePercent', language, { percent: promotion.percent })}</p>
                 {promotion.note && <p className="mt-1 text-sm text-slate-700 dark:text-amber-100">{promotion.note}</p>}
-                <p className="mt-2 text-xs font-semibold text-orange-600 dark:text-amber-300">Valid {formatPromotionDate(promotion.startAt)} to {formatPromotionDate(promotion.endAt)}</p>
+                <p className="mt-2 text-xs font-semibold text-orange-600 dark:text-amber-300">{t('details.valid', language, { start: formatPromotionDate(promotion.startAt, language), end: formatPromotionDate(promotion.endAt, language) })}</p>
               </div>
             </div>
           </div>
@@ -106,9 +106,9 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
 
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {formatBusinessType(hotel.serviceCategory)} / {formatBusinessType(hotel.bookingModel)}
+            {translateCategory(hotel.serviceCategory, language)} / {translateCategory(hotel.bookingModel, language)}
           </span>
-          <span className="card-action font-bold text-primary dark:text-blue-300">View services -&gt;</span>
+          <span className="card-action font-bold text-primary dark:text-blue-300">{t('catalog.viewServices', language)} -&gt;</span>
         </div>
       </div>
     </Link>
@@ -126,18 +126,10 @@ function getVisiblePromotion(promotion) {
   return { ...promotion, percent, note: promotion.note || promotion.description || '' };
 }
 
-function formatPromotionDate(value) {
+function formatPromotionDate(value, language) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'as scheduled';
+  if (Number.isNaN(date.getTime())) return t('catalog.asScheduled', language);
   return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function formatBusinessType(value) {
-  return String(value || 'service')
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 function StarIcon() {

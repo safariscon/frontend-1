@@ -35,20 +35,20 @@ export default function SearchBar({ variant = 'compact', locationOptions = [], c
     >
       <div>
         <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="service-input">
-          {variant === 'hero' ? 'Book travel experiences and related services' : t('serviceName', language)}
+          {variant === 'hero' ? t('searchBar.serviceLabel', language) : t('serviceName', language)}
         </label>
           <input
             id="service-input"
             value={serviceName}
             onChange={(event) => setServiceName(event.target.value)}
-            placeholder={t('serviceNamePlaceholder', language) === 'serviceNamePlaceholder' ? 'e.g. Car rental, Tour guide, Hotel...' : t('serviceNamePlaceholder', language)}
+            placeholder={t('searchBar.placeholder', language)}
             className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
           />
       </div>
 
       <div>
         <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="location-input">
-          {variant === 'hero' ? 'Where?' : t('location', language)}
+          {variant === 'hero' ? t('searchBar.where', language) : t('searchBar.location', language)}
         </label>
         <select
           id="location-input"
@@ -56,7 +56,7 @@ export default function SearchBar({ variant = 'compact', locationOptions = [], c
           onChange={(event) => setLocation(event.target.value)}
           className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
         >
-          <option value="">City / area</option>
+          <option value="">{t('searchBar.cityArea', language)}</option>
           {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       </div>
@@ -67,7 +67,7 @@ export default function SearchBar({ variant = 'compact', locationOptions = [], c
         type="submit"
         className="search-button w-full rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-primary-dark"
       >
-        Search Services
+        {t('searchBar.searchServices', language)}
       </button>
     </form>
   );

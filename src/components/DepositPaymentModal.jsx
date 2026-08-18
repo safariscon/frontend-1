@@ -5,8 +5,11 @@ import { formatRwf } from '../lib/currency';
 import { paymentsApi } from '../lib/api';
 import { amountDueNow, remainingAtVenue, toCollectionMethod } from '../lib/payments';
 import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function DepositPaymentModal({ booking, customer, onClose, onConfirm }) {
+  const { language } = useLanguage();
   const [catalog, setCatalog] = useState(null);
   const [method, setMethod] = useState('momo');
   const [account, setAccount] = useState(customer?.phone || '');
@@ -41,15 +44,15 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
 
   const due = amountDueNow(booking);
   const remaining = remainingAtVenue(booking);
-  const serviceName = booking.priceSnapshot?.name || booking.bookingDetails?.requestedService || booking.destinationPlace || 'Selected service';
+  const serviceName = booking.priceSnapshot?.name || booking.bookingDetails?.requestedService || booking.destinationPlace || t('payment.selectedService', language);
   const people = booking.bookingDetails?.numberOfPeople ?? booking.numberOfPeople ?? booking.priceSnapshot?.people ?? 1;
   const quantity = booking.quantity ?? booking.bookingDetails?.quantity ?? booking.priceSnapshot?.quantity ?? 1;
   const totalUnits = booking.totalConsumptionUnits ?? booking.bookingDetails?.totalConsumptionUnits ?? Number(people || 1) * Number(quantity || 1);
   const methods = catalog?.collectionMethods?.length
     ? catalog.collectionMethods
     : [
-        { id: 'momo', name: 'Mobile Money' },
-        { id: 'cc', name: 'Card' },
+        { id: 'momo', name: t('booking.mobileMoney', language) },
+        { id: 'cc', name: t('booking.card', language) },
       ];
 
   const submit = async (event) => {
@@ -61,13 +64,13 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
       const digits = account.replace(/\D/g, '');
       const normalized = digits.startsWith('250') ? `0${digits.slice(3, 12)}` : digits.length === 9 ? `0${digits}` : digits.slice(-10);
       if (!/^07\d{8}$/.test(normalized)) {
-        setError('Enter a 10-digit Mobile Money number such as 07XXXXXXXX.');
+        setError(t('payment.invalidMomo', language));
         setSubmitting(false);
         return;
       }
     }
     try {
-      setStatusNote(pmethod === 'cc' ? 'Opening card checkout…' : 'Ask the customer to approve the prompt on their phone.');
+      setStatusNote(pmethod === 'cc' ? t('payment.openingCard', language) : t('payment.approvePrompt', language));
       await onConfirm({
         paymentMethod: pmethod,
         pmethod,
@@ -78,7 +81,7 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
       });
     } catch (requestError) {
       trackAnalytics(ANALYTICS_EVENTS.PAYMENT_FAILED, { serviceId, bookingId: booking._id });
-      setError(requestError.message || 'Payment could not be completed.');
+      setError(requestError.message || t('payment.couldNotComplete', language));
       setStatusNote('');
       setSubmitting(false);
     }
@@ -92,51 +95,52 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
             <div className="flex gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/15 text-xl">▣</span>
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-100">Secure booking payment</p>
-                <h2 id="deposit-payment-title" className="mt-1 text-2xl font-black">Pay in full</h2>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-100">{t('payment.secureTitle', language)}</p>
+                <h2 id="deposit-payment-title" className="mt-1 text-2xl font-black">{t('payment.payInFull', language)}</h2>
               </div>
             </div>
-            <button type="button" disabled={submitting} onClick={closeAsCancelled} aria-label="Close payment" className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-xl font-bold hover:bg-white/25 disabled:opacity-50">×</button>
+            <button type="button" disabled={submitting} onClick={closeAsCancelled} aria-label={t('payment.closePayment', language)} className="grid h-9 w-9 place-items-center rounded-full bg-white/15 text-xl font-bold hover:bg-white/25 disabled:opacity-50">×</button>
           </div>
         </div>
 
         <div className="p-6">
           <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-600">Booking summary</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-600">{t('payment.bookingSummary', language)}</p>
             <h3 className="mt-1 font-black text-blue-950">{serviceName}</h3>
             <div className="mt-4 grid grid-cols-2 gap-3 text-center">
-              <PaymentAmount label="Pay now" value={formatRwf(due)} primary />
-              <PaymentAmount label="Remaining at venue" value={formatRwf(remaining)} />
+              <PaymentAmount label={t('payment.payNow', language)} value={formatRwf(due)} primary />
+              <PaymentAmount label={t('payment.remainingAtVenue', language)} value={formatRwf(remaining)} />
             </div>
             <div className="mt-3 grid grid-cols-3 gap-3 text-center">
-              <PaymentAmount label="People" value={people} />
-              <PaymentAmount label="Quantity" value={quantity} />
-              <PaymentAmount label="Total units" value={totalUnits} />
+              <PaymentAmount label={t('payment.people', language)} value={people} />
+              <PaymentAmount label={t('payment.quantity', language)} value={quantity} />
+              <PaymentAmount label={t('payment.totalUnits', language)} value={totalUnits} />
             </div>
           </div>
 
           <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-            You pay the full amount now. Money is held until the cancel window ends. See{' '}
-            <Link to="/payments" className="font-bold text-primary hover:underline">Payments & refunds</Link>.
+            {t('payment.payFullNote', language, { link: '___LINK___' }).split('___LINK___')[0]}
+            <Link to="/payments" className="font-bold text-primary hover:underline">{t('payment.paymentsRefunds', language)}</Link>
+            {t('payment.payFullNote', language, { link: '___LINK___' }).split('___LINK___')[1]}
           </p>
 
           {booking.paymentReason && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">{booking.paymentReason}</p>}
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-2 text-sm font-bold text-slate-700">Payment method
+            <label className="grid gap-2 text-sm font-bold text-slate-700">{t('payment.paymentMethod', language)}
               <select value={method} onChange={(event) => setMethod(event.target.value)} className="rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
                 {methods.map((item) => (
                   <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             </label>
-            <label className="grid gap-2 text-sm font-bold text-slate-700">Name on payment
+            <label className="grid gap-2 text-sm font-bold text-slate-700">{t('payment.nameOnPayment', language)}
               <input required value={name} onChange={(event) => setName(event.target.value)} className="rounded-xl border border-slate-300 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
             </label>
-            <label className="grid gap-2 text-sm font-bold text-slate-700">Email
+            <label className="grid gap-2 text-sm font-bold text-slate-700">{t('email', language)}
               <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="rounded-xl border border-slate-300 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
             </label>
-            <label className="grid gap-2 text-sm font-bold text-slate-700">{toCollectionMethod(method) === 'cc' ? 'Phone' : 'MoMo number (07XXXXXXXX)'}
+            <label className="grid gap-2 text-sm font-bold text-slate-700">{toCollectionMethod(method) === 'cc' ? t('phone', language) : t('payment.momoNumberHint', language)}
               <input required autoFocus value={account} onChange={(event) => setAccount(event.target.value)} placeholder="0780371519" className="rounded-xl border border-slate-300 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
             </label>
           </div>
@@ -145,9 +149,9 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
           {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
 
           <button disabled={submitting} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">
-            <span aria-hidden="true">▣</span>{submitting ? 'Processing payment…' : `Pay ${formatRwf(due)} securely`}
+            <span aria-hidden="true">▣</span>{submitting ? t('payment.processing', language) : t('payment.paySecurely', language, { amount: formatRwf(due) })}
           </button>
-          <p className="mt-3 text-center text-xs font-medium text-slate-500">Provider details, booking PDF, and QR confirmation unlock only after successful payment. The hotel is not paid at this moment.</p>
+          <p className="mt-3 text-center text-xs font-medium text-slate-500">{t('payment.unlockNote', language)}</p>
         </div>
       </form>
     </div>,

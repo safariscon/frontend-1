@@ -7,6 +7,8 @@ import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../li
 import { SERVICE_CATEGORY_TUPLES as BUSINESS_TYPE_GROUPS } from '../data/serviceCategories';
 import AdminRebookRequests from '../components/rebook/AdminRebookRequests';
 import { isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 const EMPTY_PROVIDER_FORM = {
   providerName: '',
@@ -32,6 +34,7 @@ function buildTransactionQuery(filters) {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const navigate = useNavigate();
   const { section } = useParams();
   const view = ['users', 'services', 'bookings', 'revenue'].includes(section) ? section : 'dashboard';
@@ -333,11 +336,11 @@ export default function AdminDashboard() {
       sellerId: item.sellerId,
     }));
   const pageMeta = {
-    dashboard: { title: 'Analytics', subtitle: 'Marketplace activity.' },
-    users: { title: 'Users', subtitle: 'Manage system users.' },
-    services: { title: 'Services', subtitle: 'Review pending and approved listings.' },
-    bookings: { title: 'Bookings', subtitle: 'Manage bookings.' },
-    revenue: { title: 'Revenue', subtitle: 'Track payments and payouts.' },
+    dashboard: { title: t('admin.analyticsTitle', language), subtitle: t('admin.analyticsSubtitle', language) },
+    users: { title: t('admin.usersTitle', language), subtitle: t('admin.usersSubtitle', language) },
+    services: { title: t('admin.servicesTitle', language), subtitle: t('admin.servicesSubtitle', language) },
+    bookings: { title: t('admin.bookingsTitle', language), subtitle: t('admin.bookingsSubtitle', language) },
+    revenue: { title: t('admin.revenueTitle', language), subtitle: t('admin.revenueSubtitle', language) },
   }[view];
 
   return (
@@ -352,10 +355,10 @@ export default function AdminDashboard() {
             <div className="flex gap-2">
               {view === 'users' && (
                 <button type="button" onClick={() => setShowCreateProvider((open) => !open)} className="px-5 py-3 rounded-xl bg-primary text-white font-semibold">
-                  {showCreateProvider ? 'Close' : 'Create Provider'}
+                  {showCreateProvider ? t('admin.close', language) : t('admin.createProvider', language)}
                 </button>
               )}
-              <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
+              <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">{t('admin.refresh', language)}</button>
             </div>
           </div>
 
@@ -364,10 +367,10 @@ export default function AdminDashboard() {
             <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-bold">Provider onboarding details</h2>
+                  <h2 className="font-bold">{t('admin.onboardingDetails', language)}</h2>
                   <CredentialEmailBadge credentialEmail={onboardingCredentials.credentialEmail} />
                 </div>
-                <button type="button" onClick={() => setOnboardingCredentials(null)} className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-emerald-800">Hide</button>
+                <button type="button" onClick={() => setOnboardingCredentials(null)} className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-emerald-800">{t('admin.close', language)}</button>
               </div>
               <p>
                 Share the invite link if the email is delayed. The provider only needs to confirm the seller ID, set a password, and add payout details.
@@ -375,34 +378,34 @@ export default function AdminDashboard() {
                 {onboardingCredentials.credentialEmail?.warning && ' Email delivery failed, so share the link and seller ID manually.'}
               </p>
               <dl className="mt-3 grid gap-2 md:grid-cols-2">
-                <Credential label="Provider Name" value={onboardingCredentials.providerName} />
-                <Credential label="Provider Email" value={onboardingCredentials.providerEmail} />
-                <Credential label="Seller ID" value={onboardingCredentials.sellerId} />
-                <Credential label="Registration URL" value={onboardingCredentials.registrationUrl} copyable />
+                <Credential label={t('providerName', language)} value={onboardingCredentials.providerName} />
+                <Credential label={t('providerEmail', language)} value={onboardingCredentials.providerEmail} />
+                <Credential label={t('profilePage.sellerId', language)} value={onboardingCredentials.sellerId} />
+                <Credential label={t('prefilledRegistrationLink', language)} value={onboardingCredentials.registrationUrl} copyable />
               </dl>
             </div>
           )}
 
           {view === 'dashboard' && (
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-              <Metric label="Users" value={stats?.totalUsers ?? users.length} />
-              <Metric label="Services" value={services.length} />
-              <Metric label="Bookings" value={stats?.totalBookings ?? bookings.length} />
-              <Metric label="Revenue" value={`${Number(stats?.totalRevenue ?? 0).toLocaleString()} RWF`} />
-              <Metric label="Pending" value={stats?.pendingApprovals ?? services.filter((item) => serviceApprovalStatus(item) === 'pending').length} />
+              <Metric label={t('admin.users', language)} value={stats?.totalUsers ?? users.length} />
+              <Metric label={t('dash.services', language)} value={services.length} />
+              <Metric label={t('dash.bookings', language)} value={stats?.totalBookings ?? bookings.length} />
+              <Metric label={t('dash.revenue', language)} value={`${Number(stats?.totalRevenue ?? 0).toLocaleString()} RWF`} />
+              <Metric label={t('pending', language)} value={stats?.pendingApprovals ?? services.filter((item) => serviceApprovalStatus(item) === 'pending').length} />
             </div>
           )}
 
           {view === 'bookings' && (
             <div className="mb-6 flex gap-2 overflow-x-auto">
-              {[['bookings', 'Bookings'], ['rebook-requests', 'Re-book requests'], ['verification', 'Verification']].map(([id, label]) => (
+              {[['bookings', t('dash.bookings', language)], ['rebook-requests', t('admin.rebookRequests', language)], ['verification', t('verify.title', language)]].map(([id, label]) => (
                 <button key={id} type="button" onClick={() => setBookingSubTab(id)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${bookingSubTab === id ? 'bg-primary text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>{label}</button>
               ))}
             </div>
           )}
 
           <section className="bg-white rounded-2xl shadow-sm p-4">
-            {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
+            {loading ? <p className="p-4 text-gray-600">{t('sellerDash.loadingDashboard', language)}</p> : null}
             {!loading && view === 'dashboard' && <AnalyticsDashboard token={token} />}
             {!loading && view === 'users' && (
               <div className="space-y-6">
@@ -499,31 +502,33 @@ function CredentialEmailBadge({ credentialEmail }) {
 }
 
 function BusinessTable({ businesses, onApprove, onReview, onDelete, onView }) {
-  return <SimpleTable rows={businesses} columns={['Business', 'Type', 'Location', 'Status', 'Actions']} map={(business) => [
+  const { language } = useLanguage();
+  return <SimpleTable rows={businesses} columns={[t('customerDash.business', language), t('type', language), t('locationLabel', language), t('status', language), t('actions', language)]} map={(business) => [
     business.businessName || business.name,
     business.businessType || business.type,
     business.location,
-    business.approvalStatus || business.verificationStatus || 'pending',
+    business.approvalStatus || business.verificationStatus || t('pending', language),
     <div className="flex flex-wrap gap-2">
-      <button onClick={() => onView(business)} className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">View</button>
-      <button onClick={() => onApprove(business)} className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">Post</button>
-      <button onClick={() => onReview(business._id || business.id, 'rejected')} className="rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">Reject</button>
-      <button onClick={() => onDelete(business._id || business.id)} className="rounded-lg bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">Delete</button>
+      <button onClick={() => onView(business)} className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{t('view', language)}</button>
+      <button onClick={() => onApprove(business)} className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">{t('admin.approve', language)}</button>
+      <button onClick={() => onReview(business._id || business.id, 'rejected')} className="rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">{t('admin.reject', language)}</button>
+      <button onClick={() => onDelete(business._id || business.id)} className="rounded-lg bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{t('delete', language)}</button>
     </div>,
   ]} />;
 }
 
 function BusinessApprovalModal({ business, defaultCommission, onApprove, onClose }) {
+  const { language } = useLanguage();
   const [commissionPercentage, setCommissionPercentage] = useState(business.commissionPercentage ?? defaultCommission ?? 5);
   return (
-    <Modal title="Approve Business" onClose={onClose}>
+    <Modal title={t('admin.approveListing', language)} onClose={onClose}>
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
         <p className="text-sm font-bold text-blue-950">{business.businessName || business.name}</p>
         <p className="mt-1 text-sm text-blue-800">Set the private platform commission before posting this provider. The provider will receive these terms by email after approval.</p>
       </div>
       <div className="mt-4">
         <AdminInput
-          label="Commission percentage"
+          label={t('admin.defaultCommission', language)}
           type="number"
           value={commissionPercentage}
           onChange={setCommissionPercentage}
@@ -532,34 +537,35 @@ function BusinessApprovalModal({ business, defaultCommission, onApprove, onClose
         />
       </div>
       <div className="mt-5 flex justify-end gap-3">
-        <button type="button" onClick={onClose} className="rounded-xl border border-gray-200 px-5 py-3 font-bold text-gray-700">Cancel</button>
-        <button type="button" disabled={Number(commissionPercentage) < 0} onClick={() => onApprove(commissionPercentage)} className="rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Approve and post</button>
+        <button type="button" onClick={onClose} className="rounded-xl border border-gray-200 px-5 py-3 font-bold text-gray-700">{t('cancel', language)}</button>
+        <button type="button" disabled={Number(commissionPercentage) < 0} onClick={() => onApprove(commissionPercentage)} className="rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{t('admin.approve', language)}</button>
       </div>
     </Modal>
   );
 }
 
 function ServiceTable({ services, providers, search, setSearch, providerId, setProviderId, statusFilter, setStatusFilter, onView, onModeChange, globalBookingMode, updatingModeId, modeErrors }) {
+  const { language } = useLanguage();
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search services" className="rounded-xl border border-gray-300 px-4 py-3 text-sm" />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('searchBar.searchServices', language)} className="rounded-xl border border-gray-300 px-4 py-3 text-sm" />
         <select value={providerId} onChange={(event) => setProviderId(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-3 text-sm">
-          <option value="">All providers</option>
+          <option value="">{t('catalog.allProviders', language)}</option>
           {providers.map((provider) => (
             <option key={provider._id || provider.id || provider.sellerId} value={provider._id || provider.id || provider.sellerId}>
-              {provider.name || provider.providerName || provider.sellerId || 'Provider'}
+              {provider.name || provider.providerName || provider.sellerId || t('providerLabel', language)}
             </option>
           ))}
         </select>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-3 text-sm">
-          <option value="all">Pending and approved</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
+          <option value="all">{t('sellerDash.all', language)}</option>
+          <option value="pending">{t('pending', language)}</option>
+          <option value="approved">{t('rebook.approved', language)}</option>
+          <option value="rejected">{t('rejected', language)}</option>
         </select>
       </div>
-      <SimpleTable rows={services} columns={['Service', 'Provider', 'Category', 'Approval', 'Availability', 'Booking mode', 'Actions']} map={(service) => [
+      <SimpleTable rows={services} columns={[t('sellerDash.service', language), t('providerLabel', language), t('sellerDash.category', language), t('admin.approve', language), t('sellerDash.availability', language), t('admin.bookingMode', language), t('actions', language)]} map={(service) => [
         service.title || service.name,
         service.providerName || service.provider?.name || service.sellerName || service.sellerId || '—',
         service.serviceType || service.category,
@@ -567,19 +573,20 @@ function ServiceTable({ services, providers, search, setSearch, providerId, setP
         service.availabilityText || (service.availableQuantity ?? 0),
         <div key={`${service._id}-mode`} className="grid gap-1">
           <select disabled={String(updatingModeId) === String(service._id || service.id)} value={service.bookingMode || 'manual'} onChange={(event) => onModeChange(service, event.target.value)} className="rounded-lg border border-blue-300 bg-white px-2 py-1 text-xs font-bold text-blue-950 disabled:opacity-50">
-            <option value="manual">Manual</option>
-            <option value="automatic">Automatic</option>
+            <option value="manual">{t('admin.manual', language)}</option>
+            <option value="automatic">{t('admin.automatic', language)}</option>
           </select>
-          <span className="text-[10px] font-semibold text-slate-500">{String(updatingModeId) === String(service._id || service.id) ? 'Saving mode…' : globalBookingMode === 'service-level' ? 'Effective for this service' : `Global override: ${globalBookingMode}`}</span>
+          <span className="text-[10px] font-semibold text-slate-500">{String(updatingModeId) === String(service._id || service.id) ? t('savingEllipsis', language) : globalBookingMode === 'service-level' ? t('admin.serviceLevel', language) : `${t('admin.globalMode', language)}: ${globalBookingMode}`}</span>
           {modeErrors[service._id || service.id] && <span className="max-w-56 text-[10px] font-semibold leading-4 text-red-600">{modeErrors[service._id || service.id]}</span>}
         </div>,
-        <button key={`${service._id}-view`} type="button" onClick={() => onView(service)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white">View details</button>,
+        <button key={`${service._id}-view`} type="button" onClick={() => onView(service)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white">{t('sellerDash.viewDetails', language)}</button>,
       ]} />
     </div>
   );
 }
 
 function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelected, onDeleteOne }) {
+  const { language } = useLanguage();
   const [roleFilter, setRoleFilter] = useState('all');
   const selectedSet = new Set(selectedUserIds);
   const toggleUser = (userId) => {
@@ -637,13 +644,13 @@ function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelect
             user.name,
             user.email,
             user.sellerId || '-',
-            isSellerRole(user.role) ? 'Service provider' : user.role === 'admin' ? 'Admin' : 'Customer',
+            isSellerRole(user.role) ? t('serviceProviderRole', language) : user.role === 'admin' ? 'Admin' : t('sellerDash.customer', language),
             <button
               type="button"
               onClick={() => onDeleteOne(user._id || user.id)}
               className="rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-700"
             >
-              Delete
+              {t('delete', language)}
             </button>,
           ]} />
         </section>
@@ -653,22 +660,24 @@ function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelect
 }
 
 function BookingTable({ bookings, onView }) {
-  return <SimpleTable rows={bookings} columns={['Booking ID', 'Code', 'Customer', 'Service', 'Business', 'Status', 'Payment', 'Completed', 'Actions']} map={(booking) => [
+  const { language } = useLanguage();
+  return <SimpleTable rows={bookings} columns={[t('sellerDash.bookingId', language), t('bookingCode', language), t('sellerDash.customer', language), t('sellerDash.service', language), t('customerDash.business', language), t('status', language), t('sellerDash.payment', language), t('completed', language), t('actions', language)]} map={(booking) => [
     booking._id,
     booking.bookingCode || booking._id?.slice(-8),
-    booking.userId?.name || booking.touristId?.name || booking.userId?.email || booking.touristId?.email || 'Customer',
+    booking.userId?.name || booking.touristId?.name || booking.userId?.email || booking.touristId?.email || t('sellerDash.customer', language),
     booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace,
     booking.businessId?.businessName || booking.businessId?.name || booking.hotelId?.name || booking.preferredHotelId?.name || '-',
     booking.status,
     booking.paymentStatus || 'unpaid',
     booking.completedAt ? new Date(booking.completedAt).toLocaleString() : '-',
     <div className="flex flex-wrap gap-2">
-      <button type="button" onClick={() => onView(booking)} className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">View</button>
+      <button type="button" onClick={() => onView(booking)} className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{t('view', language)}</button>
     </div>,
   ]} />;
 }
 
 function RevenueList({ revenueByType, transactions, summary, financeSummary, payouts = [], payoutStatusFilter, setPayoutStatusFilter, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect, onSync }) {
+  const { language } = useLanguage();
   const entries = Object.entries(revenueByType);
   const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value, page: key === 'page' ? value : 1 }));
   const finance = financeSummary || {};
@@ -679,15 +688,15 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
           <AdminInput label="From" type="date" value={filters.from} onChange={(value) => updateFilter('from', value)} />
           <AdminInput label="To" type="date" value={filters.to} onChange={(value) => updateFilter('to', value)} />
           <label className="block">
-            <span className="text-sm font-semibold text-gray-700">Payment status</span>
+            <span className="text-sm font-semibold text-gray-700">{t('customerDash.paymentStatus', language)}</span>
             <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3">
-              <option value="">All statuses</option>
-              <option value="paid">Paid</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
+              <option value="">{t('sellerDash.all', language)}</option>
+              <option value="paid">{t('customerDash.paid', language)}</option>
+              <option value="pending">{t('pending', language)}</option>
+              <option value="failed">{t('payment.failed', language)}</option>
             </select>
           </label>
-          <button type="button" onClick={onRefresh} className="rounded-xl bg-primary px-5 py-3 font-bold text-white">Refresh</button>
+          <button type="button" onClick={onRefresh} className="rounded-xl bg-primary px-5 py-3 font-bold text-white">{t('admin.refresh', language)}</button>
         </div>
       </div>
       <div className="rounded-xl border border-gray-200 p-4"><p className="font-semibold text-gray-900">Gross booking payments</p><p className="text-primary font-bold">{Number(finance.grossBookingPayments ?? summary?.totalReceived ?? 0).toLocaleString()} RWF</p></div>
@@ -754,7 +763,7 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
             <p className="text-sm font-semibold text-gray-600">Page {pagination.page || filters.page} of {pagination.totalPages || 1}. {Number(pagination.total || transactions.length).toLocaleString()} transactions.</p>
             <div className="flex gap-2">
               <button type="button" disabled={Number(filters.page) <= 1} onClick={() => updateFilter('page', Math.max(1, Number(filters.page) - 1))} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Previous</button>
-              <button type="button" disabled={Number(filters.page) >= Number(pagination.totalPages || 1)} onClick={() => updateFilter('page', Number(filters.page) + 1)} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Next</button>
+              <button type="button" disabled={Number(filters.page) >= Number(pagination.totalPages || 1)} onClick={() => updateFilter('page', Number(filters.page) + 1)} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">{t('next', language)}</button>
             </div>
           </div>
         )}
@@ -986,15 +995,17 @@ function formatStoragePercent(value) {
 }
 
 function ActivityFeed({ bookings, services, businesses }) {
+  const { language } = useLanguage();
   const items = [
-    ...bookings.slice(0, 5).map((booking) => ({ id: booking._id, text: `Booking ${booking.bookingCode || booking._id?.slice(-8)} is ${booking.status}` })),
-    ...services.slice(0, 5).map((service) => ({ id: service._id, text: `Service updated: ${service.title || service.name}` })),
-    ...businesses.slice(0, 5).map((business) => ({ id: business._id || business.id, text: `Business: ${business.businessName || business.name}` })),
+    ...bookings.slice(0, 5).map((booking) => ({ id: booking._id, text: t('admin.bookingIs', language, { code: booking.bookingCode || booking._id?.slice(-8), status: booking.status }) })),
+    ...services.slice(0, 5).map((service) => ({ id: service._id, text: t('admin.serviceUpdated', language, { name: service.title || service.name }) })),
+    ...businesses.slice(0, 5).map((business) => ({ id: business._id || business.id, text: t('admin.businessLine', language, { name: business.businessName || business.name }) })),
   ];
   return <div className="space-y-2">{items.map((item) => <p key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm text-gray-700">{item.text}</p>)}</div>;
 }
 
 export function AnnouncementForm({ form, setForm, onSubmit }) {
+  const { language } = useLanguage();
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const items = Array.isArray(form.items) ? form.items : [];
   const updateItem = (index, key, value) => setForm((previous) => ({
@@ -1016,69 +1027,71 @@ export function AnnouncementForm({ form, setForm, onSubmit }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 01-6 0" />
             </svg>
           </span>
-          <span>{items[0]?.text || 'Your announcement text will appear here.'} {items[0]?.linkUrl && <strong>{items[0]?.linkLabel || 'Learn more'}</strong>}</span>
+          <span>{items[0]?.text || t('admin.previewText', language)} {items[0]?.linkUrl && <strong>{items[0]?.linkLabel || t('learnMore', language)}</strong>}</span>
         </span>
       </div>
       <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
         <input type="checkbox" checked={form.enabled} onChange={(event) => set('enabled', event.target.checked)} />
-        Show announcement bar on every page
+        {t('admin.showBar', language)}
       </label>
       <div className="grid gap-2 md:max-w-xs">
-        <label className="text-sm font-semibold text-gray-700">Seconds before showing the next announcement</label>
+        <label className="text-sm font-semibold text-gray-700">{t('admin.intervalLabel', language)}</label>
         <input type="number" min="1" max="3600" value={form.intervalSeconds || 5} onChange={(event) => set('intervalSeconds', Number(event.target.value) || 1)} className="rounded-xl border border-gray-300 px-4 py-3" />
       </div>
       <div className="grid gap-4">
         {items.map((item, index) => (
           <div key={index} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="font-bold text-gray-900">Announcement {index + 1}</h3>
-              {items.length > 1 && <button type="button" onClick={() => removeItem(index)} className="text-sm font-semibold text-red-600">Remove</button>}
+              <h3 className="font-bold text-gray-900">{t('admin.announcementN', language, { n: index + 1 })}</h3>
+              {items.length > 1 && <button type="button" onClick={() => removeItem(index)} className="text-sm font-semibold text-red-600">{t('admin.remove', language)}</button>}
             </div>
             <div className="grid gap-4">
-              <AdminTextArea label="Message" value={item.text} onChange={(value) => updateItem(index, 'text', value)} />
+              <AdminTextArea label={t('admin.message', language)} value={item.text} onChange={(value) => updateItem(index, 'text', value)} />
               <div className="grid gap-4 md:grid-cols-2">
-                <AdminInput label="Optional Link URL" value={item.linkUrl} onChange={(value) => updateItem(index, 'linkUrl', value)} />
-                <AdminInput label="Link Text" value={item.linkLabel} onChange={(value) => updateItem(index, 'linkLabel', value)} />
+                <AdminInput label={t('admin.optionalLinkUrl', language)} value={item.linkUrl} onChange={(value) => updateItem(index, 'linkUrl', value)} />
+                <AdminInput label={t('admin.linkText', language)} value={item.linkLabel} onChange={(value) => updateItem(index, 'linkLabel', value)} />
               </div>
             </div>
           </div>
         ))}
-        {items.length < 5 && <button type="button" onClick={addItem} className="rounded-xl border border-primary px-5 py-3 font-semibold text-primary md:w-fit">Add announcement ({items.length}/5)</button>}
+        {items.length < 5 && <button type="button" onClick={addItem} className="rounded-xl border border-primary px-5 py-3 font-semibold text-primary md:w-fit">{t('admin.addAnnouncement', language, { n: items.length })}</button>}
       </div>
       <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white md:w-fit">
-        Update Announcement
+        {t('admin.updateAnnouncement', language)}
       </button>
     </form>
   );
 }
 
 export function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange }) {
+  const { language } = useLanguage();
   const rulesText = (form.bookingRules || []).join('\n');
   return (
     <form onSubmit={onSubmit} className="grid gap-5">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        Manual remains the safe default. Automatic booking creates the exact quote and allows the customer to pay the full price immediately when all option rules are complete.
+        {t('admin.modeHelp', language)}
       </div>
       <label className="block">
-        <span className="text-sm font-semibold text-gray-700">Global booking mode</span>
+        <span className="text-sm font-semibold text-gray-700">{t('admin.globalMode', language)}</span>
         <select value={form.bookingMode || 'manual'} onChange={(event) => onModeChange(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
-          <option value="manual">All services use manual booking</option>
-          <option value="automatic">All services use automatic booking</option>
-          <option value="service-level">Use service-level booking mode</option>
+          <option value="manual">{t('admin.allManual', language)}</option>
+          <option value="automatic">{t('admin.allAutomatic', language)}</option>
+          <option value="service-level">{t('admin.serviceLevel', language)}</option>
         </select>
       </label>
-      <AdminInput label="Default commission percentage" type="number" value={form.defaultCommissionPercentage} onChange={(value) => setForm((prev) => ({ ...prev, defaultCommissionPercentage: Number(value) }))} required />
+      <AdminInput label={t('admin.defaultCommission', language)} type="number" value={form.defaultCommissionPercentage} onChange={(value) => setForm((prev) => ({ ...prev, defaultCommissionPercentage: Number(value) }))} required />
       <label className="block md:col-span-2">
-        <span className="text-sm font-semibold text-gray-700">Global booking rules — one rule per line</span>
+        <span className="text-sm font-semibold text-gray-700">{t('admin.globalRules', language)}</span>
         <textarea value={rulesText} onChange={(event) => setForm((prev) => ({ ...prev, bookingRules: event.target.value.split('\n') }))} rows={7} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3" />
       </label>
-      <p className="text-xs font-semibold text-blue-700">Global booking mode saves immediately when selected.</p>
-      <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white md:w-fit">Save commission and booking rules</button>
+      <p className="text-xs font-semibold text-blue-700">{t('admin.modeSavesNow', language)}</p>
+      <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white md:w-fit">{t('admin.saveRules', language)}</button>
     </form>
   );
 }
 
 function BookingVerification({ token, verify }) {
+  const { language } = useLanguage();
   const [lookup, setLookup] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -1097,8 +1110,8 @@ function BookingVerification({ token, verify }) {
   return (
     <div className="space-y-4">
       <form onSubmit={submit} className="flex flex-col gap-3 md:flex-row">
-        <input value={lookup} onChange={(event) => setLookup(event.target.value)} placeholder="Enter Booking ID, code, verification token, or QR token" className="flex-1 rounded-xl border border-gray-300 px-4 py-3" />
-        <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">Verify Booking</button>
+        <input value={lookup} onChange={(event) => setLookup(event.target.value)} placeholder={t('verify.bookingId', language)} className="flex-1 rounded-xl border border-gray-300 px-4 py-3" />
+        <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">{t('verify.title', language)}</button>
       </form>
       <p className="text-sm text-gray-500">When scanning a QR code, paste the token or full verification URL here.</p>
       {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -1160,6 +1173,7 @@ function BusinessDetailModal({ business, onClose }) {
 }
 
 function AdminBookingDetailModal({ booking, defaultCommission, onApprove, onReject, onClose }) {
+  const { language } = useLanguage();
   const [decision, setDecision] = useState({ totalPrice: booking.totalPrice || booking.bookingDetails?.listedPriceRwf || '', commissionPercentage: booking.commissionPercentage || defaultCommission || 10, paymentReason: booking.paymentReason || '' });
   const [reason, setReason] = useState('');
   const sellerManaged = isSellerManagedManualBooking(booking);
@@ -1179,7 +1193,7 @@ function AdminBookingDetailModal({ booking, defaultCommission, onApprove, onReje
           <p className="mt-1 text-sm text-blue-800">Enter the exact agreed price. The customer pays this full amount in the app. Provider details unlock after payment. Money is held until the cancel window ends.</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <AdminInput label="Exact service price (RWF)" type="number" value={decision.totalPrice} onChange={(value) => setDecision((prev) => ({ ...prev, totalPrice: value }))} required />
-            <AdminInput label="Commission percentage" type="number" value={decision.commissionPercentage} onChange={(value) => setDecision((prev) => ({ ...prev, commissionPercentage: value }))} required />
+            <AdminInput label={t('admin.defaultCommission', language)} type="number" value={decision.commissionPercentage} onChange={(value) => setDecision((prev) => ({ ...prev, commissionPercentage: value }))} required />
           </div>
           <div className="mt-4">
             <AdminTextArea label="Reason or purpose for customer payment" value={decision.paymentReason} onChange={(value) => setDecision((prev) => ({ ...prev, paymentReason: value }))} required maxLength={500} />
@@ -1187,9 +1201,9 @@ function AdminBookingDetailModal({ booking, defaultCommission, onApprove, onReje
           </div>
           {decision.totalPrice && <p className="mt-3 text-sm font-semibold text-blue-950">Customer pays now: {Number(decision.totalPrice || 0).toLocaleString()} RWF</p>}
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <button type="button" disabled={!Number(decision.totalPrice) || Number(decision.commissionPercentage) < 0 || !decision.paymentReason.trim()} onClick={() => onApprove(booking, decision)} className="rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Approve and send quote</button>
-            <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for rejection" className="min-w-0 flex-1 rounded-xl border border-gray-300 px-4 py-3" />
-            <button type="button" onClick={() => onReject(booking, reason)} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white">Reject</button>
+            <button type="button" disabled={!Number(decision.totalPrice) || Number(decision.commissionPercentage) < 0 || !decision.paymentReason.trim()} onClick={() => onApprove(booking, decision)} className="rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{t('sellerDash.approveSend', language)}</button>
+            <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t('rebook.rejectPrompt', language)} className="min-w-0 flex-1 rounded-xl border border-gray-300 px-4 py-3" />
+            <button type="button" onClick={() => onReject(booking, reason)} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white">{t('admin.reject', language)}</button>
           </div>
         </div>
       )}
@@ -1215,7 +1229,8 @@ function isSellerManagedManualBooking(booking) {
 }
 
 function Modal({ title, onClose, children }) {
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"><div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-bold text-gray-900">{title}</h2><button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">Close</button></div>{children}</div></div>;
+  const { language } = useLanguage();
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"><div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-bold text-gray-900">{title}</h2><button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">{t('admin.close', language)}</button></div>{children}</div></div>;
 }
 
 function DetailGrid({ data }) {
@@ -1229,13 +1244,14 @@ function ResponseBlock({ title = 'Form Responses', responses }) {
 }
 
 function AdminProviderForm({ form, setForm, onSubmit, saving }) {
+  const { language } = useLanguage();
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   return (
     <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-      <AdminInput label="Provider Name" value={form.providerName} onChange={(value) => set('providerName', value)} required />
-      <AdminInput label="Provider email" type="email" value={form.providerEmail} onChange={(value) => set('providerEmail', value)} required helperText="The seller ID will be sent to this email." />
+      <AdminInput label={t('providerName', language)} value={form.providerName} onChange={(value) => set('providerName', value)} required />
+      <AdminInput label={t('providerEmail', language)} type="email" value={form.providerEmail} onChange={(value) => set('providerEmail', value)} required helperText="The seller ID will be sent to this email." />
       <button disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">
-        {saving ? 'Saving...' : 'Create Service Provider'}
+        {saving ? t('savingEllipsis', language) : t('admin.createProvider', language)}
       </button>
     </form>
   );

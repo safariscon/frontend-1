@@ -34,8 +34,8 @@ export default function BookingPage() {
       <div className="min-h-screen flex flex-col">
         <SeoHead
           {...noindexSeo({
-            title: 'Login to book on SafarisCon',
-            description: 'Sign in to complete your SafarisCon booking for services in Rwanda.',
+            title: t('booking.loginTitle', language),
+            description: t('booking.loginDescription', language),
             path: `/booking/${hotelId}`,
           })}
         />
@@ -60,8 +60,8 @@ export default function BookingPage() {
     <DashboardLayout>
       <SeoHead
         {...noindexSeo({
-          title: 'Complete your SafarisCon booking',
-          description: 'Complete your SafarisCon service booking in Rwanda. Enter dates and pay in the app after login.',
+            title: t('booking.completeTitle', language),
+            description: t('booking.completeDescription', language),
           path: `/booking/${hotelId}`,
         })}
       />
@@ -70,7 +70,7 @@ export default function BookingPage() {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('completeBooking', language)}</h1>
             <p className="text-gray-600">
-              {t('selectServiceAndDate', language) || 'Enter service details and date.'}
+              {t('selectServiceAndDate', language)}
             </p>
           </div>
           <BookingForm

@@ -1,26 +1,29 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 const SERVICE_CATEGORIES = [
-  { label: 'Accommodation', query: 'accommodation', icon: 'bed' },
-  { label: 'Transport', query: 'transport', icon: 'bus' },
-  { label: 'Events & Venues', query: 'events', icon: 'calendar' },
-  { label: 'Travel Experiences', query: 'travel experience', icon: 'mountain' },
-  { label: 'Tours & Activities', query: 'tours activities', icon: 'compass' },
-  { label: 'Food & Cafes', query: 'cafe restaurant food', icon: 'bag' },
-  { label: 'Wellness', query: 'wellness', icon: 'wellness' },
-  { label: 'More', query: '', icon: 'more' },
+  { labelKey: 'categoriesUi.accommodation', query: 'accommodation', icon: 'bed' },
+  { labelKey: 'categoriesUi.transport', query: 'transport', icon: 'bus' },
+  { labelKey: 'categoriesUi.eventsVenues', query: 'events', icon: 'calendar' },
+  { labelKey: 'categoriesUi.travelExperiences', query: 'travel experience', icon: 'mountain' },
+  { labelKey: 'categoriesUi.toursActivities', query: 'tours activities', icon: 'compass' },
+  { labelKey: 'categoriesUi.foodCafes', query: 'cafe restaurant food', icon: 'bag' },
+  { labelKey: 'categoriesUi.wellness', query: 'wellness', icon: 'wellness' },
+  { labelKey: 'categoriesUi.more', query: '', icon: 'more' },
 ];
 
 const WORKFLOW_STEPS = [
-  ['Choose a Service', 'Browse verified options'],
-  ['Book Instantly', 'Send your request'],
-  ['Pay Securely', 'Use available payment flows'],
-  ['Details Unlocked', 'Get provider contacts'],
-  ['Enjoy the Service', 'Use your confirmation'],
+  ['home.workflowChoose', 'home.workflowChooseDesc'],
+  ['home.workflowBook', 'home.workflowBookDesc'],
+  ['home.workflowPay', 'home.workflowPayDesc'],
+  ['home.workflowUnlock', 'home.workflowUnlockDesc'],
+  ['home.workflowEnjoy', 'home.workflowEnjoyDesc'],
 ];
 
 export default function MarketplaceGuide() {
+  const { language } = useLanguage();
   const categoryTrack = useRef(null);
   const workflowTrack = useRef(null);
   const scrollTrack = (track, direction) => {
@@ -31,43 +34,46 @@ export default function MarketplaceGuide() {
     <section className="border-b border-slate-200 bg-white py-7 dark:border-slate-800 dark:bg-slate-950">
       <div className="mx-auto max-w-7xl px-4">
         <div className="relative">
-          <ScrollButton direction="left" label="Previous service categories" onClick={() => scrollTrack(categoryTrack, -1)} />
+          <ScrollButton direction="left" label={t('previousCategories', language)} onClick={() => scrollTrack(categoryTrack, -1)} />
           <div ref={categoryTrack} className="marketplace-scroll-track overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
             <div className="flex min-w-max items-stretch divide-x divide-slate-200 dark:divide-slate-700">
-              {SERVICE_CATEGORIES.map((category) => (
+              {SERVICE_CATEGORIES.map((category) => {
+                const label = t(category.labelKey, language);
+                return (
                 <Link
-                  key={category.label}
+                  key={category.labelKey}
                   to={category.query ? `/services?service=${encodeURIComponent(category.query)}` : '/services'}
-                  aria-label={category.label}
+                  aria-label={label}
                   className="flex min-w-32 flex-1 flex-col items-center justify-center gap-2 px-4 py-4 text-center hover:bg-blue-50 dark:hover:bg-slate-800"
                 >
                   <CategoryIcon name={category.icon} />
-                  {category.icon !== 'more' && <span className="max-w-24 text-[11px] font-bold leading-tight text-blue-950 dark:text-slate-100">{category.label}</span>}
+                  {category.icon !== 'more' && <span className="max-w-24 text-[11px] font-bold leading-tight text-blue-950 dark:text-slate-100">{label}</span>}
                 </Link>
-              ))}
+                );
+              })}
             </div>
           </div>
-          <ScrollButton direction="right" label="Next service categories" onClick={() => scrollTrack(categoryTrack, 1)} />
+          <ScrollButton direction="right" label={t('nextCategories', language)} onClick={() => scrollTrack(categoryTrack, 1)} />
         </div>
-        <p className="mt-3 text-center text-xs font-semibold text-primary md:hidden">Scroll to explore more services</p>
+        <p className="mt-3 text-center text-xs font-semibold text-primary md:hidden">{t('home.scrollCategories', language)}</p>
 
         <div className="mt-7 text-center">
-          <h2 className="text-xl font-black text-blue-900 dark:text-blue-200">How SafarisCon Works</h2>
+          <h2 className="text-xl font-black text-blue-900 dark:text-blue-200">{t('home.howItWorksTitle', language)}</h2>
           <div className="relative mt-5">
-            <ScrollButton direction="left" label="Previous booking steps" onClick={() => scrollTrack(workflowTrack, -1)} mobileOnly />
+            <ScrollButton direction="left" label={t('previousSteps', language)} onClick={() => scrollTrack(workflowTrack, -1)} mobileOnly />
             <div ref={workflowTrack} className="marketplace-scroll-track flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 lg:grid lg:grid-cols-5 lg:overflow-visible">
-              {WORKFLOW_STEPS.map(([title, description], index) => (
-                <div key={title} className="marketplace-step relative flex min-w-[12rem] snap-start flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:min-w-0">
+              {WORKFLOW_STEPS.map(([titleKey, descriptionKey], index) => (
+                <div key={titleKey} className="marketplace-step relative flex min-w-[12rem] snap-start flex-col items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:min-w-0">
                   <span className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-primary dark:bg-blue-950/70 dark:text-blue-200"><WorkflowIcon index={index} /></span>
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white">{index + 1}</span>
                   <span>
-                    <strong className="block text-xs text-slate-900 dark:text-white">{title}</strong>
-                    <small className="mt-1 block text-[11px] text-slate-500 dark:text-slate-400">{description}</small>
+                    <strong className="block text-xs text-slate-900 dark:text-white">{t(titleKey, language)}</strong>
+                    <small className="mt-1 block text-[11px] text-slate-500 dark:text-slate-400">{t(descriptionKey, language)}</small>
                   </span>
                 </div>
               ))}
             </div>
-            <ScrollButton direction="right" label="Next booking steps" onClick={() => scrollTrack(workflowTrack, 1)} mobileOnly />
+            <ScrollButton direction="right" label={t('nextSteps', language)} onClick={() => scrollTrack(workflowTrack, 1)} mobileOnly />
           </div>
         </div>
       </div>

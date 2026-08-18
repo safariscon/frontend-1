@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function TermsCheckbox({ checked, onChange, error }) {
+  const { language } = useLanguage();
   return (
     <div>
       <label className="flex items-start gap-3 rounded-xl border border-gray-200 p-4 text-sm text-gray-700">
@@ -11,13 +14,13 @@ export default function TermsCheckbox({ checked, onChange, error }) {
           className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
         />
         <span>
-          I accept the{' '}
+          {t('acceptTermsPrefix', language)}{' '}
           <Link to="/terms" target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">
-            Terms of use
+            {t('termsOfUse', language)}
           </Link>{' '}
-          and{' '}
+          {t('and', language)}{' '}
           <Link to="/privacy" target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">
-            Privacy policy
+            {t('privacyPolicy', language)}
           </Link>
           .
         </span>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 import { emptyLocationDetails, listCities, listCountries, listStates, normalizeLocationDetails } from '../lib/places';
 
 export default function AdministrativeLocationFields({
@@ -8,6 +10,7 @@ export default function AdministrativeLocationFields({
   showNeighborhood = true,
   disabled = false,
 }) {
+  const { language } = useLanguage();
   const location = useMemo(() => normalizeLocationDetails(value), [value]);
   const [countries, setCountries] = useState([]);
   const [stateBundle, setStateBundle] = useState({ country: '', items: [] });
@@ -27,7 +30,7 @@ export default function AdministrativeLocationFields({
         if (!cancelled) setCountries(items);
       })
       .catch(() => {
-        if (!cancelled) setError('Could not load countries. Check your connection and try again.');
+        if (!cancelled) setError(t('locationUi.countriesError', language));
       })
       .finally(() => {
         if (!cancelled) setLoadingCountries(false);
@@ -35,7 +38,7 @@ export default function AdministrativeLocationFields({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     const country = location.country;
@@ -101,7 +104,7 @@ export default function AdministrativeLocationFields({
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-gray-700">Country{required ? ' *' : ''}</span>
+        <span className="mb-1 block text-sm font-medium text-gray-700">{t('locationUi.country', language)}{required ? ' *' : ''}</span>
         <select
           required={required}
           disabled={disabled || loadingCountries}
@@ -119,7 +122,7 @@ export default function AdministrativeLocationFields({
           }}
           className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
         >
-          <option value="">{loadingCountries ? 'Loading countries...' : 'Select country'}</option>
+          <option value="">{loadingCountries ? t('locationUi.loadingCountries', language) : t('locationUi.selectCountry', language)}</option>
           {countryOptions.map((item) => (
             <option key={item.code || item.name} value={item.name}>{item.name}</option>
           ))}
@@ -127,7 +130,7 @@ export default function AdministrativeLocationFields({
       </label>
 
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-gray-700">State / region{states.length ? ' *' : ''}</span>
+        <span className="mb-1 block text-sm font-medium text-gray-700">{t('locationUi.stateRegion', language)}{states.length ? ' *' : ''}</span>
         {stateOptions.length ? (
           <select
             required={required && states.length > 0}
@@ -136,7 +139,7 @@ export default function AdministrativeLocationFields({
             onChange={(event) => emit({ state: event.target.value, city: '', province: event.target.value, district: '' })}
             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
           >
-            <option value="">{loadingStates ? 'Loading regions...' : 'Select state / region'}</option>
+            <option value="">{loadingStates ? t('locationUi.loadingRegions', language) : t('locationUi.selectState', language)}</option>
             {stateOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         ) : (
@@ -145,14 +148,14 @@ export default function AdministrativeLocationFields({
             disabled={disabled || !location.country || loadingStates}
             value={location.state}
             onChange={(event) => emit({ state: event.target.value, province: event.target.value })}
-            placeholder={loadingStates ? 'Loading regions...' : 'Type state or region'}
+            placeholder={loadingStates ? t('locationUi.loadingRegions', language) : t('locationUi.typeState', language)}
             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
           />
         )}
       </label>
 
       <label className="block">
-        <span className="mb-1 block text-sm font-medium text-gray-700">City{required ? ' *' : ''}</span>
+        <span className="mb-1 block text-sm font-medium text-gray-700">{t('locationUi.city', language)}{required ? ' *' : ''}</span>
         {cityOptions.length ? (
           <select
             required={required}
@@ -161,7 +164,7 @@ export default function AdministrativeLocationFields({
             onChange={(event) => emit({ city: event.target.value, district: event.target.value })}
             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
           >
-            <option value="">{loadingCities ? 'Loading cities...' : 'Select city'}</option>
+            <option value="">{loadingCities ? t('locationUi.loadingCities', language) : t('locationUi.selectCity', language)}</option>
             {cityOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         ) : (
@@ -170,7 +173,7 @@ export default function AdministrativeLocationFields({
             disabled={disabled || !location.country || loadingCities}
             value={location.city}
             onChange={(event) => emit({ city: event.target.value, district: event.target.value })}
-            placeholder={loadingCities ? 'Loading cities...' : 'Type city'}
+            placeholder={loadingCities ? t('locationUi.loadingCities', language) : t('locationUi.typeCity', language)}
             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
           />
         )}
@@ -178,12 +181,12 @@ export default function AdministrativeLocationFields({
 
       {showNeighborhood && (
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Area / neighborhood</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">{t('locationUi.areaNeighborhood', language)}</span>
           <input
             disabled={disabled}
             value={location.sector}
             onChange={(event) => emit({ sector: event.target.value })}
-            placeholder="Optional"
+            placeholder={t('optional', language)}
             className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
           />
         </label>

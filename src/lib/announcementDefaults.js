@@ -1,5 +1,5 @@
 export const DEFAULT_ANNOUNCEMENT = {
   enabled: true,
   intervalSeconds: 5,
-  items: [{ text: 'Niba ushaka guhindura ururimi kanda ahanditse English', linkUrl: '', linkLabel: '' }],
+  items: [{ text: 'To change the language, use the language menu.', linkUrl: '', linkLabel: '' }],
 };

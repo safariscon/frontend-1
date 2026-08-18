@@ -11,7 +11,7 @@ import { normalizeHotels } from '../lib/hotelMapper';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
-import { t } from '../lib/translations';
+import { t, translateCategory } from '../lib/translations';
 import { serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 import SeoHead from '../components/SeoHead';
 import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
@@ -80,11 +80,11 @@ function ServicesCatalog({ embedded = false }) {
       setAllHotels(listings);
     } catch (error) {
       setAllHotels([]);
-      setLoadError(error.message || 'Unable to load services.');
+      setLoadError(error.message || t('unableToLoadServices', language));
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [categoryFilter, isAdmin, locationParam, providerId, searchParam]);
+  }, [categoryFilter, isAdmin, language, locationParam, providerId, searchParam]);
 
   useEffect(() => {
     Promise.resolve().then(() => loadHotels());
@@ -148,10 +148,10 @@ function ServicesCatalog({ embedded = false }) {
     [filteredHotels]
   );
 
-  const seo = getServicesSeo({ location: locationParam, search: searchParam });
+  const seo = getServicesSeo({ location: locationParam, search: searchParam, language });
   const breadcrumbItems = [
-    { label: 'Home', to: '/' },
-    { label: 'Services', to: '/services' },
+    { label: t('navigation.home', language), to: '/' },
+    { label: t('navigation.services', language), to: '/services' },
     ...(locationParam || searchParam ? [{ label: seo.h1 }] : []),
   ];
 
@@ -161,7 +161,7 @@ function ServicesCatalog({ embedded = false }) {
       {!embedded && <SeoBreadcrumbs items={breadcrumbItems} />}
       <div className="relative overflow-hidden border-b border-slate-200 bg-slate-50 py-8 dark:border-slate-800 dark:bg-slate-900">
         <div className="absolute inset-y-0 right-0 hidden w-1/2 opacity-70 md:block">
-          <img src="/safariscon-hero-services.png" alt="SafarisCon services across Rwanda including hotels, tours, and transport" className="h-full w-full object-cover" />
+          <img src="/safariscon-hero-services.png" alt={t('catalog.heroAlt', language)} className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-50 via-slate-50/80 to-slate-50/20 dark:from-slate-900 dark:via-slate-900/85 dark:to-slate-900/20" />
         </div>
         <div className="relative z-10 mx-auto flex max-w-7xl items-center gap-4 px-4">
@@ -169,7 +169,7 @@ function ServicesCatalog({ embedded = false }) {
             <BriefcaseIcon />
           </span>
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-primary">Service catalog</p>
+            <p className="text-xs font-black uppercase tracking-wide text-primary">{t('catalog.eyebrow', language)}</p>
             <h1 className="mt-1 text-2xl font-black text-slate-950 dark:text-white md:text-4xl">{seo.h1}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
               {seo.description}
@@ -185,22 +185,22 @@ function ServicesCatalog({ embedded = false }) {
               <select
                 value={categoryFilter}
                 onChange={(event) => setCategoryFilter(event.target.value)}
-                aria-label="All categories"
+                aria-label={t('catalog.allCategories', language)}
                 className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none dark:bg-slate-950 dark:text-slate-100"
               >
-                <option value="">All Categories</option>
+                <option value="">{t('catalog.allCategories', language)}</option>
                 {categoryOptions.map((category) => (
-                  <option key={category} value={category}>{formatLabel(category)}</option>
+                  <option key={category} value={category}>{translateCategory(category, language)}</option>
                 ))}
               </select>
               {isAdmin && (
                 <select
                   value={providerId}
                   onChange={(event) => setProviderId(event.target.value)}
-                  aria-label="Service provider"
+                  aria-label={t('catalog.serviceProvider', language)}
                   className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none dark:bg-slate-950 dark:text-slate-100"
                 >
-                  <option value="">All providers</option>
+                  <option value="">{t('catalog.allProviders', language)}</option>
                   {providers.map((provider) => {
                     const id = provider.id || provider._id || '';
                     const label = [provider.name, provider.sellerId || provider.email].filter(Boolean).join(' · ');
@@ -209,7 +209,7 @@ function ServicesCatalog({ embedded = false }) {
                 </select>
               )}
               <label className="inline-flex min-h-12 items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200">
-                <span>Available now</span>
+                <span>{t('catalog.availableNow', language)}</span>
                 <input type="checkbox" checked={availableOnly} onChange={(event) => setAvailableOnly(event.target.checked)} />
               </label>
             </div>
@@ -223,7 +223,7 @@ function ServicesCatalog({ embedded = false }) {
             {searchParam && <FilterChip label={searchParam} onRemove={() => removeParam(searchParams, navigate, 'search')} />}
             {locationParam && <FilterChip label={locationParam} onRemove={() => removeParam(searchParams, navigate, 'location')} />}
             <button type="button" onClick={() => navigate('/services')} className="text-sm font-bold text-slate-600 underline hover:text-primary dark:text-slate-400">
-              Clear all
+              {t('clearAll', language)}
             </button>
           </div>
         )}
@@ -255,12 +255,12 @@ function ServicesCatalog({ embedded = false }) {
           </label>
         </div>
 
-        <div className="mb-5 flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900 md:hidden" aria-label="Service display style">
+        <div className="mb-5 flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-700 dark:bg-slate-900 md:hidden" aria-label={t('catalog.displayStyle', language)}>
           <button type="button" onClick={() => setMobileView('list')} className={`rounded-lg px-4 py-2 text-sm font-bold ${mobileView === 'list' ? 'bg-primary text-white' : 'text-slate-700 dark:text-slate-300'}`}>
-            List
+            {t('catalog.list', language)}
           </button>
           <button type="button" onClick={() => setMobileView('grid')} className={`rounded-lg px-4 py-2 text-sm font-bold ${mobileView === 'grid' ? 'bg-primary text-white' : 'text-slate-700 dark:text-slate-300'}`}>
-            Grid
+            {t('catalog.grid', language)}
           </button>
         </div>
 
@@ -276,7 +276,7 @@ function ServicesCatalog({ embedded = false }) {
               <section key={category}>
                 <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
-                    <h3 className="text-xl font-black text-slate-950 dark:text-white">{formatLabel(category)}</h3>
+                    <h3 className="text-xl font-black text-slate-950 dark:text-white">{category === 'general' ? t('catalog.general', language) : translateCategory(category, language)}</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
                       {hotels.length} {hotels.length === 1 ? t('serviceFound', language) : t('servicesFound', language)}
                     </p>
@@ -301,10 +301,11 @@ function ServicesCatalog({ embedded = false }) {
 }
 
 function FilterChip({ label, onRemove }) {
+  const { language } = useLanguage();
   return (
     <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-bold text-primary dark:bg-blue-950/60 dark:text-blue-200">
       {label}
-      <button type="button" onClick={onRemove} className="hover:text-primary-dark" aria-label={`Remove ${label}`}>
+      <button type="button" onClick={onRemove} className="hover:text-primary-dark" aria-label={t('catalog.removeFilter', language, { label })}>
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
       </button>
     </span>
@@ -323,14 +324,6 @@ function BriefcaseIcon() {
 
 function NoResultsIcon() {
   return <svg className="mx-auto h-16 w-16 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.17 16.17a4 4 0 015.66 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-}
-
-function formatLabel(value) {
-  return String(value || 'service')
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 function matchesCatalogProvider(hotel, providerId) {

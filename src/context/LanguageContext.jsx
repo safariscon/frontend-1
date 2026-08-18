@@ -1,34 +1,46 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect } from 'react';
-import { defaultLanguage, isSupportedLanguage } from '../lib/translations';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import i18n, { DEFAULT_LANGUAGE, changeAppLanguage, isSupportedLanguage } from '../i18n';
 
 const LanguageContext = createContext();
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState(() => {
-    const saved = localStorage.getItem('preferredLanguage');
-    return isSupportedLanguage(saved) ? saved : defaultLanguage;
+  const [language, setLanguageState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('preferredLanguage');
+      return isSupportedLanguage(saved) ? saved : DEFAULT_LANGUAGE;
+    } catch {
+      return DEFAULT_LANGUAGE;
+    }
   });
 
   useEffect(() => {
-    localStorage.setItem('preferredLanguage', language);
-    document.documentElement.lang = language === 'rw' ? 'rw' : language === 'fr' ? 'fr' : 'en';
+    changeAppLanguage(language);
   }, [language]);
 
-  const value = {
-    language,
-    setLanguage: (nextLanguage) => {
-      if (isSupportedLanguage(nextLanguage)) {
-        setLanguage(nextLanguage);
+  useEffect(() => {
+    const handleLanguageChanged = (nextLanguage) => {
+      if (isSupportedLanguage(nextLanguage) && nextLanguage !== language) {
+        setLanguageState(nextLanguage);
       }
-    },
-  };
+    };
+    i18n.on('languageChanged', handleLanguageChanged);
+    return () => i18n.off('languageChanged', handleLanguageChanged);
+  }, [language]);
 
-  return (
-    <LanguageContext.Provider value={value}>
-      {children}
-    </LanguageContext.Provider>
+  const value = useMemo(
+    () => ({
+      language,
+      setLanguage: (nextLanguage) => {
+        if (isSupportedLanguage(nextLanguage)) {
+          setLanguageState(nextLanguage);
+        }
+      },
+    }),
+    [language]
   );
+
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
 export function useLanguage() {

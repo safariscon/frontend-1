@@ -167,7 +167,7 @@ export default function LoginPage() {
                 <>
                   <p className="text-sm font-bold uppercase tracking-wider text-primary">{t('loginOtpLabel', language)}</p>
                   <h1 className="mt-2 text-3xl font-bold text-gray-900">{t('enterLoginCode', language)}</h1>
-                  <p className="mt-2 text-gray-600">{t('loginOtpSent', language).replace('{email}', email)}</p>
+                  <p className="mt-2 text-gray-600">{t('loginOtpSent', language, { email })}</p>
                 </>
               ) : (
                 <>
@@ -209,7 +209,7 @@ export default function LoginPage() {
                 <p className={`mb-6 text-center text-sm ${otpSecondsLeft === 0 ? 'text-red-600' : 'text-gray-600'}`}>
                   {otpSecondsLeft === 0
                     ? t('loginOtpExpired', language)
-                    : t('loginOtpExpiresIn', language).replace('{time}', formatCountdown(otpSecondsLeft))}
+                    : t('loginOtpExpiresIn', language, { time: formatCountdown(otpSecondsLeft) })}
                 </p>
 
                 <button
@@ -230,7 +230,7 @@ export default function LoginPage() {
                     {resending
                       ? t('sendingCode', language)
                       : resendSecondsLeft > 0
-                        ? t('resendCodeIn', language).replace('{time}', formatCountdown(resendSecondsLeft))
+                        ? t('resendCodeIn', language, { time: formatCountdown(resendSecondsLeft) })
                         : t('resendCode', language)}
                   </button>
                   <button
@@ -320,7 +320,7 @@ export default function LoginPage() {
                     </span>
                   </label>
                   <Link to="/forgot-password" className="shrink-0 text-sm font-medium text-primary hover:underline">
-                    Forgot password?
+                    {t('forgotPassword', language)}?
                   </Link>
                 </div>
 
@@ -349,9 +349,9 @@ export default function LoginPage() {
                   </Link>
                 </p>
                 <p className="text-gray-600 mt-2 text-xs">
-                  By creating an account you agree to our{' '}
-                  <Link to="/terms" className="text-primary hover:underline font-medium">Terms</Link> and{' '}
-                  <Link to="/privacy" className="text-primary hover:underline font-medium">Privacy Policy</Link>.
+                  {t('byCreatingAccount', language)}{' '}
+                  <Link to="/terms" className="text-primary hover:underline font-medium">{t('termsShort', language)}</Link> {t('and', language)}{' '}
+                  <Link to="/privacy" className="text-primary hover:underline font-medium">{t('privacyPolicy', language)}</Link>.
                 </p>
               </div>
             )}

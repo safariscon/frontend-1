@@ -7,13 +7,15 @@ import { getAuthData, hotelApi, paymentsApi, publicApi } from '../lib/api';
 import { payoutStatusLabel } from '../lib/payments';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { formatRwf } from '../lib/currency';
-import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES } from '../data/serviceCategories';
+import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES, getCategoryDisplayLabel, getCategoryGroupDisplayLabel } from '../data/serviceCategories';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
 import ServiceDetailsView from '../components/ServiceDetailsView';
 import OptionDetailsModal from '../components/OptionDetailsModal';
 import { DAY_OPTIONS, TIME_REQUIREMENT_OPTIONS, parseOptionAvailability, toggleAvailableDay } from '../lib/availability';
 import { emptyLocationDetails, isAdministrativeLocationComplete, normalizeLocationDetails } from '../lib/places';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 const EMPTY_FORM = {
   title: '',
@@ -253,6 +255,7 @@ const normalizeBookingFormForForm = (bookingForm) => ({
 
 export default function HotelDashboard() {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const { section } = useParams();
@@ -552,10 +555,10 @@ export default function HotelDashboard() {
   if (!user || !isSellerRole(user.role)) return null;
 
   const pageMeta = {
-    dashboard: { title: 'Analytics', subtitle: 'Your bookings, earnings, and service activity.' },
-    services: { title: 'Services', subtitle: 'Manage your pending and approved listings.' },
-    bookings: { title: 'Bookings', subtitle: 'Manage your bookings.' },
-    finance: { title: 'Finance', subtitle: 'Earnings, payouts, and payout account.' },
+    dashboard: { title: t('dash.analytics', language), subtitle: t('sellerDash.yourListings', language) },
+    services: { title: t('dash.services', language), subtitle: t('sellerDash.yourListings', language) },
+    bookings: { title: t('dash.bookings', language), subtitle: t('customerDash.manage', language) },
+    finance: { title: t('dash.finance', language), subtitle: t('payouts', language) },
   }[view];
   const visibleServices = services.filter((service) => {
     const approval = serviceApprovalStatus(service);
@@ -577,7 +580,7 @@ export default function HotelDashboard() {
               <p className="text-gray-600">{pageMeta.subtitle}</p>
             </div>
             <div className="seller-dashboard-actions flex gap-2">
-              <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">Refresh</button>
+              <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">{t('refresh', language)}</button>
             </div>
           </div>
 
@@ -585,26 +588,26 @@ export default function HotelDashboard() {
 
           {view === 'dashboard' && (
             <div className="seller-dashboard-metrics grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <Metric label="Services" value={stats.totalServices} />
-              <Metric label="Earnings" value={formatRwf(overview?.stats?.earnings ?? stats.revenue)} />
-              <Metric label="Held payout" value={formatRwf(overview?.stats?.pendingPayout ?? overview?.stats?.pendingSettlement ?? 0)} />
-              <Metric label="Bookings" value={stats.totalBookings} />
+              <Metric label={t('dash.services', language)} value={stats.totalServices} />
+              <Metric label={t('revenue', language)} value={formatRwf(overview?.stats?.earnings ?? stats.revenue)} />
+              <Metric label={t('heldMoney', language)} value={formatRwf(overview?.stats?.pendingPayout ?? overview?.stats?.pendingSettlement ?? 0)} />
+              <Metric label={t('dash.bookings', language)} value={stats.totalBookings} />
             </div>
           )}
           {view === 'finance' && !payoutDetails?.accountNumber && !payoutDetails?.msisdn && (
-            <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Customers cannot pay until you save payout details. We store your MoMo or bank details only to pay you after the guest cancel window.</p>
+            <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{t('sellerDash.customersCannotPay', language)}</p>
           )}
 
           {view === 'bookings' && (
             <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
-              {[['bookings', 'Bookings'], ['rebook-requests', 'Re-book requests'], ['verification', 'Verification']].map(([id, label]) => (
+              {[['bookings', t('dash.bookings', language)], ['rebook-requests', t('admin.rebookRequests', language)], ['verification', t('verify.title', language)]].map(([id, label]) => (
                 <button key={id} type="button" onClick={() => setBookingSubTab(id)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${bookingSubTab === id ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>{label}</button>
               ))}
             </div>
           )}
           {view === 'finance' && (
             <div className="seller-dashboard-tabs mb-6 flex gap-2 overflow-x-auto">
-              {[['finance', 'Finance'], ['payout', 'Payout account']].map(([id, label]) => (
+              {[['finance', t('dash.finance', language)], ['payout', t('payout', language)]].map(([id, label]) => (
                 <button key={id} type="button" onClick={() => setFinanceSubTab(id)} className={`px-4 py-2 rounded-xl text-sm font-semibold ${financeSubTab === id ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-700'}`}>{label}</button>
               ))}
             </div>
@@ -612,13 +615,13 @@ export default function HotelDashboard() {
 
           {view === 'services' && viewingService && !showEditor ? (
             <div>
-              <button type="button" onClick={() => setViewingService(null)} className="mb-4 text-sm font-semibold text-primary">Back to services</button>
-              <h2 className="mb-4 text-2xl font-black text-slate-950">{viewingService.title || viewingService.name || 'Service details'}</h2>
+              <button type="button" onClick={() => setViewingService(null)} className="mb-4 text-sm font-semibold text-primary">{t('sellerDash.backToServices', language)}</button>
+              <h2 className="mb-4 text-2xl font-black text-slate-950">{viewingService.title || viewingService.name || t('admin.serviceDetails', language)}</h2>
               <ServiceDetailsView service={viewingService} />
             </div>
           ) : (
           <section className="seller-dashboard-content bg-white rounded-2xl shadow-sm p-4">
-            {loading ? <p className="p-4 text-gray-600">Loading dashboard...</p> : null}
+            {loading ? <p className="p-4 text-gray-600">{t('sellerDash.loadingDashboard', language)}</p> : null}
             {!loading && view === 'dashboard' && <Analytics stats={stats} services={services} />}
             {!loading && view === 'services' && !showEditor && (
               <ServiceGrid
@@ -634,7 +637,7 @@ export default function HotelDashboard() {
             )}
             {view === 'services' && showEditor && (
               <div>
-                <button type="button" onClick={resetForm} className="mb-4 text-sm font-semibold text-primary">Back to services</button>
+                <button type="button" onClick={resetForm} className="mb-4 text-sm font-semibold text-primary">{t('sellerDash.backToServices', language)}</button>
                 <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} globalBookingMode={globalBookingMode} />
               </div>
             )}
@@ -668,49 +671,50 @@ function canSellerReviewBooking(booking) {
 }
 
 function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, onEdit, onDelete, onStatus }) {
+  const { language } = useLanguage();
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-black text-slate-950">Services</h2>
-          <p className="text-sm text-slate-500">Your pending and approved listings.</p>
+          <h2 className="text-lg font-black text-slate-950">{t('dash.services', language)}</h2>
+          <p className="text-sm text-slate-500">{t('sellerDash.yourListings', language)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold">
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
+            <option value="all">{t('sellerDash.all', language)}</option>
+            <option value="pending">{t('pending', language)}</option>
+            <option value="approved">{t('rebook.approved', language)}</option>
+            <option value="rejected">{t('rejected', language)}</option>
           </select>
-          <button type="button" onClick={onAdd} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ Add service</button>
+          <button type="button" onClick={onAdd} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ {t('sellerDash.addService', language)}</button>
         </div>
       </div>
       {!services.length ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-          <p className="font-black text-slate-900">No services yet</p>
-          <p className="mt-1 text-sm text-slate-600">Create a service so customers can find and book you.</p>
-          <button type="button" onClick={onAdd} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">Add service</button>
+          <p className="font-black text-slate-900">{t('sellerDash.noServicesYet', language)}</p>
+          <p className="mt-1 text-sm text-slate-600">{t('sellerDash.noServicesLead', language)}</p>
+          <button type="button" onClick={onAdd} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">{t('sellerDash.addService', language)}</button>
         </div>
       ) : (
         <div className="seller-service-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <button type="button" onClick={onAdd} className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary/40 bg-blue-50/60 p-4 text-center text-primary hover:bg-blue-50">
             <span className="text-3xl font-black">+</span>
-            <span className="mt-2 text-sm font-bold">Add service</span>
+            <span className="mt-2 text-sm font-bold">{t('sellerDash.addService', language)}</span>
           </button>
           {services.map((service) => (
             <div key={service._id} className="seller-service-card rounded-xl border border-gray-200 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-gray-900">{service.title || service.name}</h3>
-                  <p className="text-sm text-gray-600">{service.serviceType || service.category}</p>
+                  <p className="text-sm text-gray-600">{getCategoryDisplayLabel(service.serviceType || service.category, language)}</p>
                 </div>
                 <div className="grid gap-1 text-right">
                   <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold capitalize text-blue-800">{serviceApprovalStatus(service)}</span>
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.availabilityText || formatStatus(service.status)}</span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.availabilityText || formatStatus(service.status, language)}</span>
                 </div>
               </div>
-              <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || 'No description.'}</p>
-              <p className="mt-3 text-sm font-semibold text-primary">Prices are managed in the Service / Price table.</p>
+              <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || t('serviceView.noDescription', language)}</p>
+              <p className="mt-3 text-sm font-semibold text-primary">{t('sellerDash.pricesInTable', language)}</p>
               {Array.isArray(service.images) && service.images.length > 0 && (
                 <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
                   {service.images.slice(0, 3).map((image, index) => (
@@ -729,10 +733,10 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, o
                 </p>
               )}
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => onView(service)} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white">View details</button>
-                <button type="button" onClick={() => onEdit(service)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Edit</button>
-                <button type="button" onClick={() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available')} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{service.status === 'available' ? 'Set Not Available' : 'Set Available'}</button>
-                <button type="button" onClick={() => onDelete(service._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Delete</button>
+                <button type="button" onClick={() => onView(service)} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white">{t('sellerDash.viewDetails', language)}</button>
+                <button type="button" onClick={() => onEdit(service)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{t('edit', language)}</button>
+                <button type="button" onClick={() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available')} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{service.status === 'available' ? t('sellerDash.notAvailable', language) : t('sellerDash.available', language)}</button>
+                <button type="button" onClick={() => onDelete(service._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{t('delete', language)}</button>
               </div>
             </div>
           ))}
@@ -743,6 +747,7 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, o
 }
 
 function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
+  const { language } = useLanguage();
   const [decision, setDecision] = useState({
     totalPrice: booking.totalPrice || booking.bookingDetails?.listedPriceRwf || '',
     paymentDeadlineHours: booking.paymentDeadlineHours || 24,
@@ -758,36 +763,36 @@ function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-primary">Manual booking approval</p>
+            <p className="text-xs font-black uppercase tracking-wide text-primary">{t('sellerDash.manualApproval', language)}</p>
             <h2 className="text-xl font-bold text-gray-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || 'Booking request'}</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">Close</button>
+          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">{t('close', language)}</button>
         </div>
         <DetailGrid data={{
-          Customer: booking.touristId?.name || booking.userId?.name || 'Customer',
-          Email: booking.touristId?.email || booking.userId?.email || '-',
-          Quantity: booking.quantity || booking.guests || 1,
-          Status: booking.status,
+          [t('sellerDash.customer', language)]: booking.touristId?.name || booking.userId?.name || t('sellerDash.customer', language),
+          [t('email', language)]: booking.touristId?.email || booking.userId?.email || '-',
+          [t('sellerDash.quantity', language)]: booking.quantity || booking.guests || 1,
+          [t('status', language)]: booking.status,
         }} />
         <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
-          <h3 className="font-bold text-green-950">Approve and send payment request</h3>
-          <p className="mt-1 text-sm text-green-800">Set the final service price and how long the customer has to pay after approval.</p>
+          <h3 className="font-bold text-green-950">{t('sellerDash.approveSend', language)}</h3>
+          <p className="mt-1 text-sm text-green-800">{t('sellerDash.approveSendLead', language)}</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-semibold text-gray-700">Final service price (RWF)</span>
+              <span className="text-sm font-semibold text-gray-700">{t('sellerDash.finalPrice', language)}</span>
               <input type="number" min="1" value={decision.totalPrice} onChange={(event) => set('totalPrice', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-gray-700">Payment deadline hours</span>
+              <span className="text-sm font-semibold text-gray-700">{t('sellerDash.paymentDeadlineHours', language)}</span>
               <input type="number" min="1" value={decision.paymentDeadlineHours} onChange={(event) => set('paymentDeadlineHours', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
             </label>
           </div>
           <label className="mt-4 block">
-            <span className="text-sm font-semibold text-gray-700">Payment reason</span>
+            <span className="text-sm font-semibold text-gray-700">{t('sellerDash.paymentReason', language)}</span>
             <input value={decision.paymentReason} onChange={(event) => set('paymentReason', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
           </label>
           <label className="mt-4 block">
-            <span className="text-sm font-semibold text-gray-700">Optional note</span>
+            <span className="text-sm font-semibold text-gray-700">{t('sellerDash.optionalNote', language)}</span>
             <textarea rows={3} value={decision.note} onChange={(event) => set('note', event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-4 py-3" />
           </label>
           <button
@@ -802,14 +807,14 @@ function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
             })}
             className="mt-4 rounded-xl bg-green-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Approve and email customer
+            {t('sellerDash.approveSend', language)}
           </button>
         </div>
         <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
-          <h3 className="font-bold text-red-950">Reject request</h3>
+          <h3 className="font-bold text-red-950">{t('sellerDash.rejectRequest', language)}</h3>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-            <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reason for cancellation" className="min-w-0 flex-1 rounded-xl border border-red-200 bg-white px-4 py-3" />
-            <button type="button" disabled={!rejectReason.trim()} onClick={() => onSubmit({ status: 'cancelled', reason: rejectReason.trim() })} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Reject booking</button>
+            <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder={t('rebook.reason', language)} className="min-w-0 flex-1 rounded-xl border border-red-200 bg-white px-4 py-3" />
+            <button type="button" disabled={!rejectReason.trim()} onClick={() => onSubmit({ status: 'cancelled', reason: rejectReason.trim() })} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{t('sellerDash.rejectBooking', language)}</button>
           </div>
         </div>
       </div>
@@ -818,6 +823,7 @@ function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
 }
 
 function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
+  const { language } = useLanguage();
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [searchParams] = useSearchParams();
   const focusId = searchParams.get('bookingId');
@@ -836,28 +842,28 @@ function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
     return () => window.clearTimeout(timer);
   }, [bookings, focusId, onApproveBooking]);
 
-  if (!bookings.length) return <p className="p-4 text-gray-600">No bookings yet.</p>;
+  if (!bookings.length) return <p className="p-4 text-gray-600">{t('sellerDash.noBookingsYet', language)}</p>;
   return (
     <>
       <CompleteBookingPanel onCompleted={onCompleted} />
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
-          <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">Booking ID</th><th className="py-3 px-2 text-left">Customer</th><th className="py-3 px-2 text-left">Service</th><th className="py-3 px-2 text-left">Quantity</th><th className="py-3 px-2 text-left">Booking</th><th className="py-3 px-2 text-left">Payment</th><th className="py-3 px-2 text-left">Paid</th><th className="py-3 px-2 text-right">Actions</th></tr></thead>
+          <thead><tr className="border-b border-gray-200"><th className="py-3 px-2 text-left">{t('sellerDash.bookingId', language)}</th><th className="py-3 px-2 text-left">{t('sellerDash.customer', language)}</th><th className="py-3 px-2 text-left">{t('sellerDash.service', language)}</th><th className="py-3 px-2 text-left">{t('sellerDash.quantity', language)}</th><th className="py-3 px-2 text-left">{t('sellerDash.booking', language)}</th><th className="py-3 px-2 text-left">{t('sellerDash.payment', language)}</th><th className="py-3 px-2 text-left">{t('sellerDash.paid', language)}</th><th className="py-3 px-2 text-right">{t('actions', language)}</th></tr></thead>
           <tbody>{bookings.map((booking) => {
             const focused = String(booking._id) === String(focusId) || String(booking.id) === String(focusId) || String(booking.bookingCode || '') === String(focusId);
             return (
               <tr key={booking._id} className={`border-b border-gray-100 ${focused ? 'bg-blue-50' : ''}`}>
                 <td className="py-3 px-2 font-mono text-xs text-slate-600">{booking._id}</td>
-                <td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || 'Customer'}</td>
+                <td className="py-3 px-2">{booking.userId?.name || booking.touristId?.name || t('sellerDash.customer', language)}</td>
                 <td className="py-3 px-2">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</td>
                 <td className="py-3 px-2">{booking.quantity || 1}</td>
                 <td className="py-3 px-2">{booking.status}</td>
                 <td className="py-3 px-2">{booking.paymentStatus || 'unpaid'}</td>
                 <td className="py-3 px-2">{formatRwf(booking.amountPaid || 0)}</td>
                 <td className="py-3 px-2 text-right space-x-2">
-                  <button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">View</button>
-                  {canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="text-green-700 hover:underline">Review</button>}
-                  {booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="text-primary hover:underline">cancelled</button>}
+                  <button onClick={() => setSelectedBooking(booking)} className="text-primary hover:underline">{t('view', language)}</button>
+                  {canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="text-green-700 hover:underline">{t('sellerDash.review', language)}</button>}
+                  {booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="text-primary hover:underline">{t('cancelled', language)}</button>}
                 </td>
               </tr>
             );
@@ -870,11 +876,11 @@ function BookingList({ bookings, onStatus, onApproveBooking, onCompleted }) {
           return (
           <article key={booking._id} className={`rounded-xl border bg-white p-4 shadow-sm ${focused ? 'border-blue-400 ring-2 ring-blue-200' : 'border-slate-200'}`}>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-primary">Booking ID {String(booking._id || '').slice(-8) || '-'}</p><h3 className="mt-1 truncate font-black text-slate-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</h3><p className="mt-1 text-sm text-slate-500">{booking.touristId?.name || 'Customer'}</p></div>
+              <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-primary">{t('sellerDash.bookingId', language)} {String(booking._id || '').slice(-8) || '-'}</p><h3 className="mt-1 truncate font-black text-slate-900">{booking.bookingDetails?.requestedService || booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace}</h3><p className="mt-1 text-sm text-slate-500">{booking.touristId?.name || t('sellerDash.customer', language)}</p></div>
               <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700">{booking.status}</span>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Payment</span><strong>{booking.paymentStatus || 'unpaid'}</strong></p><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Paid</span><strong>{formatRwf(booking.amountPaid || 0)}</strong></p></div>
-            <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">View</button>{canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white">Review</button>}{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">cancelled</button>}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">{t('sellerDash.payment', language)}</span><strong>{booking.paymentStatus || 'unpaid'}</strong></p><p className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">{t('sellerDash.paid', language)}</span><strong>{formatRwf(booking.amountPaid || 0)}</strong></p></div>
+            <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setSelectedBooking(booking)} className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white">{t('view', language)}</button>{canSellerReviewBooking(booking) && <button onClick={() => onApproveBooking(booking)} className="rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white">{t('sellerDash.review', language)}</button>}{booking.status === 'confirmed' && <button onClick={() => onStatus(booking._id, 'cancelled')} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold capitalize text-slate-700">{t('cancelled', language)}</button>}</div>
           </article>
           );
         })}
@@ -901,6 +907,7 @@ function Analytics({ stats, services }) {
 }
 
 function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMode }) {
+  const { language } = useLanguage();
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setServiceLocation = (serviceLocation) => setForm((prev) => ({
     ...prev,
@@ -913,26 +920,26 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
   const updateTable = (updater) => setForm((prev) => ({ ...prev, availabilityTable: updater(prev.availabilityTable) }));
   return (
     <form onSubmit={onSubmit} className="seller-service-form grid gap-4 md:grid-cols-2">
-      <Input label="Service name" value={form.title} onChange={(value) => set('title', value)} required />
+      <Input label={t('serviceName', language)} value={form.title} onChange={(value) => set('title', value)} required />
       <CategorySelect value={form.category} onChange={(value) => set('category', value)} />
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-        <p className="text-sm font-black text-blue-950">Booking mode: <span className="capitalize">{globalBookingMode === 'service-level' ? form.bookingMode : globalBookingMode}</span></p>
-        <p className="mt-1 text-xs leading-5 text-blue-800">Booking mode is controlled by the administrator. Sellers can update service information, prices, availability, and customer questions, but cannot change this setting.</p>
+        <p className="text-sm font-black text-blue-950">{t('sellerDash.bookingMode', language, { mode: globalBookingMode === 'service-level' ? form.bookingMode : globalBookingMode })}</p>
+        <p className="mt-1 text-xs leading-5 text-blue-800">{t('sellerDash.bookingModeHelp', language)}</p>
       </div>
       <ServiceLocationPicker value={form.serviceLocation} onChange={setServiceLocation} />
-      <Select label="Availability" value={form.status} onChange={(value) => set('status', value)} options={[['available', 'Available'], ['unavailable', 'Not Available'], ['custom', 'Custom']]} />
+      <Select label={t('sellerDash.availability', language)} value={form.status} onChange={(value) => set('status', value)} options={[['available', t('sellerDash.available', language)], ['unavailable', t('sellerDash.notAvailable', language)], ['custom', t('custom', language)]]} />
       {form.status === 'custom' ? (
-        <Input label="Custom Availability" value={form.customAvailability} onChange={(value) => set('customAvailability', value)} placeholder="Example: Weekends only" required />
+        <Input label={t('customAvailability', language)} value={form.customAvailability} onChange={(value) => set('customAvailability', value)} placeholder={t('businessRegister.remainingExample', language)} required />
       ) : (
-        <Input label="Remaining Quantity" value={form.remainingQuantity} onChange={(value) => set('remainingQuantity', value)} placeholder="Example: 5 cars left" />
+        <Input label={t('remainingQuantity', language)} value={form.remainingQuantity} onChange={(value) => set('remainingQuantity', value)} placeholder={t('businessRegister.remainingExample', language)} />
       )}
-      <TextArea label="Description" value={form.description} onChange={(value) => set('description', value)} required />
+      <TextArea label={t('description', language)} value={form.description} onChange={(value) => set('description', value)} required />
       <div className="md:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-        <h3 className="font-bold text-emerald-950">Customer contact after payment</h3>
-        <p className="mt-1 text-sm text-emerald-800">Add one phone number and an optional second WhatsApp number. These remain locked until the customer pays.</p>
+        <h3 className="font-bold text-emerald-950">{t('sellerDash.contactAfterPay', language)}</h3>
+        <p className="mt-1 text-sm text-emerald-800">{t('sellerDash.contactAfterPayLead', language)}</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Input label="Primary phone number" type="tel" value={form.contactDetails.phone} onChange={(value) => setContact('phone', value)} placeholder="Example: +250 788 000 000" required />
-          <Input label="WhatsApp / second phone number" type="tel" value={form.contactDetails.whatsapp} onChange={(value) => setContact('whatsapp', value)} placeholder="Optional second number" />
+          <Input label={t('primaryPhone', language)} type="tel" value={form.contactDetails.phone} onChange={(value) => setContact('phone', value)} placeholder="Example: +250 788 000 000" required />
+          <Input label={t('secondPhone', language)} type="tel" value={form.contactDetails.whatsapp} onChange={(value) => setContact('whatsapp', value)} placeholder={t('optional', language)} />
         </div>
       </div>
       <div className="md:col-span-2 rounded-xl border border-amber-300 bg-amber-50 p-4">
@@ -940,7 +947,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
           <input type="checkbox" checked={form.promotion.enabled} onChange={(event) => setPromotion('enabled', event.target.checked)} />
           Add a promotion to this service
         </label>
-        <p className="mt-1 text-sm text-amber-800">Enable this only when customers should receive a percentage discount on this service.</p>
+        <p className="mt-1 text-sm text-amber-800">{t('sellerDash.promoHelp', language)}</p>
         {form.promotion.enabled && (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Input label="Promotion title" value={form.promotion.title} onChange={(value) => setPromotion('title', value)} placeholder="Example: Happy Hours!" required />
@@ -971,23 +978,23 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
         )}
       </div>
       <div className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
-        <h3 className="font-bold text-blue-950">Re-book deadlines for this business</h3>
-        <p className="mt-1 text-sm text-blue-800">These values apply only to this service when customers request a re-book or cancellation.</p>
+        <h3 className="font-bold text-blue-950">{t('sellerDash.rebookDeadlines', language)}</h3>
+        <p className="mt-1 text-sm text-blue-800">{t('sellerDash.rebookDeadlinesLead', language)}</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <Input label="Request cutoff (hours before booking)" type="number" value={form.rebookSettings.requestDeadlineHours} onChange={(value) => setRebookSetting('requestDeadlineHours', Number(value))} required />
           <Input label="Re-book ID validity (hours)" type="number" value={form.rebookSettings.rebookIdValidityHours} onChange={(value) => setRebookSetting('rebookIdValidityHours', Number(value))} required />
         </div>
       </div>
       <div className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
-        <h3 className="font-bold text-blue-950">Guest cancellation rules</h3>
-        <p className="mt-1 text-sm text-blue-800">Hours before the service when cancel closes, and the percent the guest loses if they cancel. Defaults are 6 hours and 20%.</p>
+        <h3 className="font-bold text-blue-950">{t('sellerDash.guestCancelRules', language)}</h3>
+        <p className="mt-1 text-sm text-blue-800">{t('sellerDash.guestCancelRulesLead', language)}</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <Input label="Cancel window (hours before service)" type="number" value={form.cancelWindowHours ?? 6} onChange={(value) => set('cancelWindowHours', Number(value))} required />
-          <Input label="Cancel penalty percent" type="number" value={form.cancelPenaltyPercent ?? 20} onChange={(value) => set('cancelPenaltyPercent', Number(value))} required />
+          <Input label={t('cancelWindowHours', language)} type="number" value={form.cancelWindowHours ?? 6} onChange={(value) => set('cancelWindowHours', Number(value))} required />
+          <Input label={t('cancelPenaltyPercent', language)} type="number" value={form.cancelPenaltyPercent ?? 20} onChange={(value) => set('cancelPenaltyPercent', Number(value))} required />
         </div>
       </div>
       <label className="seller-photo-input block">
-        <span className="text-sm font-semibold text-gray-700">Photos</span>
+        <span className="text-sm font-semibold text-gray-700">{t('sellerDash.photos', language)}</span>
         <input
           type="file"
           accept="image/*"
@@ -999,12 +1006,12 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
             set('imageFiles', accepted.slice(0, remainingSlots));
             if (rejected || accepted.length > remainingSlots) {
               event.target.value = '';
-              window.alert('Please choose up to 3 image files. Each image must be 5 MB or smaller.');
+              window.alert(t('imageLimit', language));
             }
           }}
           className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3"
         />
-        <span className="mt-1 block text-xs text-gray-500">Upload 1, 2, or 3 image files. Maximum 5 MB each.</span>
+        <span className="mt-1 block text-xs text-gray-500">{t('sellerDash.photoHint', language)}</span>
       </label>
       {(form.existingImages.length > 0 || form.imageFiles.length > 0) && (
         <div className="seller-photo-grid md:col-span-2 grid grid-cols-3 gap-3">
@@ -1016,7 +1023,7 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
                 onClick={() => set('existingImages', form.existingImages.filter((item) => item !== image))}
                 className="absolute right-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-xs font-semibold text-red-700"
               >
-                Remove
+                {t('admin.remove', language)}
               </button>
             </div>
           ))}
@@ -1029,16 +1036,17 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
       )}
       <AvailabilityTableBuilder table={form.availabilityTable} updateTable={updateTable} />
       <details className="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer font-black text-slate-900">Optional seller questions after the fixed booking form</summary>
-        <p className="mt-2 text-sm text-slate-500">The required customer fields above always stay in place. Open this section only when your service needs extra questions.</p>
+        <summary className="cursor-pointer font-black text-slate-900">{t('sellerDash.optionalQuestions', language)}</summary>
+        <p className="mt-2 text-sm text-slate-500">{t('sellerDash.optionalQuestionsLead', language)}</p>
         <div className="mt-4"><BookingFormBuilder bookingForm={form.bookingForm} setBookingForm={(bookingForm) => set('bookingForm', bookingForm)} /></div>
       </details>
-      <button type="submit" disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Update Service' : 'Create Service'}</button>
+      <button type="submit" disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? t('savingEllipsis', language) : editing ? t('editService', language) : t('addService', language)}</button>
     </form>
   );
 }
 
 function BookingFormBuilder({ bookingForm, setBookingForm }) {
+  const { language } = useLanguage();
   const update = (patch) => setBookingForm({ ...bookingForm, ...patch });
   const makeField = (question = {}) => ({
     id: makeId('field'),
@@ -1100,14 +1108,14 @@ function BookingFormBuilder({ bookingForm, setBookingForm }) {
     <div className="seller-booking-builder md:col-span-2 min-w-0 rounded-xl border border-gray-200 p-4">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h3 className="font-bold text-gray-900">Optional Customer Questions</h3>
-          <p className="text-sm text-gray-500">Add only service-specific questions. These appear after the platform's fixed booking form.</p>
+          <h3 className="font-bold text-gray-900">{t('sellerDash.optionalCustomerQuestions', language)}</h3>
+          <p className="text-sm text-gray-500">{t('sellerDash.optionalCustomerQuestionsLead', language)}</p>
         </div>
-        <button type="button" onClick={addField} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">Add Field</button>
+        <button type="button" onClick={addField} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{t('sellerDash.addField', language)}</button>
       </div>
       <div className="mb-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-950">
-        <p className="font-bold">How to use this</p>
-        <p className="mt-1">These questions supplement the fixed name, phone, email, date, time, people, quantity, location, request, payment, and terms fields.</p>
+        <p className="font-bold">{t('sellerDash.howToUse', language)}</p>
+        <p className="mt-1">{t('sellerDash.howToUseBody', language)}</p>
       </div>
       <div className="mb-4 grid gap-3 md:grid-cols-4">
         {FORM_TEMPLATES.map((template) => (
@@ -1118,8 +1126,8 @@ function BookingFormBuilder({ bookingForm, setBookingForm }) {
         ))}
       </div>
       <div className="mb-4 rounded-xl border border-gray-200 p-4">
-        <p className="font-bold text-gray-900">Add questions from the field library</p>
-        <p className="mt-1 text-sm text-gray-500">Click what you need. Each question is added below and can be changed anytime.</p>
+        <p className="font-bold text-gray-900">{t('sellerDash.fieldLibrary', language)}</p>
+        <p className="mt-1 text-sm text-gray-500">{t('sellerDash.fieldLibraryLead', language)}</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {QUICK_QUESTIONS.map((group) => (
             <div key={group.group} className="rounded-xl bg-gray-50 p-3">
@@ -1166,7 +1174,7 @@ function BookingFormBuilder({ bookingForm, setBookingForm }) {
                 </div>
               )}
               <details className="mt-3 rounded-lg bg-gray-50 p-3">
-                <summary className="cursor-pointer text-sm font-semibold text-gray-700">More settings</summary>
+                <summary className="cursor-pointer text-sm font-semibold text-gray-700">{t('sellerDash.moreSettings', language)}</summary>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   {field.type === 'number' && (
                     <>
@@ -1180,22 +1188,22 @@ function BookingFormBuilder({ bookingForm, setBookingForm }) {
                 </div>
               </details>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <label className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm"><input type="checkbox" checked={field.required} onChange={(event) => updateField(field.id, { required: event.target.checked })} />Customer must answer this</label>
-                <label className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm"><input type="checkbox" checked={field.enabled} onChange={(event) => updateField(field.id, { enabled: event.target.checked })} />Show this question</label>
+                <label className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm"><input type="checkbox" checked={field.required} onChange={(event) => updateField(field.id, { required: event.target.checked })} />{t('sellerDash.mustAnswer', language)}</label>
+                <label className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm"><input type="checkbox" checked={field.enabled} onChange={(event) => updateField(field.id, { enabled: event.target.checked })} />{t('sellerDash.showQuestion', language)}</label>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" disabled={index === 0} onClick={() => moveField(field.id, -1)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:opacity-40">Move earlier</button>
-                <button type="button" disabled={index === bookingForm.fields.length - 1} onClick={() => moveField(field.id, 1)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:opacity-40">Move later</button>
-                <button type="button" onClick={() => duplicateField(field)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">Copy question</button>
-                <button type="button" onClick={() => deleteField(field.id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Remove question</button>
+                <button type="button" disabled={index === 0} onClick={() => moveField(field.id, -1)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:opacity-40">{t('sellerDash.moveEarlier', language)}</button>
+                <button type="button" disabled={index === bookingForm.fields.length - 1} onClick={() => moveField(field.id, 1)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:opacity-40">{t('sellerDash.moveLater', language)}</button>
+                <button type="button" onClick={() => duplicateField(field)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm">{t('sellerDash.copyQuestion', language)}</button>
+                <button type="button" onClick={() => deleteField(field.id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{t('sellerDash.removeQuestion', language)}</button>
               </div>
             </div>
           ))}
         </div>
         <div className="rounded-xl bg-gray-50 p-4">
           <div className="mb-3 rounded-lg bg-white p-3 text-sm text-gray-600">
-            <p className="font-bold text-gray-900">Customer Preview</p>
-            <p>This is what customers will see when they click Book.</p>
+            <p className="font-bold text-gray-900">{t('sellerDash.customerPreview', language)}</p>
+            <p>{t('sellerDash.customerPreviewLead', language)}</p>
           </div>
           <h4 className="font-bold text-gray-900">{bookingForm.title || 'Booking Request'}</h4>
           {bookingForm.description && <p className="mt-1 text-sm text-gray-600">{bookingForm.description}</p>}
@@ -1222,6 +1230,7 @@ function PreviewField({ field }) {
 }
 
 function AvailabilityTableBuilder({ table, updateTable }) {
+  const { language } = useLanguage();
   const rows = table?.rows || [];
   const [selectedRowId, setSelectedRowId] = useState(rows[0]?.id || '');
   const [detailsRow, setDetailsRow] = useState(null);
@@ -1255,7 +1264,7 @@ function AvailabilityTableBuilder({ table, updateTable }) {
   const duration = 2;
   const basePrice = Number(selected.price || 0);
   const previewTotal = calculatePreviewTotal(selected.priceType, basePrice, people, quantity, duration);
-  const priceTypeLabel = PRICE_TABLE_OPTIONS.priceType.find(([value]) => value === selected.priceType)?.[1] || 'Select price type';
+  const priceTypeLabel = PRICE_TABLE_OPTIONS.priceType.find(([value]) => value === selected.priceType)?.[1] || t('sellerDash.priceType', language);
 
   return (
     <section className="seller-price-builder md:col-span-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm sm:p-5">
@@ -1264,47 +1273,47 @@ function AvailabilityTableBuilder({ table, updateTable }) {
           <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4">
             <div className="flex gap-3">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-lg font-black text-primary">1</span>
-              <div><h3 className="font-black text-slate-950">Service price options <span className="font-medium text-slate-500">(Seller view)</span></h3><p className="mt-1 text-xs text-slate-500">Manage what customers can select, book, and pay for.</p></div>
+              <div><h3 className="font-black text-slate-950">{t('sellerDash.priceOptions', language)} <span className="font-medium text-slate-500">{t('sellerDash.sellerView', language)}</span></h3><p className="mt-1 text-xs text-slate-500">{t('sellerDash.priceOptionsLead', language)}</p></div>
             </div>
             <button type="button" onClick={addRow} className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white">+ Add option</button>
           </div>
 
           <div className="grid grid-cols-[1.45fr_.65fr_.8fr_.65fr_.55fr] gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            <span>Option name</span><span>Price</span><span>Price type</span><span>Availability</span><span>Details</span>
+            <span>{t('sellerDash.optionName', language)}</span><span>{t('sellerDash.price', language)}</span><span>{t('sellerDash.priceType', language)}</span><span>{t('sellerDash.availability', language)}</span><span>{t('sellerDash.details', language)}</span>
           </div>
           <div className="divide-y divide-slate-100">
             {rows.map((row) => {
               const cells = row.cells || {};
               const active = row.id === selectedRow?.id;
               return <button key={row.id} type="button" onClick={() => setSelectedRowId(row.id)} className={`grid w-full grid-cols-[1.45fr_.65fr_.8fr_.65fr_.55fr] items-center gap-2 px-4 py-4 text-left text-xs transition ${active ? 'bg-blue-50/70' : 'hover:bg-slate-50'}`}>
-                <span className="flex min-w-0 items-center gap-2 font-bold text-slate-900"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-primary">▣</span><span className="truncate">{cells.service || 'New service option'}</span></span>
+                <span className="flex min-w-0 items-center gap-2 font-bold text-slate-900"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-primary">▣</span><span className="truncate">{cells.service || t('sellerDash.newOption', language)}</span></span>
                 <span className="font-black text-primary">{Number(cells.price || 0).toLocaleString()}</span>
-                <span className="capitalize text-slate-600">{String(cells.priceType || 'Not set').replace(/-/g, ' ')}</span>
-                <span className="font-semibold text-emerald-600">● {Number(cells.availability || 0)} available</span>
-                <span onClick={(event) => { event.stopPropagation(); setDetailsRow(row); }} className="font-bold text-primary">View details</span>
+                <span className="capitalize text-slate-600">{String(cells.priceType || t('notSet', language)).replace(/-/g, ' ')}</span>
+                <span className="font-semibold text-emerald-600">● {Number(cells.availability || 0)} {t('sellerDash.available', language).toLowerCase()}</span>
+                <span onClick={(event) => { event.stopPropagation(); setDetailsRow(row); }} className="font-bold text-primary">{t('sellerDash.viewDetails', language)}</span>
               </button>;
             })}
           </div>
-          {!rows.length && <p className="p-6 text-center text-sm text-slate-500">Add the first service price option.</p>}
+          {!rows.length && <p className="p-6 text-center text-sm text-slate-500">{t('sellerDash.addFirstOption', language)}</p>}
 
           {selectedRow && <div className="border-t border-slate-200 bg-slate-50 p-4">
-            <div className="mb-3 flex items-center justify-between"><h4 className="text-sm font-black text-slate-900">Edit selected option</h4><button type="button" onClick={() => deleteRow(selectedRow.id)} className="text-xs font-bold text-red-600">Delete option</button></div>
+            <div className="mb-3 flex items-center justify-between"><h4 className="text-sm font-black text-slate-900">{t('sellerDash.editSelected', language)}</h4><button type="button" onClick={() => deleteRow(selectedRow.id)} className="text-xs font-bold text-red-600">{t('sellerDash.deleteOption', language)}</button></div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <StudioField label="Option name" value={selected.service || ''} onChange={(value) => updateCell(selectedRow.id, 'service', value)} />
-              <StudioField label="Price (RWF)" type="number" value={selected.price || ''} onChange={(value) => updateCell(selectedRow.id, 'price', value)} />
-              <StudioSelect label="Price type" value={selected.priceType || ''} options={PRICE_TABLE_OPTIONS.priceType} onChange={(value) => updateCell(selectedRow.id, 'priceType', value)} />
-              <StudioSelect label="Calculation field" value={selected.calculationField || ''} options={PRICE_TABLE_OPTIONS.calculationField} onChange={(value) => updateCell(selectedRow.id, 'calculationField', value)} />
-              <StudioSelect label="Duration unit" value={selected.durationUnit || ''} options={PRICE_TABLE_OPTIONS.durationUnit} onChange={(value) => updateCell(selectedRow.id, 'durationUnit', value)} />
-              <StudioField label="Maximum booking duration" type="number" value={selected.maximumDuration || ''} onChange={(value) => updateCell(selectedRow.id, 'maximumDuration', value)} />
-              <StudioField label="Availability / capacity" type="number" value={selected.availability || ''} onChange={(value) => updateCell(selectedRow.id, 'availability', value)} />
-              <StudioField label="Available from" type="date" value={selected.availableFrom || ''} onChange={(value) => updateCell(selectedRow.id, 'availableFrom', value)} />
-              <StudioField label="Available until" type="date" value={selected.availableTo || ''} onChange={(value) => updateCell(selectedRow.id, 'availableTo', value)} />
-              <StudioField label="Open time (optional)" type="time" value={selected.availableStartTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableStartTime', value)} />
-              <StudioField label="Close time (optional)" type="time" value={selected.availableEndTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableEndTime', value)} />
-              <StudioSelect label="Clock times on booking form" value={selected.requiresTime || ''} options={TIME_REQUIREMENT_OPTIONS} onChange={(value) => updateCell(selectedRow.id, 'requiresTime', value)} />
+              <StudioField label={t('sellerDash.optionName', language)} value={selected.service || ''} onChange={(value) => updateCell(selectedRow.id, 'service', value)} />
+              <StudioField label={`${t('sellerDash.price', language)} (RWF)`} type="number" value={selected.price || ''} onChange={(value) => updateCell(selectedRow.id, 'price', value)} />
+              <StudioSelect label={t('sellerDash.priceType', language)} value={selected.priceType || ''} options={PRICE_TABLE_OPTIONS.priceType} onChange={(value) => updateCell(selectedRow.id, 'priceType', value)} />
+              <StudioSelect label={t('serviceView.calculatedBy', language)} value={selected.calculationField || ''} options={PRICE_TABLE_OPTIONS.calculationField} onChange={(value) => updateCell(selectedRow.id, 'calculationField', value)} />
+              <StudioSelect label={t('serviceView.durationUnit', language)} value={selected.durationUnit || ''} options={PRICE_TABLE_OPTIONS.durationUnit} onChange={(value) => updateCell(selectedRow.id, 'durationUnit', value)} />
+              <StudioField label={t('serviceView.maximumDuration', language)} type="number" value={selected.maximumDuration || ''} onChange={(value) => updateCell(selectedRow.id, 'maximumDuration', value)} />
+              <StudioField label={t('serviceView.capacity', language)} type="number" value={selected.availability || ''} onChange={(value) => updateCell(selectedRow.id, 'availability', value)} />
+              <StudioField label={t('serviceView.availableFrom', language)} type="date" value={selected.availableFrom || ''} onChange={(value) => updateCell(selectedRow.id, 'availableFrom', value)} />
+              <StudioField label={t('serviceView.availableUntil', language)} type="date" value={selected.availableTo || ''} onChange={(value) => updateCell(selectedRow.id, 'availableTo', value)} />
+              <StudioField label={`${t('serviceView.startTime', language)} ${t('booking.optional', language)}`} type="time" value={selected.availableStartTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableStartTime', value)} />
+              <StudioField label={`${t('serviceView.endTime', language)} ${t('booking.optional', language)}`} type="time" value={selected.availableEndTime || ''} onChange={(value) => updateCell(selectedRow.id, 'availableEndTime', value)} />
+              <StudioSelect label={t('serviceView.timeRequired', language)} value={selected.requiresTime || ''} options={TIME_REQUIREMENT_OPTIONS} onChange={(value) => updateCell(selectedRow.id, 'requiresTime', value)} />
               <fieldset className="sm:col-span-2">
-                <span className="text-xs font-bold text-slate-600">Available days</span>
-                <p className="mt-1 text-[11px] text-slate-500">Leave all unchecked to allow every day inside the date window.</p>
+                <span className="text-xs font-bold text-slate-600">{t('sellerDash.availableDays', language)}</span>
+                <p className="mt-1 text-[11px] text-slate-500">{t('sellerDash.leaveUnchecked', language)}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {DAY_OPTIONS.map(([key, label]) => {
                     const selectedDays = String(selected.availableDays || '').split(',').filter(Boolean);
@@ -1323,7 +1332,7 @@ function AvailabilityTableBuilder({ table, updateTable }) {
                   })}
                 </div>
               </fieldset>
-              <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600">Details / amenities</span><textarea rows={2} value={selected.details || ''} onChange={(event) => updateCell(selectedRow.id, 'details', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Wi-Fi, breakfast, private bathroom..." /></label>
+              <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-600">{t('sellerDash.detailsAmenities', language)}</span><textarea rows={2} value={selected.details || ''} onChange={(event) => updateCell(selectedRow.id, 'details', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder={t('sellerDash.detailsPlaceholder', language)} /></label>
             </div>
           </div>}
 
@@ -1331,36 +1340,36 @@ function AvailabilityTableBuilder({ table, updateTable }) {
         </div>
 
         <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-primary">●</span><div><h3 className="font-black text-slate-950">Booking form preview <span className="font-medium text-slate-500">(Customer view)</span></h3><p className="mt-1 text-xs text-slate-500">The fixed form sellers cannot remove or replace.</p></div></div>
-          <label className="block text-xs font-bold text-slate-700">Choose a service <span className="text-red-500">*</span><select value={selectedRow?.id || ''} onChange={(event) => setSelectedRowId(event.target.value)} className="mt-1 w-full rounded-lg border-2 border-blue-500 bg-white px-3 py-3 text-sm"><option value="">Choose an option</option>{rows.map((row) => <option key={row.id} value={row.id}>{row.cells?.service || 'New option'} — {formatRwf(Number(row.cells?.price || 0))} {String(row.cells?.priceType || '').replace(/-/g, ' ')}</option>)}</select></label>
-          {selectedRow && <div className="mt-3 flex items-center justify-between rounded-xl bg-blue-50 px-3 py-3 text-xs"><strong className="text-primary">▥ &nbsp;{selected.service || 'Selected option'} — {formatRwf(basePrice)}</strong><button type="button" onClick={() => setDetailsRow(selectedRow)} className="font-bold text-primary">View details ↗</button></div>}
+          <div className="mb-4 flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-primary">●</span><div><h3 className="font-black text-slate-950">{t('sellerDash.formPreview', language)} <span className="font-medium text-slate-500">{t('sellerDash.customerView', language)}</span></h3><p className="mt-1 text-xs text-slate-500">{t('sellerDash.formPreviewLead', language)}</p></div></div>
+          <label className="block text-xs font-bold text-slate-700">{t('sellerDash.chooseService', language)} <span className="text-red-500">*</span><select value={selectedRow?.id || ''} onChange={(event) => setSelectedRowId(event.target.value)} className="mt-1 w-full rounded-lg border-2 border-blue-500 bg-white px-3 py-3 text-sm"><option value="">{t('sellerDash.chooseOption', language)}</option>{rows.map((row) => <option key={row.id} value={row.id}>{row.cells?.service || t('sellerDash.newOption', language)} — {formatRwf(Number(row.cells?.price || 0))} {String(row.cells?.priceType || '').replace(/-/g, ' ')}</option>)}</select></label>
+          {selectedRow && <div className="mt-3 flex items-center justify-between rounded-xl bg-blue-50 px-3 py-3 text-xs"><strong className="text-primary">▥ &nbsp;{selected.service || t('sellerDash.selectedOption', language)} — {formatRwf(basePrice)}</strong><button type="button" onClick={() => setDetailsRow(selectedRow)} className="font-bold text-primary">{t('sellerDash.viewDetails', language)} ↗</button></div>}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <PreviewInput label="Full name" placeholder="Enter full name" />
-            <PreviewInput label="Phone number" placeholder="+250 7XX XXX XXX" />
-            <PreviewInput label="Email" placeholder="you@example.com" />
-            <PreviewInput label="Booking date" placeholder="Select date" />
-            {parseOptionAvailability(selectedRow).requiresEndDate && <PreviewInput label="End booking date" placeholder="Select end date" />}
-            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? 'Start time' : 'Start time (optional)'} placeholder="Select start time" />
-            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? 'End time' : 'End time (optional)'} placeholder="Select end time" />
-            <PreviewInput label="Number of people" placeholder="2" />
-            <PreviewInput label="Quantity / units" placeholder="1" />
-            <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-700">Special request <span className="font-normal text-slate-400">(optional)</span></span><textarea disabled rows={4} placeholder="Any special request or notes..." className="mt-1 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
+            <PreviewInput label={t('booking.fullName', language)} placeholder={t('booking.fullName', language)} />
+            <PreviewInput label={t('booking.phoneNumber', language)} placeholder="+250 7XX XXX XXX" />
+            <PreviewInput label={t('email', language)} placeholder="you@example.com" />
+            <PreviewInput label={t('booking.bookingDate', language)} placeholder={t('booking.date', language)} />
+            {parseOptionAvailability(selectedRow).requiresEndDate && <PreviewInput label={t('booking.endBookingDate', language)} placeholder={t('booking.endDate', language)} />}
+            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? t('booking.startTime', language) : `${t('booking.startTime', language)} ${t('booking.optional', language)}`} placeholder={t('booking.startTime', language)} />
+            <PreviewInput label={parseOptionAvailability(selectedRow).requiresTime ? t('booking.endTime', language) : `${t('booking.endTime', language)} ${t('booking.optional', language)}`} placeholder={t('booking.endTime', language)} />
+            <PreviewInput label={t('booking.numberOfPeople', language)} placeholder="2" />
+            <PreviewInput label={t('booking.quantityUnits', language)} placeholder="1" />
+            <label className="sm:col-span-2"><span className="text-xs font-bold text-slate-700">{t('sellerDash.specialRequest', language)} <span className="font-normal text-slate-400">{t('booking.optional', language)}</span></span><textarea disabled rows={4} placeholder={t('sellerDash.specialRequestPlaceholder', language)} className="mt-1 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" /></label>
           </div>
         </div>
 
         <aside className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-primary">▦</span><h3 className="text-sm font-black text-slate-950">Automatic quote preview</h3></div>
+          <div className="flex items-center gap-2"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-primary">▦</span><h3 className="text-sm font-black text-slate-950">{t('sellerDash.quotePreview', language)}</h3></div>
           <dl className="mt-5 space-y-4 text-xs text-slate-600">
-            <QuoteLine label="Selected service" value={selected.service || 'Choose an option'} />
-            <QuoteLine label="Price type" value={priceTypeLabel} />
-            <QuoteLine label="Number of people" value={people} />
-            <QuoteLine label="Quantity / units" value={quantity} />
-            <QuoteLine label="Booking duration" value={`${duration} ${selected.durationUnit || 'units'}`} />
+            <QuoteLine label={t('payment.selectedService', language)} value={selected.service || t('sellerDash.chooseOption', language)} />
+            <QuoteLine label={t('sellerDash.priceType', language)} value={priceTypeLabel} />
+            <QuoteLine label={t('booking.numberOfPeople', language)} value={people} />
+            <QuoteLine label={t('booking.quantityUnits', language)} value={quantity} />
+            <QuoteLine label={t('booking.bookingDuration', language)} value={`${duration} ${selected.durationUnit || t('sellerDash.quantity', language).toLowerCase()}`} />
           </dl>
           <div className="my-5 border-t border-slate-200" />
-          <QuoteLine label="Total price" value={formatRwf(previewTotal)} strong />
-          <p className="mt-4 text-xs text-slate-500">Guests pay this full amount in the app. There is no remaining balance at the venue.</p>
-          <button type="button" disabled className="mt-7 w-full rounded-xl bg-primary px-3 py-3 text-sm font-black text-white opacity-90">▣ &nbsp; Pay in full</button>
+          <QuoteLine label={t('booking.totalPrice', language)} value={formatRwf(previewTotal)} strong />
+          <p className="mt-4 text-xs text-slate-500">{t('sellerDash.guestsPayFull', language)}</p>
+          <button type="button" disabled className="mt-7 w-full rounded-xl bg-primary px-3 py-3 text-sm font-black text-white opacity-90">▣ &nbsp; {t('booking.payInFull', language)}</button>
           <p className="mt-3 text-center text-[10px] text-slate-500">♢ Your payment is secure and protected.</p>
         </aside>
       </div>
@@ -1371,6 +1380,7 @@ function AvailabilityTableBuilder({ table, updateTable }) {
 }
 
 function CompleteBookingPanel({ onCompleted }) {
+  const { language } = useLanguage();
   const [code, setCode] = useState('');
   const [summary, setSummary] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -1417,25 +1427,25 @@ function CompleteBookingPanel({ onCompleted }) {
 
   return (
     <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
-      <h3 className="font-black text-blue-950">Complete Booking</h3>
-      <p className="mt-1 text-sm text-blue-800">Enter the customer's Booking Code to verify it, then mark the stay done. Completing a booking does not collect extra payment.</p>
+      <h3 className="font-black text-blue-950">{t('sellerDash.completeBooking', language)}</h3>
+      <p className="mt-1 text-sm text-blue-800">{t('sellerDash.completeBookingLead', language)}</p>
       <form onSubmit={verify} className="mt-4 flex flex-col gap-2 sm:flex-row">
-        <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="Enter Booking Code only" className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono uppercase" />
-        <button disabled={busy || !code.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? 'Checking...' : 'Verify Code'}</button>
+        <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder={t('bookingCode', language)} className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono uppercase" />
+        <button disabled={busy || !code.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? `${t('verify.checking', language)}...` : t('booking.verifyId', language)}</button>
       </form>
       {error && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {message && <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
       {summary && (
         <div className="mt-4 rounded-xl bg-white p-4 text-sm">
           <dl className="grid gap-3 md:grid-cols-3">
-            <Detail label="Booking ID" value={summary.bookingId} />
-            <Detail label="Customer" value={summary.customerName} />
-            <Detail label="Service" value={summary.serviceName} />
-            <Detail label="Booking date" value={summary.bookingDate ? new Date(summary.bookingDate).toLocaleString() : '-'} />
-            <Detail label="Amount paid" value={formatRwf(summary.depositAmount || summary.amountPaid || 0)} />
-            <Detail label="Remaining at venue" value={formatRwf(summary.remainingAmount || 0)} />
+            <Detail label={t('sellerDash.bookingId', language)} value={summary.bookingId} />
+            <Detail label={t('sellerDash.customer', language)} value={summary.customerName} />
+            <Detail label={t('sellerDash.service', language)} value={summary.serviceName} />
+            <Detail label={t('booking.bookingDate', language)} value={summary.bookingDate ? new Date(summary.bookingDate).toLocaleString() : '-'} />
+            <Detail label={t('customerDash.amountPaid', language)} value={formatRwf(summary.depositAmount || summary.amountPaid || 0)} />
+            <Detail label={t('payment.remainingAtVenue', language)} value={formatRwf(summary.remainingAmount || 0)} />
           </dl>
-          <button type="button" disabled={busy} onClick={complete} className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">Complete booking</button>
+          <button type="button" disabled={busy} onClick={complete} className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{t('sellerDash.completeBooking', language)}</button>
         </div>
       )}
     </section>
@@ -1484,13 +1494,14 @@ const PRICE_TABLE_OPTIONS = {
 };
 
 function CategorySelect({ value, onChange }) {
+  const { language } = useLanguage();
   return (
     <label className="block">
-      <span className="text-sm font-semibold text-gray-700">Category</span>
+      <span className="text-sm font-semibold text-gray-700">{t('sellerDash.category', language)}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
         {SERVICE_CATEGORIES.map(([group, options]) => (
-          <optgroup key={group} label={group}>
-            {options.map(([categoryValue, label]) => <option key={categoryValue} value={categoryValue}>{label}</option>)}
+          <optgroup key={group} label={getCategoryGroupDisplayLabel(group, language)}>
+            {options.map(([categoryValue, label]) => <option key={categoryValue} value={categoryValue}>{getCategoryDisplayLabel(categoryValue, language) || label}</option>)}
           </optgroup>
         ))}
       </select>
@@ -1502,29 +1513,30 @@ function TextArea({ label, value, onChange, required = false }) {
   return <label className="block md:col-span-2"><span className="text-sm font-semibold text-gray-700">{label}</span><textarea required={required} value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3" /></label>;
 }
 
-function formatStatus(status) {
-  return status === 'unavailable' ? 'Not Available' : 'Available';
+function formatStatus(status, language) {
+  return status === 'unavailable' ? t('sellerDash.notAvailable', language) : t('sellerDash.available', language);
 }
 
 function BookingDetailModal({ booking, onClose }) {
+  const { language } = useLanguage();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-gray-900">Booking Details</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">Close</button>
+          <h2 className="text-xl font-bold text-gray-900">{t('sellerDash.bookingDetails', language)}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">{t('close', language)}</button>
         </div>
         <DetailGrid data={{
-          'Booking ID': booking._id,
-          Customer: booking.touristId?.name || booking.userId?.name || 'Customer',
-          Email: booking.touristId?.email || booking.userId?.email || '-',
-          Business: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
-          Status: booking.status,
-          Payment: booking.paymentStatus || 'unpaid',
-          'Amount paid': formatRwf(booking.amountPaid || 0),
-          'Payment purpose': booking.paymentReason || '-',
-          Quantity: booking.quantity || booking.guests || 1,
-          Date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
+          [t('sellerDash.bookingId', language)]: booking._id,
+          [t('sellerDash.customer', language)]: booking.touristId?.name || booking.userId?.name || t('sellerDash.customer', language),
+          [t('email', language)]: booking.touristId?.email || booking.userId?.email || '-',
+          [t('customerDash.business', language)]: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
+          [t('status', language)]: booking.status,
+          [t('sellerDash.payment', language)]: booking.paymentStatus || 'unpaid',
+          [t('customerDash.amountPaid', language)]: formatRwf(booking.amountPaid || 0),
+          [t('customerDash.paymentPurpose', language)]: booking.paymentReason || '-',
+          [t('sellerDash.quantity', language)]: booking.quantity || booking.guests || 1,
+          [t('booking.date', language)]: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
         }} />
         <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
         <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
@@ -1534,6 +1546,7 @@ function BookingDetailModal({ booking, onClose }) {
 }
 
 function SellerBookingVerification({ token }) {
+  const { language } = useLanguage();
   const [lookup, setLookup] = useState('');
   const [booking, setBooking] = useState(null);
   const [error, setError] = useState('');
@@ -1552,8 +1565,8 @@ function SellerBookingVerification({ token }) {
   return (
     <div className="space-y-4">
       <form onSubmit={submit} className="flex flex-col gap-3 md:flex-row">
-        <input value={lookup} onChange={(event) => setLookup(event.target.value)} placeholder="Enter Booking ID or QR verification token" className="flex-1 rounded-xl border border-gray-300 px-4 py-3" />
-        <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">Verify Booking</button>
+        <input value={lookup} onChange={(event) => setLookup(event.target.value)} placeholder={t('verify.bookingId', language)} className="flex-1 rounded-xl border border-gray-300 px-4 py-3" />
+        <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">{t('verify.title', language)}</button>
       </form>
       <p className="text-sm text-gray-500">Staff can paste a scanned QR verification URL or enter the booking ID.</p>
       {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -1563,19 +1576,20 @@ function SellerBookingVerification({ token }) {
 }
 
 function BookingDetailBody({ booking }) {
+  const { language } = useLanguage();
   return (
     <>
       <DetailGrid data={{
-        'Booking ID': booking._id,
-        Customer: booking.touristId?.name || booking.userId?.name || 'Customer',
-        Email: booking.touristId?.email || booking.userId?.email || '-',
-        Business: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
-        Status: booking.status,
-        Payment: booking.paymentStatus || 'unpaid',
-        'Amount paid': formatRwf(booking.amountPaid || 0),
-        'Payment purpose': booking.paymentReason || '-',
-        Quantity: booking.quantity || booking.guests || 1,
-        Date: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
+        [t('sellerDash.bookingId', language)]: booking._id,
+        [t('sellerDash.customer', language)]: booking.touristId?.name || booking.userId?.name || t('sellerDash.customer', language),
+        [t('email', language)]: booking.touristId?.email || booking.userId?.email || '-',
+        [t('customerDash.business', language)]: booking.hotelId?.name || booking.preferredHotelId?.name || booking.destinationPlace,
+        [t('status', language)]: booking.status,
+        [t('sellerDash.payment', language)]: booking.paymentStatus || 'unpaid',
+        [t('customerDash.amountPaid', language)]: formatRwf(booking.amountPaid || 0),
+        [t('customerDash.paymentPurpose', language)]: booking.paymentReason || '-',
+        [t('sellerDash.quantity', language)]: booking.quantity || booking.guests || 1,
+        [t('booking.date', language)]: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
       }} />
       <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
       <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
@@ -1584,10 +1598,11 @@ function BookingDetailBody({ booking }) {
 }
 
 function BookingPromotionSnapshot({ promotion }) {
+  const { language } = useLanguage();
   if (!promotion?.title) return null;
   return (
     <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
-      <p className="text-xs font-black uppercase tracking-wide text-amber-700">Promotion applied at booking</p>
+      <p className="text-xs font-black uppercase tracking-wide text-amber-700">{t('customerDash.promotionApplied', language)}</p>
       <h3 className="mt-1 font-black text-amber-900">{promotion.title}</h3>
       <p className="mt-1 text-sm text-slate-700">Saved {promotion.percent || promotion.promotionPercent || 0}% on this service.</p>
       {(promotion.note || promotion.description) && <p className="mt-1 text-sm text-slate-700">{promotion.note || promotion.description}</p>}
@@ -1601,12 +1616,14 @@ function DetailGrid({ data }) {
 }
 
 function ResponseList({ responses }) {
+  const { language } = useLanguage();
   const entries = Object.entries(responses || {}).filter(([, value]) => value !== undefined && value !== null && value !== '');
-  if (!entries.length) return <p className="mt-4 text-sm text-gray-500">No form responses saved.</p>;
-  return <div className="mt-4"><h3 className="font-bold text-gray-900">Form Responses</h3><div className="mt-2 grid gap-2">{entries.map(([key, value]) => <div key={key} className="rounded-lg border border-gray-200 p-3"><p className="text-xs font-semibold uppercase text-gray-500">{key}</p><p className="break-all text-sm text-gray-800">{Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value)}</p></div>)}</div></div>;
+  if (!entries.length) return <p className="mt-4 text-sm text-gray-500">{t('sellerDash.noBookingsYet', language)}</p>;
+  return <div className="mt-4"><h3 className="font-bold text-gray-900">{t('serviceView.bookingForm', language)}</h3><div className="mt-2 grid gap-2">{entries.map(([key, value]) => <div key={key} className="rounded-lg border border-gray-200 p-3"><p className="text-xs font-semibold uppercase text-gray-500">{key}</p><p className="break-all text-sm text-gray-800">{Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value)}</p></div>)}</div></div>;
 }
 
 function PayoutDetailsForm({ token, initial, onSaved }) {
+  const { language } = useLanguage();
   const [catalog, setCatalog] = useState(null);
   const [form, setForm] = useState({
     method: initial?.method === 'bank' ? 'bank' : 'momo',
@@ -1631,7 +1648,7 @@ function PayoutDetailsForm({ token, initial, onSaved }) {
     setMessage('');
     try {
       const response = await hotelApi.savePayoutDetails(token, form);
-      setMessage(response.message || 'Payout details saved.');
+      setMessage(response.message || t('profilePage.payoutSavedMsg', language));
       onSaved?.();
     } catch (requestError) {
       setError(requestError.message);
@@ -1642,39 +1659,40 @@ function PayoutDetailsForm({ token, initial, onSaved }) {
 
   return (
     <form onSubmit={save} className="grid max-w-2xl gap-4">
-      <h3 className="text-xl font-black text-slate-950">Settlement account</h3>
-      <p className="text-sm text-slate-600">We store your MoMo or bank details only to pay you after the guest cancel window. Customers never see this information. Do not put these numbers on the public listing form.</p>
-      <Select label="Payout method" value={form.method} onChange={(value) => setForm((prev) => ({ ...prev, method: value, providerId: '' }))} options={[['momo', 'Mobile Money'], ['bank', 'Bank transfer']]} />
-      <label className="block"><span className="text-sm font-semibold text-gray-700">Provider</span>
+      <h3 className="text-xl font-black text-slate-950">{t('profilePage.paymentInfo', language)}</h3>
+      <p className="text-sm text-slate-600">{t('profilePage.paymentLead', language)}</p>
+      <Select label={t('payoutMethod', language)} value={form.method} onChange={(value) => setForm((prev) => ({ ...prev, method: value, providerId: '' }))} options={[['momo', t('mobileMoney', language)], ['bank', t('bank', language)]]} />
+      <label className="block"><span className="text-sm font-semibold text-gray-700">{t('providerLabel', language)}</span>
         <select required value={form.providerId} onChange={(event) => setForm((prev) => ({ ...prev, providerId: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
-          <option value="">Select provider</option>
+          <option value="">{t('selectProvider', language)}</option>
           {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
         </select>
       </label>
-      <Input label="Account name" value={form.accountName} onChange={(value) => setForm((prev) => ({ ...prev, accountName: value }))} required />
-      <Input label={form.method === 'bank' ? 'Account number' : 'MoMo number'} value={form.accountNumber} onChange={(value) => setForm((prev) => ({ ...prev, accountNumber: value }))} required />
+      <Input label={t('accountName', language)} value={form.accountName} onChange={(value) => setForm((prev) => ({ ...prev, accountName: value }))} required />
+      <Input label={form.method === 'bank' ? t('accountNumber', language) : t('profilePage.momoNumber', language)} value={form.accountNumber} onChange={(value) => setForm((prev) => ({ ...prev, accountNumber: value }))} required />
       {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {message && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
-      <button disabled={saving} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{saving ? 'Saving...' : 'Save payout details'}</button>
+      <button disabled={saving} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{saving ? t('savingEllipsis', language) : t('profilePage.savePayout', language)}</button>
     </form>
   );
 }
 
 function FinancePanel({ finance }) {
+  const { language } = useLanguage();
   const summary = finance?.summary || {};
   const rows = finance?.transactions || [];
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">{finance?.message || 'Customer payments stay held until the cancellation window closes, then payout is sent. If the guest cancels in time, most of the cancellation fee is paid to you.'}</p>
+      <p className="text-sm text-slate-600">{finance?.message || t('profilePage.paymentLead', language)}</p>
       <div className="grid gap-3 md:grid-cols-3">
-        <Metric label="Gross collected" value={formatRwf(summary.grossCollected)} />
-        <Metric label="Held payout" value={formatRwf(summary.pendingPayout ?? summary.heldPayout)} />
-        <Metric label="Failed payout" value={formatRwf(summary.failedPayout)} />
+        <Metric label={t('heldMoney', language)} value={formatRwf(summary.grossCollected)} />
+        <Metric label={t('payouts', language)} value={formatRwf(summary.pendingPayout ?? summary.heldPayout)} />
+        <Metric label={t('payment.failed', language)} value={formatRwf(summary.failedPayout)} />
       </div>
-      {!rows.length ? <p className="rounded-xl border border-slate-200 p-4 text-sm text-slate-600">No payout rows yet.</p> : (
+      {!rows.length ? <p className="rounded-xl border border-slate-200 p-4 text-sm text-slate-600">{t('sellerDash.noBookingsYet', language)}</p> : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">Booking</th><th className="py-2 pr-3">Gross</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Payout id</th><th className="py-2 pr-3">Destination</th><th className="py-2">Note</th></tr></thead>
+            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">{t('sellerDash.booking', language)}</th><th className="py-2 pr-3">{t('sellerDash.paid', language)}</th><th className="py-2 pr-3">{t('status', language)}</th><th className="py-2 pr-3">{t('payout', language)}</th><th className="py-2 pr-3">{t('customerDash.destination', language)}</th><th className="py-2">{t('admin.message', language)}</th></tr></thead>
             <tbody>
               {rows.map((tx) => (
                 <tr key={tx._id || tx.payoutReference} className="border-b border-slate-100">

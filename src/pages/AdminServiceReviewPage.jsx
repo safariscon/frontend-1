@@ -3,11 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import ServiceDetailsView from '../components/ServiceDetailsView';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { adminApi, getAuthData } from '../lib/api';
 import { serviceApprovalStatus } from '../lib/dashboard';
+import { t } from '../lib/translations';
 
 export default function AdminServiceReviewPage() {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const { serviceId } = useParams();
   const navigate = useNavigate();
   const token = getAuthData()?.token;
@@ -48,7 +51,7 @@ export default function AdminServiceReviewPage() {
     setInfo('');
     try {
       const response = await adminApi.updateServiceApproval(token, serviceId, { status });
-      setInfo(response.message || (status === 'approved' ? 'Service approved.' : 'Service rejected.'));
+      setInfo(response.message || (status === 'approved' ? t('admin.approved', language) : t('admin.rejected', language)));
       await loadService({ silent: true });
     } catch (requestError) {
       setError(requestError.message);
@@ -66,11 +69,11 @@ export default function AdminServiceReviewPage() {
       <main className="py-6 sm:py-8">
         <div className="mx-auto max-w-5xl px-4">
           <button type="button" onClick={() => navigate('/admin-dashboard/services')} className="text-sm font-semibold text-primary">
-            Back to services
+            {t('admin.backToServices', language)}
           </button>
           <div className="mt-3 mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">{service?.title || service?.name || 'Service details'}</h1>
-            <p className="text-gray-600">Review the listing as the provider submitted it. Admin can only approve or reject.</p>
+            <h1 className="text-3xl font-bold text-gray-900">{service?.title || service?.name || t('admin.serviceDetails', language)}</h1>
+            <p className="text-gray-600">{t('admin.reviewLead', language)}</p>
           </div>
           {(error || info) && (
             <div className="mb-4 space-y-2">
@@ -79,24 +82,24 @@ export default function AdminServiceReviewPage() {
             </div>
           )}
           {loading ? (
-            <p className="rounded-2xl bg-white p-6 text-slate-600">Loading service details...</p>
+            <p className="rounded-2xl bg-white p-6 text-slate-600">{t('admin.loadingService', language)}</p>
           ) : !service ? (
-            <p className="rounded-2xl bg-white p-6 text-slate-600">This service could not be loaded.</p>
+            <p className="rounded-2xl bg-white p-6 text-slate-600">{t('admin.loadFailed', language)}</p>
           ) : (
             <div className="space-y-5">
               {missing.length > 0 && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  <p className="font-bold">Missing before a clean approval</p>
+                  <p className="font-bold">{t('admin.missingApproval', language)}</p>
                   <p className="mt-1">{missing.join(', ')}</p>
                 </div>
               )}
               <ServiceDetailsView service={service} />
               <div className="sticky bottom-4 flex flex-wrap justify-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
                 <button type="button" disabled={saving || approval === 'rejected'} onClick={() => review('rejected')} className="rounded-xl bg-red-50 px-5 py-3 text-sm font-black text-red-700 disabled:opacity-50">
-                  Reject
+                  {t('admin.reject', language)}
                 </button>
                 <button type="button" disabled={saving || approval === 'approved'} onClick={() => review('approved')} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white disabled:opacity-50">
-                  Approve
+                  {t('admin.approve', language)}
                 </button>
               </div>
             </div>

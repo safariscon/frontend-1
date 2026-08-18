@@ -5,9 +5,12 @@ import Footer from '../components/Footer';
 import { authApi } from '../lib/api';
 import SeoHead from '../components/SeoHead';
 import { noindexSeo } from '../lib/seo';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,7 +25,7 @@ export default function ForgotPasswordPage() {
       navigate('/reset-password', {
         state: {
           email: email.trim(),
-          message: 'If this email is registered, a password reset code has been sent.',
+          message: t('resetCodeSent', language),
         },
       });
     } catch (requestError) {
@@ -36,8 +39,8 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <SeoHead
         {...noindexSeo({
-          title: 'Forgot password | SafarisCon',
-          description: 'Reset your SafarisCon account password to continue booking services in Rwanda.',
+          title: t('seo.forgotTitle', language),
+          description: t('seo.forgotDescription', language),
           path: '/forgot-password',
         })}
       />
@@ -45,15 +48,15 @@ export default function ForgotPasswordPage() {
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Forgot password</h1>
-            <p className="text-gray-600">Enter your email and we will send a reset code.</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('forgotPassword', language)}</h1>
+            <p className="text-gray-600">{t('forgotPasswordLead', language)}</p>
           </div>
 
           {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('email', language)}</label>
               <input
                 type="email"
                 value={email}
@@ -69,14 +72,14 @@ export default function ForgotPasswordPage() {
               disabled={loading}
               className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50"
             >
-              {loading ? 'Sending...' : 'Send reset code'}
+              {loading ? t('sending', language) : t('sendResetCode', language)}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-600">
-            Remember your password?{' '}
+            {t('rememberPassword', language)}{' '}
             <Link to="/login" className="font-semibold text-primary hover:underline">
-              Sign in
+              {t('signInLink', language)}
             </Link>
           </p>
         </div>

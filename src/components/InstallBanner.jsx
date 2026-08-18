@@ -37,7 +37,7 @@ export default function InstallBanner() {
                   <span className="text-white font-bold text-xl">T</span>
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Install safariscon</h3>
+                  <h3 className="font-bold text-gray-900">{t('installSafariscon', language)}</h3>
                   <p className="text-xs text-gray-500">{t('rwandaTourismApp', language)}</p>
                 </div>
               </div>

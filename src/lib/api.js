@@ -168,11 +168,24 @@ const shouldEndSessionOn401 = (path, options, error) => {
   return true;
 };
 
+const readPreferredLanguage = () => {
+  try {
+    const saved = localStorage.getItem("preferredLanguage");
+    if (["en", "rw", "fr", "sw"].includes(saved)) return saved;
+  } catch {
+    /* ignore */
+  }
+  return "en";
+};
+
 const buildHeaders = (token, customHeaders = {}) => {
   const headers = { ...customHeaders };
   if (!headers["Content-Type"] && !(customHeaders instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
+  const language = readPreferredLanguage();
+  if (!headers["Accept-Language"]) headers["Accept-Language"] = language;
+  if (!headers["X-App-Language"]) headers["X-App-Language"] = language;
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }

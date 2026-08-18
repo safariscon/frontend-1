@@ -6,10 +6,13 @@ import { useAuth } from '../context/AuthContext';
 import { getPostAuthRoute } from '../lib/dashboard';
 import SeoHead from '../components/SeoHead';
 import { noindexSeo } from '../lib/seo';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 
 export default function EmailVerificationPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const { user, verifyEmailOtp, resendEmailVerificationOtp } = useAuth();
   const [email, setEmail] = useState(location.state?.email || user?.email || '');
   const [otp, setOtp] = useState('');
@@ -49,10 +52,10 @@ export default function EmailVerificationPage() {
       if (result.emailVerified) {
         navigate('/login', {
           replace: true,
-          state: { email, message: result.message || 'Email is already verified. Please sign in.' },
+          state: { email, message: result.message || t('alreadyVerified', language) },
         });
       } else {
-        setMessage(result.message || 'Verification code sent.');
+        setMessage(result.message || t('verificationSent', language));
       }
     } else {
       setError(result.error);
@@ -64,8 +67,8 @@ export default function EmailVerificationPage() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <SeoHead
         {...noindexSeo({
-          title: 'Verify email | SafarisCon',
-          description: 'Enter the email verification code to activate your SafarisCon account.',
+          title: t('seo.verifyEmailTitle', language),
+          description: t('seo.verifyEmailDescription', language),
           path: '/verify-email',
         })}
       />
@@ -73,9 +76,9 @@ export default function EmailVerificationPage() {
       <main className="flex-1 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
-            <p className="text-sm font-bold uppercase tracking-wider text-primary">Email verification</p>
-            <h1 className="mt-2 text-3xl font-bold text-gray-900">Enter your code</h1>
-            <p className="mt-2 text-gray-600">We sent a one-time code to your email address.</p>
+            <p className="text-sm font-bold uppercase tracking-wider text-primary">{t('emailVerification', language)}</p>
+            <h1 className="mt-2 text-3xl font-bold text-gray-900">{t('enterYourCode', language)}</h1>
+            <p className="mt-2 text-gray-600">{t('codeSentToEmail', language)}</p>
           </div>
 
           {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
@@ -83,7 +86,7 @@ export default function EmailVerificationPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('email', language)}</label>
               <input
                 type="email"
                 value={email}
@@ -95,7 +98,7 @@ export default function EmailVerificationPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Verification code</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('verificationCode', language)}</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -115,7 +118,7 @@ export default function EmailVerificationPage() {
               disabled={loading}
               className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50"
             >
-              {loading ? 'Verifying...' : 'Verify email'}
+              {loading ? t('verifying', language) : t('verifyEmail', language)}
             </button>
           </form>
 
@@ -126,10 +129,10 @@ export default function EmailVerificationPage() {
               disabled={resending || !email.trim()}
               className="font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {resending ? 'Sending...' : 'Send a new code'}
+              {resending ? t('sendingCode', language) : t('resendCode', language)}
             </button>
             <Link to={location.state?.loginSearch ? `/login?${location.state.loginSearch}` : '/login'} className="text-gray-600 hover:text-primary">
-              Back to sign in
+              {t('backToSignIn', language)}
             </Link>
           </div>
         </div>

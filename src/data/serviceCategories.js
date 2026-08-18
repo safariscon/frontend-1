@@ -1,4 +1,13 @@
+import { t, translateCategory } from '../lib/translations';
+
 const slug = (label) => label.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+export const getCategoryDisplayLabel = (slugOrLabel, language) => translateCategory(slugOrLabel, language);
+
+export const getCategoryGroupDisplayLabel = (label, language) => {
+  const translated = t(`categoryGroups.${label}`, language);
+  return translated === `categoryGroups.${label}` ? label : translated;
+};
 
 const groups = [
   ['Accommodation', [
