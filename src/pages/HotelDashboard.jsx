@@ -435,12 +435,14 @@ export default function HotelDashboard() {
     navigate(`/dashboard/seller/services/${service._id || service.id}/edit`);
   };
 
-  const resetForm = () => {
-    setEditingService(null);
-    setForm(EMPTY_FORM);
-    setShowEditor(false);
-    setViewingService(null);
-  };
+  // const resetForm = () => {
+  //   setEditingService(null);
+  //   setForm(EMPTY_FORM);
+  //   setShowEditor(false);
+  //   setViewingService(null);
+  // };
+
+
 
   const cancelEditing = () => {
     resetForm();
