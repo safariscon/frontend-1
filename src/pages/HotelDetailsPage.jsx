@@ -71,7 +71,12 @@ export default function HotelDetailsPage() {
     );
   }
   const isNotAvailable = hotel.status === 'unavailable';
-  const images = Array.isArray(hotel.images) ? hotel.images.slice(0, 3) : [];
+  const primaryCover = hotel.primaryImage || hotel.image || '';
+  const images = (() => {
+    const list = Array.isArray(hotel.images) ? hotel.images.filter(Boolean) : [];
+    if (primaryCover) return [primaryCover, ...list.filter((url) => url !== primaryCover)].slice(0, 3);
+    return list.slice(0, 3);
+  })();
   const showPreviousImage = () => setSelectedImage((current) => (current === 0 ? images.length - 1 : current - 1));
   const showNextImage = () => setSelectedImage((current) => (current + 1) % images.length);
   const tableColumns = hotel.availabilityTable?.columns || [];

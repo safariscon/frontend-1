@@ -10,6 +10,9 @@ export default function ServiceDetailsView({ service, showProvider = true }) {
   if (!service) return null;
 
   const images = collectImages(service, language);
+  const primaryUrl = service.primaryImage || images[0]?.url || '';
+  const primaryImage = images.find((image) => image.url === primaryUrl) || images[0] || null;
+  const additionalImages = images.filter((image) => image.url !== primaryImage?.url);
   const map = service.map || {};
   const provider = service.provider || {};
   const latitude = Number(map.latitude ?? service.serviceLocation?.latitude);
@@ -47,13 +50,23 @@ export default function ServiceDetailsView({ service, showProvider = true }) {
 
       <section className="rounded-2xl bg-white p-5 shadow-sm">
         <h2 className="text-lg font-black text-slate-950">{t('serviceView.images', language)}</h2>
-        {images.length ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-            {images.map((image) => (
-              <img key={image.url} src={image.url} alt={image.alt} className="h-44 w-full rounded-xl object-cover" />
-            ))}
+        {primaryImage ? (
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">Cover photo</p>
+            <img src={primaryImage.url} alt={primaryImage.alt} className="h-64 w-full rounded-xl object-cover" />
           </div>
-        ) : (
+        ) : null}
+        {additionalImages.length ? (
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">Additional photos</p>
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+              {additionalImages.map((image) => (
+                <img key={image.url} src={image.url} alt={image.alt} className="h-40 w-full rounded-xl object-cover" />
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {!primaryImage && !additionalImages.length && (
           <p className="mt-3 text-sm text-slate-500">{t('serviceView.noImages', language)}</p>
         )}
       </section>
@@ -198,12 +211,16 @@ function Info({ label, value }) {
 
 function collectImages(service, language) {
   if (!service) return [];
-  if (Array.isArray(service.images) && service.images.length) {
-    return service.images
-      .map((image) => (typeof image === 'string' ? { url: image, alt: service.title || t('serviceView.serviceImage', language) } : { url: image.url, alt: image.alt || service.title || t('serviceView.serviceImage', language) }))
-      .filter((image) => image.url);
+  const fallbackAlt = service.title || t('serviceView.serviceImage', language);
+  const fromArray = Array.isArray(service.images) && service.images.length
+    ? service.images
+      .map((image) => (typeof image === 'string' ? { url: image, alt: fallbackAlt } : { url: image.url, alt: image.alt || fallbackAlt }))
+      .filter((image) => image.url)
+    : (service.imageUrls || []).map((url) => ({ url, alt: fallbackAlt }));
+  if (service.primaryImage && !fromArray.some((image) => image.url === service.primaryImage)) {
+    return [{ url: service.primaryImage, alt: fallbackAlt }, ...fromArray];
   }
-  return (service.imageUrls || []).map((url) => ({ url, alt: service.title || t('serviceView.serviceImage', language) }));
+  return fromArray;
 }
 
 function pretty(value) {

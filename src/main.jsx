@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import { LanguageProvider } from './context/LanguageContext.jsx'
+import { ToastProvider } from './context/ToastContext.jsx'
 
 // Keep PWA support in production, but avoid stale cached UI while developing.
 if ('serviceWorker' in navigator) {
@@ -26,7 +27,9 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
       <LanguageProvider>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </LanguageProvider>
     </ThemeProvider>
   </StrictMode>,
