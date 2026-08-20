@@ -112,6 +112,9 @@ export default function HomePage() {
             <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-4xl">
               {t('home.heroTitle', language)}
             </h1>
+            <p className="mt-3 max-w-2xl text-lg font-bold italic tracking-wide text-blue-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] md:text-xl">
+              {t('home.heroSlogan', language)}
+            </p>
             <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-base md:leading-7">
               {t('home.heroLead', language)}
             </p>
