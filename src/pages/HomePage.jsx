@@ -129,7 +129,7 @@ export default function HomePage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 md:p-8">
-            <p className="mb-3 text-sm font-black text-slate-900 dark:text-white">{t('home.searchProviders', language)}</p>
+            <p className="mb-4 text-sm font-black tracking-tight text-slate-900 dark:text-white">{t('home.searchProviders', language)}</p>
             <SearchBar variant="hero" serviceOptions={serviceOptions} locationOptions={locationOptions} />
             <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
               <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('home.acceptedPayments', language)}</p>

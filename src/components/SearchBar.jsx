@@ -33,20 +33,20 @@ export default function SearchBar({ variant = 'compact', locationOptions = [], c
           : `search-shell search-shell-compact grid gap-3 ${children ? `md:grid-cols-[repeat(${compactCols},minmax(0,1fr))_auto]` : 'md:grid-cols-[1fr_1fr_auto]'}`
       }
     >
-      <div>
+      <div className="search-field">
         <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="service-input">
           {variant === 'hero' ? t('searchBar.serviceLabel', language) : t('serviceName', language)}
         </label>
-          <input
-            id="service-input"
-            value={serviceName}
-            onChange={(event) => setServiceName(event.target.value)}
-            placeholder={t('searchBar.placeholder', language)}
-            className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
-          />
+        <input
+          id="service-input"
+          value={serviceName}
+          onChange={(event) => setServiceName(event.target.value)}
+          placeholder={t('searchBar.placeholder', language)}
+          className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
+        />
       </div>
 
-      <div>
+      <div className="search-field">
         <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="location-input">
           {variant === 'hero' ? t('searchBar.where', language) : t('searchBar.location', language)}
         </label>
