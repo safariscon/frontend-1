@@ -4,6 +4,7 @@ import { serviceApprovalStatus } from '../lib/dashboard';
 import loadLeaflet, { leafletMarkerIcon } from '../lib/leafletMap';
 import { useLanguage } from '../context/LanguageContext';
 import { t, translateCategory } from '../lib/translations';
+import { categorySupportsOptions } from '../lib/serviceSchema';
 
 export default function ServiceDetailsView({ service, showProvider = true }) {
   const { language } = useLanguage();
@@ -25,6 +26,12 @@ export default function ServiceDetailsView({ service, showProvider = true }) {
     osmUrl: map.osmUrl || (Number.isFinite(latitude) && Number.isFinite(longitude) ? `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}` : ''),
   };
   const approval = serviceApprovalStatus(service);
+  const supportsOptions = categorySupportsOptions(
+    service.supportsOptions,
+    service.schemaSnapshot?.supportsOptions,
+    service.category?.supportsOptions
+  );
+  const basePrice = Number(service.basePrice ?? service.pricing?.amount ?? 0);
 
   return (
     <div className="space-y-5">
@@ -93,15 +100,27 @@ export default function ServiceDetailsView({ service, showProvider = true }) {
         </section>
       )}
 
-      {service.availabilityTable?.rows?.length > 0 && (
+      {supportsOptions && service.availabilityTable?.rows?.length > 0 && (
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="text-lg font-black text-slate-950">{t('serviceView.optionsPrices', language)}</h2>
           <p className="mt-1 text-sm text-slate-500">{service.availabilityTable.rows.length === 1 ? t('serviceView.optionsCount', language, { n: service.availabilityTable.rows.length }) : t('serviceView.optionsCountPlural', language, { n: service.availabilityTable.rows.length })}</p>
           <div className="mt-4 grid gap-4">
             {service.availabilityTable.rows.map((row, index) => (
-              <OptionCard key={row.id || index} row={row} index={index} />
+              <OptionCard
+                key={row.id || index}
+                row={row}
+                index={index}
+                optionFieldSchema={service.schemaSnapshot?.optionFieldSchema || service.category?.optionFieldSchema || []}
+              />
             ))}
           </div>
+        </section>
+      )}
+
+      {!supportsOptions && (
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-black text-slate-950">{t('serviceView.price', language)}</h2>
+          <p className="mt-3 text-2xl font-black text-primary">{basePrice > 0 ? formatRwf(basePrice) : '—'}</p>
         </section>
       )}
 
@@ -122,30 +141,25 @@ export default function ServiceDetailsView({ service, showProvider = true }) {
   );
 }
 
-function OptionCard({ row, index }) {
+function OptionCard({ row, index, optionFieldSchema = [] }) {
   const { language } = useLanguage();
   const cells = row.cells || {};
+  const attributes = row.attributes || cells.attributes || {};
   const name = cells.service || cells.name || cells.option || t('serviceView.optionN', language, { n: index + 1 });
   const price = Number(cells.price || 0);
-  const pricing = [
-    [t('serviceView.priceType', language), pretty(cells.priceType)],
-    [t('serviceView.calculatedBy', language), pretty(cells.calculationField)],
-    [t('serviceView.durationUnit', language), pretty(cells.durationUnit)],
-    [t('serviceView.maximumDuration', language), cells.maximumDuration],
-  ].filter(([, value]) => hasValue(value));
-  const availability = [
-    [t('serviceView.capacity', language), cells.availability],
-    [t('serviceView.availableFrom', language), formatDateValue(cells.availableFrom)],
-    [t('serviceView.availableUntil', language), formatDateValue(cells.availableTo)],
-    [t('serviceView.availableDays', language), pretty(cells.availableDays)],
-    [t('serviceView.startTime', language), cells.availableStartTime],
-    [t('serviceView.endTime', language), cells.availableEndTime],
-    [t('serviceView.timeRequired', language), pretty(cells.requiresTime)],
-  ].filter(([, value]) => hasValue(value));
-  const extras = Object.entries(cells).filter(([key, value]) => (
-    !['service', 'name', 'option', 'price', 'priceType', 'calculationField', 'durationUnit', 'maximumDuration', 'availability', 'availableFrom', 'availableTo', 'availableDays', 'availableStartTime', 'availableEndTime', 'requiresTime', 'details', 'amenities'].includes(key)
-    && hasValue(value)
-  ));
+  const publicSchema = (optionFieldSchema || []).filter((field) => (field.visibility || 'public') === 'public');
+
+  const facts = publicSchema
+    .map((field) => {
+      const value = attributes[field.id] ?? cells[field.id];
+      if (!hasValue(value)) return null;
+      return {
+        id: field.id,
+        label: field.label || field.id,
+        value: Array.isArray(value) ? value.join(', ') : String(value),
+      };
+    })
+    .filter(Boolean);
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
@@ -157,34 +171,11 @@ function OptionCard({ row, index }) {
         <div className="rounded-2xl bg-white px-5 py-3 shadow-sm sm:text-right">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('serviceView.price', language)}</p>
           <p className="mt-1 text-2xl font-black text-primary">{price ? formatRwf(price) : '—'}</p>
-          {cells.priceType && <p className="text-sm font-semibold capitalize text-slate-500">{pretty(cells.priceType)}</p>}
         </div>
       </div>
-      {pricing.length > 0 && (
-        <div className="mt-4">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.pricingRules', language)}</p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {pricing.map(([label, value]) => <Fact key={label} label={label} value={value} />)}
-          </div>
-        </div>
-      )}
-      {availability.length > 0 && (
-        <div className="mt-4">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.availability', language)}</p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {availability.map(([label, value]) => <Fact key={label} label={label} value={value} />)}
-          </div>
-        </div>
-      )}
-      {extras.length > 0 && (
+      {facts.length > 0 && (
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {extras.map(([key, value]) => <Fact key={key} label={pretty(key)} value={pretty(value)} />)}
-        </div>
-      )}
-      {(cells.details) && (
-        <div className="mt-4 rounded-xl bg-white px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('serviceView.details', language)}</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{cells.details}</p>
+          {facts.map((fact) => <Fact key={fact.id} label={fact.label} value={fact.value} />)}
         </div>
       )}
     </article>
@@ -223,24 +214,11 @@ function collectImages(service, language) {
   return fromArray;
 }
 
-function pretty(value) {
-  return String(value || '')
-    .replace(/[_-]+/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .trim();
-}
-
 function hasValue(value) {
   if (value === undefined || value === null) return false;
   if (Array.isArray(value)) return value.length > 0;
   const text = String(value).trim().toLowerCase();
   return text !== '' && text !== '-' && text !== 'none' && text !== 'not set' && text !== 'false';
-}
-
-function formatDateValue(value) {
-  if (!hasValue(value)) return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function ReadOnlyMap({ location }) {

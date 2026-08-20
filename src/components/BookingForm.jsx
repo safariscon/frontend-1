@@ -25,7 +25,7 @@ import {
 } from '../lib/availability';
 import AdministrativeLocationFields from './AdministrativeLocationFields';
 import { emptyLocationDetails, formatLocationLine, isAdministrativeLocationComplete, normalizeLocationDetails } from '../lib/places';
-import { emptyListingAttributes, validateSchemaValues } from '../lib/serviceSchema';
+import { emptyListingAttributes, validateSchemaValues, categorySupportsOptions } from '../lib/serviceSchema';
 import { MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 
 const TODAY = new Date().toISOString().split('T')[0];
@@ -111,7 +111,15 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
               || service?.schemaSnapshot?.bookingFieldSchema
               || [];
             setBookingAttributes(emptyListingAttributes(snapshotSchema));
-            const firstOffer = found.availabilityTable?.rows?.[0]?.cells?.service || '';
+            const supportsOptions = categorySupportsOptions(
+              found.supportsOptions,
+              found.schemaSnapshot?.supportsOptions,
+              found.category?.supportsOptions,
+              service?.supportsOptions
+            );
+            const firstOffer = supportsOptions
+              ? (found.availabilityTable?.rows?.[0]?.cells?.service || '')
+              : (service?.title || service?.name || found.name || 'Service');
             setSelectedOffer(firstOffer);
           setValues((prev) => ({
             ...prev,
@@ -161,11 +169,25 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     ),
     [business, bookingFieldSchema]
   );
-  const offers = business?.availabilityTable?.rows || [];
-  const selectedOfferRow = offers.find((row) => row.cells?.service === selectedOffer);
+  const supportsOptions = categorySupportsOptions(
+    business?.supportsOptions,
+    business?.schemaSnapshot?.supportsOptions,
+    business?.category?.supportsOptions,
+    service?.supportsOptions,
+    service?.schemaSnapshot?.supportsOptions,
+    service?.category?.supportsOptions
+  );
+  const basePrice = Number(business?.basePrice ?? service?.basePrice ?? business?.price ?? service?.pricing?.amount ?? 0);
+  const offers = supportsOptions ? (business?.availabilityTable?.rows || []) : [];
+  const selectedOfferRow = supportsOptions
+    ? offers.find((row) => row.cells?.service === selectedOffer)
+    : null;
   const optionSchedule = useMemo(
-    () => parseOptionAvailability(selectedOfferRow, { ...business, ...service }),
-    [selectedOfferRow, business, service]
+    () => parseOptionAvailability(
+      supportsOptions ? selectedOfferRow : {},
+      { ...business, ...service, availableDays: supportsOptions ? undefined : '' }
+    ),
+    [selectedOfferRow, business, service, supportsOptions]
   );
   const dateMin = optionMinDate(optionSchedule, TODAY);
   const dateMax = optionMaxDate(optionSchedule);
@@ -206,7 +228,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const validate = () => {
     if (!service?._id) return t('booking.notAvailableYet', language);
     if (isUnavailable) return t('booking.currentlyNotAvailable', language);
-    if (!selectedOffer) return t('booking.chooseFromTable', language);
+    if (supportsOptions && !selectedOffer) return t('booking.chooseFromTable', language);
     if (!values.fullName.trim()) return t('booking.completeName', language);
     if (!isValidPhoneNumber(values.phone)) return t('booking.validPhone', language);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return t('booking.validEmail', language);
@@ -272,9 +294,14 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       const customerLocationText = formatLocationLine(customerLocationDetails);
       const numberOfPeople = Math.max(1, Number(values.numberOfPeople) || 1);
       const quantity = Math.max(1, Number(values.quantity) || 1);
+      const listedPrice = supportsOptions
+        ? (selectedOfferRow?.cells?.price || '')
+        : basePrice;
       const response = await bookingApi.bookService(authData.token, {
         serviceId: service._id,
-        optionId: selectedOfferRow?.optionId || selectedOfferRow?.id || undefined,
+        optionId: supportsOptions
+          ? (selectedOfferRow?.optionId || selectedOfferRow?.id || undefined)
+          : undefined,
         rebookId: useRebook ? verifiedRebookId : undefined,
         numberOfPeople,
         quantity,
@@ -295,9 +322,11 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         bookingDetails: {
           customerLocationDetails,
           serviceName: service.title || service.name,
-          requestedService: selectedOffer,
-          selectedOptionId: selectedOfferRow?.optionId || selectedOfferRow?.id,
-          listedPriceRwf: selectedOfferRow?.cells?.price || '',
+          requestedService: supportsOptions ? selectedOffer : (service.title || service.name),
+          selectedOptionId: supportsOptions
+            ? (selectedOfferRow?.optionId || selectedOfferRow?.id)
+            : undefined,
+          listedPriceRwf: listedPrice,
           fullName: values.fullName,
           email: values.email,
           phone: values.phone,
@@ -384,32 +413,39 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         </div>
       )}
 
-      <label className="mb-5 block">
-        <span className="text-sm font-bold text-gray-800">{t('booking.chooseService', language)}</span>
-        <select disabled={Boolean(quoteResult)} value={selectedOffer} onChange={(event) => setSelectedOffer(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 disabled:bg-gray-100" required>
-          <option value="">{t('booking.selectFromTable', language)}</option>
-          {offers.map((row) => (
-            <option key={row.id} value={row.cells?.service}>{row.cells?.service} — {formatRwf(Number(row.cells?.price || 0))}</option>
-          ))}
-        </select>
-      </label>
+      {supportsOptions ? (
+        <>
+          <label className="mb-5 block">
+            <span className="text-sm font-bold text-gray-800">{t('booking.chooseService', language)}</span>
+            <select disabled={Boolean(quoteResult)} value={selectedOffer} onChange={(event) => setSelectedOffer(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 disabled:bg-gray-100" required>
+              <option value="">{t('booking.selectFromTable', language)}</option>
+              {offers.map((row) => (
+                <option key={row.id} value={row.cells?.service}>{row.cells?.service} — {formatRwf(Number(row.cells?.price || 0))}</option>
+              ))}
+            </select>
+          </label>
 
-      {selectedOfferRow && (
-        <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <strong>{selectedOfferRow.cells?.service}</strong>
-              <p className="mt-1 capitalize">{String(selectedOfferRow.cells?.priceType || t('booking.manualQuote', language)).replace(/-/g, ' ')}</p>
-              <p className="mt-1 text-xs">
-                {optionSchedule.capacity > 0 ? t('booking.slots', language, { n: optionSchedule.capacity }) : t('booking.capacityOnRequest', language)}
-                {' · '}
-                {optionSchedule.availableFrom || optionSchedule.availableTo
-                  ? `${formatDisplayDate(optionSchedule.availableFrom)} – ${optionSchedule.availableTo ? formatDisplayDate(optionSchedule.availableTo) : t('booking.open', language)}`
-                  : t('booking.noDateWindow', language)}
-              </p>
+          {selectedOfferRow && (
+            <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <strong>{selectedOfferRow.cells?.service}</strong>
+                  <p className="mt-1 text-xs">
+                    {optionSchedule.availableFrom || optionSchedule.availableTo
+                      ? `${formatDisplayDate(optionSchedule.availableFrom)} – ${optionSchedule.availableTo ? formatDisplayDate(optionSchedule.availableTo) : t('booking.open', language)}`
+                      : t('booking.noDateWindow', language)}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setDetailsOpen(true)} className="rounded-lg bg-white px-3 py-2 font-bold text-primary">{t('booking.viewDetails', language)}</button>
+              </div>
             </div>
-            <button type="button" onClick={() => setDetailsOpen(true)} className="rounded-lg bg-white px-3 py-2 font-bold text-primary">{t('booking.viewDetails', language)}</button>
-          </div>
+          )}
+        </>
+      ) : (
+        <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">{t('booking.chooseService', language)}</p>
+          <p className="mt-1 text-lg font-black">{service.title || service.name}</p>
+          <p className="mt-1 font-bold text-primary">{basePrice > 0 ? formatRwf(basePrice) : t('booking.manualQuote', language)}</p>
         </div>
       )}
 
@@ -539,7 +575,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       </button>
 
       {quoteResult && <QuoteCard result={quoteResult} paymentMethod={values.paymentMethod} onPaid={(booking) => onSuccess?.(booking)} />}
-      {detailsOpen && <OptionDetailsModal row={selectedOfferRow} listing={{ ...business, ...service }} onClose={() => setDetailsOpen(false)} />}
+      {detailsOpen && selectedOfferRow && <OptionDetailsModal row={selectedOfferRow} listing={{ ...business, ...service }} onClose={() => setDetailsOpen(false)} />}
     </form>
   );
 }

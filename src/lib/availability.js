@@ -21,11 +21,16 @@ const toDateOnly = (value) => {
 };
 
 const parseDays = (value) => {
-  if (Array.isArray(value)) return value.map((item) => String(item).slice(0, 3).toLowerCase()).filter(Boolean);
-  return String(value || '')
-    .split(/[,\s]+/)
-    .map((item) => item.slice(0, 3).toLowerCase())
-    .filter((item) => WEEKDAY_INDEX.includes(item));
+  const days = Array.isArray(value)
+    ? value.map((item) => String(item).slice(0, 3).toLowerCase()).filter(Boolean)
+    : String(value || '')
+      .split(/[,\s]+/)
+      .map((item) => item.slice(0, 3).toLowerCase())
+      .filter((item) => WEEKDAY_INDEX.includes(item));
+  // Full week is the old default assumption — treat as “no day restriction”.
+  const unique = [...new Set(days)];
+  if (unique.length >= 7) return [];
+  return unique;
 };
 
 export const parseOptionAvailability = (rowOrCells = {}, listing = {}) => {
@@ -219,17 +224,12 @@ const timeDiffHours = (start, end) => {
 };
 
 export const availabilityFacts = (option) => {
+  // Do not surface legacy assumed fields (price type, capacity, all-week days).
+  // Day/price rules belong in admin optionFieldSchema when needed.
   const candidates = [
-    ['Price type', option.priceType ? option.priceType.replace(/-/g, ' ') : ''],
-    ['Slots / capacity', option.capacity > 0 ? `${option.capacity} available` : ''],
-    ['Duration', option.durationUnit && option.durationUnit !== 'none' ? option.durationUnit.replace(/-/g, ' ') : ''],
-    ['Maximum duration', option.maximumDuration ? `${option.maximumDuration} ${option.durationUnit || ''}`.trim() : ''],
     ['Available from', option.availableFrom ? formatDisplayDate(option.availableFrom) : ''],
     ['Available until', option.availableTo ? formatDisplayDate(option.availableTo) : ''],
-    ['Days', option.availableDays?.length ? formatDays(option.availableDays) : ''],
     ['Hours', option.openTime && option.closeTime ? `${formatTime(option.openTime)} – ${formatTime(option.closeTime)}` : ''],
-    ['Times on the form', option.requiresTime ? 'Required for this option' : ''],
-    ['End date', option.requiresEndDate ? 'Required' : option.sameDayOnly ? 'Same day only' : ''],
   ];
   const facts = candidates.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '');
   if (option.listingNote) facts.push(['Listing note', option.listingNote]);

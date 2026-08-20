@@ -4,6 +4,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { adminApi, getAuthData } from '../lib/api';
+import { categorySupportsOptions, parseSupportsOptions } from '../lib/serviceSchema';
 
 const EMPTY_FIELD = {
   id: '',
@@ -94,7 +95,7 @@ export default function AdminServiceCategoriesPage() {
                 <article key={category._id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
                   <div>
                     <h2 className="font-black text-slate-950">{category.name}</h2>
-                    <p className="text-sm text-slate-500">{category.group} · {category.slug} · {category.supportsOptions ? 'options enabled' : 'single price'} · {category.isActive === false ? 'inactive' : 'active'}</p>
+                    <p className="text-sm text-slate-500">{category.group} · {category.slug} · {categorySupportsOptions(category.supportsOptions) ? 'options enabled' : 'single price'} · {category.isActive === false ? 'inactive' : 'active'}</p>
                   </div>
                   <div className="flex gap-2">
                     <Link to={`/admin-dashboard/service-categories/${category._id}`} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold">Edit</Link>
@@ -146,7 +147,14 @@ export function AdminServiceCategoryEditorPage() {
           setLoadError('Category not found.');
           return;
         }
-        setForm({ ...EMPTY_CATEGORY, ...category });
+        setForm({
+          ...EMPTY_CATEGORY,
+          ...category,
+          supportsOptions: parseSupportsOptions(category.supportsOptions) ?? true,
+          optionFieldSchema: (parseSupportsOptions(category.supportsOptions) ?? true)
+            ? (category.optionFieldSchema || [])
+            : [],
+        });
       }).catch((error) => {
         if (!cancelled) {
           setLoadError(error.message || 'Could not load category.');
@@ -164,7 +172,17 @@ export function AdminServiceCategoryEditorPage() {
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  const setSupportsOptions = (enabled) => {
+    setForm((prev) => ({
+      ...prev,
+      supportsOptions: enabled,
+      optionFieldSchema: enabled ? prev.optionFieldSchema : [],
+    }));
+    if (!enabled) setTab((current) => (current === 'option' ? 'listing' : current));
+  };
+
   const addField = () => {
+    if (tab === 'option' && !form.supportsOptions) return;
     const next = {
       ...EMPTY_FIELD,
       id: `field_${Date.now()}`,
@@ -187,27 +205,48 @@ export function AdminServiceCategoryEditorPage() {
     event.preventDefault();
     setSaving(true);
     try {
+      const supportsOptions = Boolean(form.supportsOptions);
+      const optionFieldSchema = supportsOptions ? (form.optionFieldSchema || []) : [];
+      const payload = {
+        name: form.name,
+        slug: form.slug,
+        group: form.group,
+        description: form.description,
+        supportsOptions,
+        isActive: form.isActive,
+        sortOrder: form.sortOrder,
+        defaults: form.defaults,
+        listingFieldSchema: form.listingFieldSchema || [],
+        optionFieldSchema,
+        bookingFieldSchema: form.bookingFieldSchema || [],
+      };
+
       if (isNew) {
-        const response = await adminApi.createServiceCategory(token, form);
+        const response = await adminApi.createServiceCategory(token, payload);
         toast.success(response.message || 'Category created.');
         const nextId = response.category?._id;
         navigate(nextId ? `/admin-dashboard/service-categories/${nextId}` : '/admin-dashboard/service-categories');
       } else {
+        // Prefer a single PUT with schemas when the backend accepts it; fields endpoint remains the schema write path.
         await adminApi.updateServiceCategory(token, id, {
-          name: form.name,
-          slug: form.slug,
-          group: form.group,
-          description: form.description,
-          supportsOptions: form.supportsOptions,
-          isActive: form.isActive,
-          sortOrder: form.sortOrder,
-          defaults: form.defaults,
+          name: payload.name,
+          slug: payload.slug,
+          group: payload.group,
+          description: payload.description,
+          supportsOptions: payload.supportsOptions,
+          isActive: payload.isActive,
+          sortOrder: payload.sortOrder,
+          defaults: payload.defaults,
+          listingFieldSchema: payload.listingFieldSchema,
+          optionFieldSchema: payload.optionFieldSchema,
+          bookingFieldSchema: payload.bookingFieldSchema,
         });
         await adminApi.updateServiceCategoryFields(token, id, {
-          listingFieldSchema: form.listingFieldSchema,
-          optionFieldSchema: form.optionFieldSchema,
-          bookingFieldSchema: form.bookingFieldSchema,
+          listingFieldSchema: payload.listingFieldSchema,
+          optionFieldSchema: payload.optionFieldSchema,
+          bookingFieldSchema: payload.bookingFieldSchema,
         });
+        setForm((prev) => ({ ...prev, supportsOptions, optionFieldSchema }));
         toast.success('Category saved.');
       }
     } catch (error) {
@@ -238,9 +277,21 @@ export function AdminServiceCategoryEditorPage() {
                 <Field label="Slug" value={form.slug} onChange={(value) => set('slug', value)} placeholder="car-rental" />
                 <Field label="Group" value={form.group} onChange={(value) => set('group', value)} placeholder="Transport Services" />
                 <Field label="Sort order" type="number" value={form.sortOrder} onChange={(value) => set('sortOrder', Number(value))} />
-                <label className="flex items-center gap-3 md:col-span-2">
-                  <input type="checkbox" checked={form.supportsOptions} onChange={(event) => set('supportsOptions', event.target.checked)} />
-                  <span className="text-sm font-semibold">Supports options (rooms, packages, vehicle classes)</span>
+                <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={Boolean(form.supportsOptions)}
+                    onChange={(event) => setSupportsOptions(event.target.checked)}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold text-slate-900">This category has priced options / packages</span>
+                    <span className="mt-1 block text-xs text-slate-600">
+                      {form.supportsOptions
+                        ? 'Sellers add named options with prices. Listing, option, and booking field builders are available.'
+                        : 'Sellers set a single base price. Option fields are hidden and cleared when you save.'}
+                    </span>
+                  </span>
                 </label>
                 <label className="block md:col-span-2">
                   <span className="text-sm font-semibold text-slate-700">Description</span>
@@ -250,15 +301,24 @@ export function AdminServiceCategoryEditorPage() {
 
               <div className="rounded-2xl bg-white p-5 shadow-sm">
                 <div className="mb-4 flex flex-wrap gap-2">
-                  {[['listing', 'Listing fields'], ['option', 'Option fields'], ['booking', 'Booking fields']].map(([tabId, label]) => (
+                  {[
+                    ['listing', 'Listing fields'],
+                    ...(form.supportsOptions ? [['option', 'Option fields']] : []),
+                    ['booking', 'Booking fields'],
+                  ].map(([tabId, label]) => (
                     <button key={tabId} type="button" onClick={() => setTab(tabId)} className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === tabId ? 'bg-primary text-white' : 'border border-slate-200 text-slate-700'}`}>{label}</button>
                   ))}
                   <button type="button" onClick={addField} className="ml-auto rounded-xl border border-primary px-4 py-2 text-sm font-bold text-primary">+ Add field</button>
                 </div>
-                {tab === 'option' && (
+                {tab === 'option' && form.supportsOptions && (
                   <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
                     <p className="font-bold">Built-in option fields (always available)</p>
                     <p className="mt-1">Sellers always enter <strong>Option name</strong> and <strong>Price (RWF)</strong>. Add only the extra fields you want below (for example Seats, Transmission). Those are the only extra fields shown on the option form and public option cards.</p>
+                  </div>
+                )}
+                {!form.supportsOptions && (
+                  <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-950">
+                    Option builder is hidden for this category. Sellers will enter a single base price instead.
                   </div>
                 )}
                 <div className="space-y-3">

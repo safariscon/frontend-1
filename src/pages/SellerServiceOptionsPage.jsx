@@ -5,7 +5,7 @@ import SchemaFields from '../components/SchemaFields';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
-import { emptyListingAttributes, sortSchemaFields, validateSchemaValues } from '../lib/serviceSchema';
+import { emptyListingAttributes, sortSchemaFields, validateSchemaValues, categorySupportsOptions } from '../lib/serviceSchema';
 import { formatRwf } from '../lib/currency';
 import { isSellerRole } from '../lib/dashboard';
 
@@ -31,10 +31,11 @@ export default function SellerServiceOptionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const supportsOptions = service?.supportsOptions
-    ?? service?.category?.supportsOptions
-    ?? service?.schemaSnapshot?.supportsOptions
-    ?? true;
+  const supportsOptions = categorySupportsOptions(
+    service?.supportsOptions,
+    service?.category?.supportsOptions,
+    service?.schemaSnapshot?.supportsOptions
+  );
 
   const load = async () => {
     if (!token || !serviceId) return;

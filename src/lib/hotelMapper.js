@@ -1,3 +1,5 @@
+import { categorySupportsOptions } from './serviceSchema';
+
 export const normalizeHotel = (hotel) => {
   if (!hotel) return null;
 
@@ -37,6 +39,11 @@ export const normalizeHotel = (hotel) => {
     categorySlug,
     categoryName,
     schemaSnapshot: hotel.schemaSnapshot || null,
+    supportsOptions: categorySupportsOptions(
+      hotel.supportsOptions,
+      hotel.schemaSnapshot?.supportsOptions,
+      hotel.category?.supportsOptions
+    ),
     platformCommissionPercent: hotel.platformCommissionPercent ?? hotel.commissionPercentage,
     primaryService: {
       ...hotel,
@@ -58,6 +65,11 @@ export const normalizeHotel = (hotel) => {
       bookingForm: hotel.bookingForm,
       bookingMode: hotel.bookingMode || 'manual',
       schemaSnapshot: hotel.schemaSnapshot || null,
+      supportsOptions: categorySupportsOptions(
+        hotel.supportsOptions,
+        hotel.schemaSnapshot?.supportsOptions,
+        hotel.category?.supportsOptions
+      ),
       availabilityTable: hotel.availabilityTable,
       listingAttributes: hotel.listingAttributes,
       cancelPenaltyPercent: hotel.cancelPenaltyPercent,

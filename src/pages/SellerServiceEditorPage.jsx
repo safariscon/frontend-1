@@ -11,6 +11,7 @@ import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
 import { detectPhoneCountry } from '../lib/phone';
 import {
   buildLocationPayload,
+  categorySupportsOptions,
   emptyListingAttributes,
   getServiceCover,
   resolveCategoryId,
@@ -72,9 +73,10 @@ export default function SellerServiceEditorPage() {
     [categories, category, categoryId]
   );
   const listingSchema = selectedCategory?.listingFieldSchema || [];
-  const supportsOptions = selectedCategory?.supportsOptions !== false && selectedCategory?.supportsOptions !== undefined
-    ? Boolean(selectedCategory.supportsOptions)
-    : true;
+  const supportsOptions = categorySupportsOptions(
+    selectedCategory?.supportsOptions,
+    category?.supportsOptions
+  );
 
   useEffect(() => {
     if (!user) {

@@ -41,8 +41,8 @@ export default function OptionDetailsModal({ row, listing, onClose }) {
         )}
 
         <p className="mt-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-950">
-          Choose a booking date{option.requiresEndDate ? ' and end date' : ''} inside this window
-          {option.availableDays.length ? ` on ${facts.find(([label]) => label === 'Days')?.[1] || 'listed days'}` : ''}.
+          Choose a booking date{option.requiresEndDate ? ' and end date' : ''}
+          {option.availableFrom || option.availableTo ? ' inside this window' : ''}.
           {option.requiresTime
             ? ` Start and end times are required${option.openTime && option.closeTime ? ` between ${facts.find(([label]) => label === 'Hours')?.[1]}` : ''}.`
             : ''}

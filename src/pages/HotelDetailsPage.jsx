@@ -14,6 +14,7 @@ import { formatRwf } from '../lib/currency';
 import SeoHead from '../components/SeoHead';
 import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
 import { getServiceDetailSeo, noindexSeo } from '../lib/seo';
+import { categorySupportsOptions } from '../lib/serviceSchema';
 
 export default function HotelDetailsPage() {
   const { id } = useParams();
@@ -97,6 +98,12 @@ export default function HotelDetailsPage() {
   const promotion = getVisiblePromotion(hotel.promotion);
   const seo = getServiceDetailSeo(hotel, language);
   const imageAlt = `${hotel.name} — ${hotel.serviceCategory || hotel.type || t('details.serviceOption', language)} · ${hotel.location || 'Rwanda'}`;
+  const supportsOptions = categorySupportsOptions(
+    hotel.supportsOptions,
+    hotel.schemaSnapshot?.supportsOptions,
+    hotel.category?.supportsOptions
+  );
+  const displayBasePrice = Number(hotel.basePrice ?? hotel.price ?? 0);
 
   return (
     <CatalogShell authenticated={isAuthenticated}>
@@ -209,17 +216,27 @@ export default function HotelDetailsPage() {
                 )}
               </div>
 
-              <AvailabilityTable
-                columns={tableColumns}
-                rows={filteredRows}
-                updatedAt={hotel.availabilityTable?.updatedAt || hotel.updatedAt}
-                search={tableSearch}
-                setSearch={setTableSearch}
-                sortColumn={sortColumn}
-                setSortColumn={setSortColumn}
-                language={language}
-                optionFieldSchema={hotel.schemaSnapshot?.optionFieldSchema || hotel.category?.optionFieldSchema || []}
-              />
+              {supportsOptions ? (
+                <AvailabilityTable
+                  columns={tableColumns}
+                  rows={filteredRows}
+                  updatedAt={hotel.availabilityTable?.updatedAt || hotel.updatedAt}
+                  search={tableSearch}
+                  setSearch={setTableSearch}
+                  sortColumn={sortColumn}
+                  setSortColumn={setSortColumn}
+                  language={language}
+                  optionFieldSchema={hotel.schemaSnapshot?.optionFieldSchema || hotel.category?.optionFieldSchema || []}
+                />
+              ) : (
+                <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <h2 className="text-xl font-bold text-gray-900">{t('details.price', language)}</h2>
+                  <p className="mt-3 text-3xl font-black text-primary">
+                    {displayBasePrice > 0 ? formatRwf(displayBasePrice) : '—'}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">{t('details.bookingNote', language)}</p>
+                </div>
+              )}
             </div>
 
             <div className="lg:col-span-1">
@@ -345,7 +362,6 @@ function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortCo
           <AvailabilityOptionCard
             key={row.id || index}
             row={row}
-            columns={columns}
             language={language}
             optionFieldSchema={optionFieldSchema}
           />
@@ -363,35 +379,22 @@ function hasFilledValue(value) {
   return text !== '' && text !== '-' && text !== 'none' && text !== 'not set' && text !== 'false';
 }
 
-function AvailabilityOptionCard({ row, columns, language, optionFieldSchema = [] }) {
+function AvailabilityOptionCard({ row, language, optionFieldSchema = [] }) {
   const cells = row.cells || {};
   const attributes = row.attributes || cells.attributes || {};
   const optionName = cells.service || cells.name || cells.option || t('details.serviceOption', language);
   const price = Number(cells.price || 0);
-  const priceType = String(cells.priceType || '').replace(/-/g, ' ');
   const details = cells.details || '';
-  const coreSkip = new Set(['service', 'name', 'option', 'price', 'details', 'amenities', 'attributes']);
   const publicSchema = (optionFieldSchema || []).filter((field) => (field.visibility || 'public') === 'public');
 
-  const schemaFacts = publicSchema
+  // Only admin-configured public option fields with values — never legacy assumed cells.
+  const facts = publicSchema
     .map((field) => {
       const value = attributes[field.id] ?? cells[field.id];
       if (!hasFilledValue(value)) return null;
       return { id: field.id, label: field.label || field.id, value: Array.isArray(value) ? value.join(', ') : String(value) };
     })
     .filter(Boolean);
-
-  const columnFacts = columns
-    .filter((column) => !coreSkip.has(column.id))
-    .map((column) => {
-      const value = cells[column.id];
-      if (!hasFilledValue(value)) return null;
-      if (schemaFacts.some((fact) => fact.id === column.id)) return null;
-      return { id: column.id, label: column.label, value: String(value) };
-    })
-    .filter(Boolean);
-
-  const facts = schemaFacts.length ? schemaFacts : columnFacts;
 
   return (
     <article className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
@@ -403,7 +406,6 @@ function AvailabilityOptionCard({ row, columns, language, optionFieldSchema = []
         <div className="rounded-xl bg-white px-4 py-3 text-left shadow-sm sm:min-w-36 sm:text-right">
           <p className="text-xs font-bold uppercase text-gray-500">{t('details.price', language)}</p>
           <p className="mt-1 text-lg font-black text-primary">{price ? formatRwf(price) : '-'}</p>
-          {hasFilledValue(priceType) && <p className="text-xs font-semibold capitalize text-gray-500">{priceType}</p>}
         </div>
       </div>
 

@@ -63,6 +63,26 @@ export function serviceCategoryId(service) {
   return String(service?.categoryId || service?.category?._id || '');
 }
 
+/** Parse supportsOptions without treating the string "false" as true. Default: true. */
+export function parseSupportsOptions(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (value === false || value === 0) return false;
+  if (value === true || value === 1) return true;
+  const text = String(value).trim().toLowerCase();
+  if (text === 'false' || text === '0' || text === 'no' || text === 'off') return false;
+  if (text === 'true' || text === '1' || text === 'yes' || text === 'on') return true;
+  return Boolean(value);
+}
+
+/** First explicit supportsOptions from service / category / snapshot; defaults to true. */
+export function categorySupportsOptions(...candidates) {
+  for (const value of candidates) {
+    const parsed = parseSupportsOptions(value);
+    if (parsed !== null) return parsed;
+  }
+  return true;
+}
+
 export function buildLocationPayload(location = {}) {
   const latitude = Number(location.latitude);
   const longitude = Number(location.longitude);

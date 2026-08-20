@@ -10,7 +10,7 @@ import { formatRwf } from '../lib/currency';
 import { getCategoryDisplayLabel } from '../data/serviceCategories';
 import useServiceCategories from '../hooks/useServiceCategories';
 import { MAX_UPLOAD_FILE_SIZE_BYTES, MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
-import { resolveCategoryId, serviceCategoryId, serviceCategoryLabel } from '../lib/serviceSchema';
+import { categorySupportsOptions, resolveCategoryId, serviceCategoryId, serviceCategoryLabel } from '../lib/serviceSchema';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
 import ServiceDetailsView from '../components/ServiceDetailsView';
@@ -949,7 +949,7 @@ function ServiceCard({ service, language, onView, onEdit, onOptions, onDelete, o
           <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
             <MenuItem label={t('sellerDash.viewDetails', language)} onClick={() => run(() => onView(service))} />
             <MenuItem label={t('edit', language)} onClick={() => run(() => onEdit(service))} />
-            {(service.supportsOptions ?? service.category?.supportsOptions ?? true) && (
+            {categorySupportsOptions(service.supportsOptions, service.category?.supportsOptions, service.schemaSnapshot?.supportsOptions) && (
               <MenuItem label="Manage options" onClick={() => run(() => onOptions?.(service))} />
             )}
             <MenuItem
