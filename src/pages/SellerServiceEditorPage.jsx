@@ -155,7 +155,6 @@ export default function SellerServiceEditorPage() {
       if (!active || !response?.category) return;
       setCategory(response.category);
       setListingAttributes(emptyListingAttributes(response.category.listingFieldSchema));
-      setCancelWindowHours(Number(response.category.defaults?.suggestedCancelWindowHours ?? 6));
     }).catch(() => {});
     return () => { active = false; };
   }, [categoryId, editing]);

@@ -294,8 +294,8 @@ export default function HotelDashboard() {
   const [approvalBooking, setApprovalBooking] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [globalBookingMode, setGlobalBookingMode] = useState('manual');
+  const [, setSaving] = useState(false);
+  const [, setGlobalBookingMode] = useState('manual');
   const [payoutDetails, setPayoutDetails] = useState(null);
   const [finance, setFinance] = useState(null);
   const token = getAuthData()?.token;
@@ -444,7 +444,7 @@ export default function HotelDashboard() {
 
 
 
-  const cancelEditing = () => {
+  const _cancelEditing = () => {
     resetForm();
     navigate(`${basePath}/services`, { replace: true });
   };
@@ -462,7 +462,7 @@ export default function HotelDashboard() {
     }
   };
 
-  const saveService = async (event) => {
+  const _saveService = async (event) => {
     event.preventDefault();
     if (!token) return;
     if (!form.primaryImage && !form.primaryImageFile) {
@@ -981,8 +981,8 @@ function CoverPreview({ file, url }) {
 
   useEffect(() => {
     if (!file) {
-      setFilePreview('');
-      return undefined;
+      const clearTimer = window.setTimeout(() => setFilePreview(''), 0);
+      return () => window.clearTimeout(clearTimer);
     }
     const objectUrl = URL.createObjectURL(file);
     const timer = window.setTimeout(() => setFilePreview(objectUrl), 0);

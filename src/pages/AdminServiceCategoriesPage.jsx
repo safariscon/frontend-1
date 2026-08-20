@@ -55,9 +55,12 @@ export default function AdminServiceCategoriesPage() {
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/login');
-      return;
+      return undefined;
     }
-    load();
+    const timer = window.setTimeout(() => {
+      load();
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -118,6 +121,7 @@ export function AdminServiceCategoryEditorPage() {
   const [form, setForm] = useState(EMPTY_CATEGORY);
   const [tab, setTab] = useState('listing');
   const [loading, setLoading] = useState(!isNew);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const schemaKey = tab === 'listing' ? 'listingFieldSchema' : tab === 'option' ? 'optionFieldSchema' : 'bookingFieldSchema';
@@ -126,12 +130,36 @@ export function AdminServiceCategoryEditorPage() {
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/login');
-      return;
+      return undefined;
     }
-    if (isNew) return;
-    adminApi.getServiceCategory(token, id).then((response) => {
-      setForm({ ...EMPTY_CATEGORY, ...(response.category || response) });
-    }).catch((error) => toast.error(error.message)).finally(() => setLoading(false));
+    if (isNew) {
+      const timer = window.setTimeout(() => setLoading(false), 0);
+      return () => window.clearTimeout(timer);
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setLoadError('');
+      adminApi.getServiceCategory(token, id).then((response) => {
+        if (cancelled) return;
+        const category = response.category || response;
+        if (!category?._id && !category?.slug && !category?.name) {
+          setLoadError('Category not found.');
+          return;
+        }
+        setForm({ ...EMPTY_CATEGORY, ...category });
+      }).catch((error) => {
+        if (!cancelled) {
+          setLoadError(error.message || 'Could not load category.');
+          toast.error(error.message);
+        }
+      }).finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [id, isNew, navigate, toast, token, user]);
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -197,7 +225,13 @@ export function AdminServiceCategoryEditorPage() {
         <div className="mx-auto max-w-5xl">
           <Link to="/admin-dashboard/service-categories" className="text-sm font-semibold text-primary">← Categories</Link>
           <h1 className="mt-2 text-3xl font-black text-slate-950">{isNew ? 'New category' : 'Edit category'}</h1>
-          {loading ? <p className="mt-6 rounded-2xl bg-white p-6">Loading…</p> : (
+          {loading ? <p className="mt-6 rounded-2xl bg-white p-6">Loading…</p> : loadError ? (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900">
+              <p className="font-bold">Could not open this category</p>
+              <p className="mt-1 text-sm">{loadError}</p>
+              <Link to="/admin-dashboard/service-categories" className="mt-4 inline-flex text-sm font-bold text-primary">← Back to categories</Link>
+            </div>
+          ) : (
             <form onSubmit={save} className="mt-6 space-y-5">
               <div className="grid gap-4 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-2">
                 <Field label="Name" value={form.name} onChange={(value) => set('name', value)} required />

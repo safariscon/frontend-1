@@ -165,11 +165,13 @@ export default function ServiceLocationPicker({ value, onChange }) {
   useEffect(() => {
     const text = query.trim();
     if (text.length < 3) {
-      setSearchResults([]);
-      setSearching(false);
-      return undefined;
+      const clearTimer = window.setTimeout(() => {
+        setSearchResults([]);
+        setSearching(false);
+      }, 0);
+      return () => window.clearTimeout(clearTimer);
     }
-    setSearching(true);
+    const startTimer = window.setTimeout(() => setSearching(true), 0);
     const timer = window.setTimeout(async () => {
       try {
         const results = await searchPlaces(text, {
@@ -187,7 +189,10 @@ export default function ServiceLocationPicker({ value, onChange }) {
         setSearching(false);
       }
     }, 350);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(startTimer);
+      window.clearTimeout(timer);
+    };
   }, [query, location.countryCode, location.latitude, location.longitude]);
 
   const useCurrentLocation = () => {

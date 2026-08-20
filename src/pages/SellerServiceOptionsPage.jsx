@@ -44,6 +44,10 @@ export default function SellerServiceOptionsPage() {
   const optionSchema = service?.schemaSnapshot?.optionFieldSchema
     || service?.category?.optionFieldSchema
     || [];
+  const supportsOptions = service?.supportsOptions
+    ?? service?.category?.supportsOptions
+    ?? service?.schemaSnapshot?.supportsOptions
+    ?? true;
 
   const load = async () => {
     if (!token || !serviceId) return;
@@ -65,10 +69,16 @@ export default function SellerServiceOptionsPage() {
   useEffect(() => {
     if (!user) {
       navigate('/login', { replace: true });
-      return;
+      return undefined;
     }
-    if (!isSellerRole(user.role)) navigate('/');
-    load();
+    if (!isSellerRole(user.role)) {
+      navigate('/');
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      load();
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceId, token, user]);
 
@@ -149,16 +159,24 @@ export default function SellerServiceOptionsPage() {
             </div>
             <div className="flex gap-2">
               <Link to={`/dashboard/seller/services/${serviceId}/edit`} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Edit service</Link>
-              <button type="button" onClick={startCreate} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ Add option</button>
+              {supportsOptions && (
+                <button type="button" onClick={startCreate} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ Add option</button>
+              )}
             </div>
           </div>
 
-          {loading ? <p className="rounded-2xl bg-white p-6 text-slate-600">Loading options…</p> : (
+          {loading ? <p className="rounded-2xl bg-white p-6 text-slate-600">Loading options…</p> : !supportsOptions ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
+              <p className="font-black">This category does not use options</p>
+              <p className="mt-1 text-sm">Set a base price on the service editor instead. Options are only for categories like car rental or hotels with packages.</p>
+              <Link to={`/dashboard/seller/services/${serviceId}/edit`} className="mt-4 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">Edit service</Link>
+            </div>
+          ) : (
             <div className="space-y-4">
               {!options.length && !editingId && (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
                   <p className="font-black text-slate-900">No options yet</p>
-                  <p className="mt-1 text-sm text-slate-600">Add room types, vehicle classes, or packages for this service.</p>
+                  <p className="mt-1 text-sm text-slate-600">Add at least one active option before admin can approve this service.</p>
                   <button type="button" onClick={startCreate} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">Add option</button>
                 </div>
               )}

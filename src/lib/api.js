@@ -531,8 +531,29 @@ export const adminApi = {
       body: typeof payload === "string" ? { status: payload } : payload,
     }),
   getServiceCategories: (token) => apiRequest("/api/admin/service-categories", { token }),
-  getServiceCategory: (token, idOrSlug) =>
-    apiRequest(`/api/admin/service-categories/${encodeURIComponent(idOrSlug)}`, { token }),
+  getServiceCategory: async (token, idOrSlug) => {
+    const key = encodeURIComponent(idOrSlug);
+    // Backend guide documents list/CRUD, but not always GET-by-id on admin.
+    // Prefer public detail (full schemas), then admin list lookup, then admin GET.
+    try {
+      const publicDetail = await apiRequest(`/api/service-categories/${key}`);
+      if (publicDetail?.category || publicDetail?._id || publicDetail?.slug) {
+        return { category: publicDetail.category || publicDetail };
+      }
+    } catch {
+      /* continue */
+    }
+    try {
+      const list = await apiRequest("/api/admin/service-categories", { token });
+      const category = (list.categories || []).find(
+        (item) => String(item._id) === String(idOrSlug) || item.slug === idOrSlug
+      );
+      if (category) return { category };
+    } catch {
+      /* continue */
+    }
+    return apiRequest(`/api/admin/service-categories/${key}`, { token });
+  },
   createServiceCategory: (token, payload) =>
     apiRequest("/api/admin/service-categories", { method: "POST", token, body: payload }),
   updateServiceCategory: (token, id, payload) =>
