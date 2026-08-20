@@ -12,6 +12,7 @@ import { adminApi, getAuthData, hotelApi, publicApi } from '../lib/api';
 import { HowItWorksPage, PaymentsPolicyPage, PrivacyPage, TermsPage } from './PolicyPages';
 import { AnnouncementForm, MarketplaceSettingsForm } from './AdminDashboard';
 import { DEFAULT_ANNOUNCEMENT } from '../lib/announcementDefaults';
+import { DEFAULT_MARKETPLACE_BOOKING_RULES, normalizeBookingRules } from '../lib/bookingRules';
 
 const DOCS = [
   ['how-it-works', 'settingsPage.howItWorks'],
@@ -63,7 +64,12 @@ export default function SettingsPage() {
         intervalSeconds: announcementResp.intervalSeconds || 5,
         items: items.slice(0, 5),
       });
-      setMarketplaceSettings(settingsResp.settings || { defaultCommissionPercentage: 10, bookingMode: 'manual', bookingRules: [] });
+      const settings = settingsResp.settings || { defaultCommissionPercentage: 10, bookingMode: 'manual', bookingRules: [] };
+      const rules = normalizeBookingRules(settings.bookingRules);
+      setMarketplaceSettings({
+        ...settings,
+        bookingRules: rules.length ? rules : [...DEFAULT_MARKETPLACE_BOOKING_RULES],
+      });
     });
   }, [isAdmin]);
 
@@ -84,8 +90,12 @@ export default function SettingsPage() {
     if (!token) return;
     setSettingsError('');
     try {
-      const response = await adminApi.updateMarketplaceSettings(token, marketplaceSettings);
-      setMarketplaceSettings(response.settings || marketplaceSettings);
+      const payload = {
+        ...marketplaceSettings,
+        bookingRules: normalizeBookingRules(marketplaceSettings.bookingRules),
+      };
+      const response = await adminApi.updateMarketplaceSettings(token, payload);
+      setMarketplaceSettings(response.settings || payload);
       setSettingsMessage(response.message || t('settingsPage.bookingRulesSaved', language));
     } catch (requestError) {
       setSettingsError(requestError.message);

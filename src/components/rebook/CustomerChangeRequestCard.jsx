@@ -3,9 +3,9 @@ import { getAuthData, rebookApi } from '../../lib/api';
 import { useLanguage } from '../../context/LanguageContext';
 import { t } from '../../lib/translations';
 
-export default function CustomerChangeRequestCard({ booking, open, onClose, onSubmitted }) {
+export default function CustomerChangeRequestCard({ booking, open, onClose, onSubmitted, defaultType = 'rebook' }) {
   const { language } = useLanguage();
-  const [requestType, setRequestType] = useState('rebook');
+  const [requestType, setRequestType] = useState(defaultType);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

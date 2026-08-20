@@ -7,12 +7,16 @@ import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../li
 import AdminRebookRequests from '../components/rebook/AdminRebookRequests';
 import { isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
 import { t } from '../lib/translations';
+import { DEFAULT_MARKETPLACE_BOOKING_RULES, normalizeBookingRules } from '../lib/bookingRules';
 
 const EMPTY_PROVIDER_FORM = {
   providerName: '',
   providerEmail: '',
 };
+
+const SELLER_MANAGED_BOOKING_TOAST = 'Manual service bookings must be approved by the assigned service provider.';
 
 const DEFAULT_TRANSACTION_FILTERS = {
   page: 1,
@@ -34,6 +38,7 @@ function buildTransactionQuery(filters) {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { language } = useLanguage();
+  const toast = useToast();
   const navigate = useNavigate();
   const { section } = useParams();
   const view = ['users', 'services', 'bookings', 'revenue'].includes(section) ? section : 'dashboard';
@@ -102,7 +107,12 @@ export default function AdminDashboard() {
       setPayouts(payoutsResp.payouts || payoutsResp.transactions || []);
       try {
         const settingsResp = await publicApi.getMarketplaceSettings();
-        setMarketplaceSettings(settingsResp.settings || { defaultCommissionPercentage: 10, bookingMode: 'manual', bookingRules: [] });
+        const settings = settingsResp.settings || { defaultCommissionPercentage: 10, bookingMode: 'manual', bookingRules: [] };
+        const rules = normalizeBookingRules(settings.bookingRules);
+        setMarketplaceSettings({
+          ...settings,
+          bookingRules: rules.length ? rules : [...DEFAULT_MARKETPLACE_BOOKING_RULES],
+        });
       } catch {
         /* keep current marketplace settings */
       }
@@ -176,13 +186,17 @@ export default function AdminDashboard() {
 
   const approveBooking = async (booking, decision) => {
     if (!token) return;
-    const businessId = booking.preferredHotelId?._id || booking.hotelId?._id || booking.businessId?._id;
-    if (!businessId) {
-      setError('This booking has no selected business. Connect it to a business before approval.');
+    if (isSellerManagedManualBooking(booking)) {
+      toast.info(SELLER_MANAGED_BOOKING_TOAST);
+      setSelectedBooking(null);
       return;
     }
-    setError('');
-    setInfo('');
+    const businessId = booking.preferredHotelId?._id || booking.hotelId?._id || booking.businessId?._id;
+    if (!businessId) {
+      toast.error('This booking has no selected business. Connect it to a business before approval.');
+      setSelectedBooking(null);
+      return;
+    }
     try {
       const response = await adminApi.approveBooking(token, booking._id || booking.id, {
         businessId,
@@ -190,26 +204,35 @@ export default function AdminDashboard() {
         commissionPercentage: Number(decision.commissionPercentage),
         paymentReason: decision.paymentReason,
       });
-      setInfo(response.message);
+      toast.success(response.message || 'Booking approved.');
       setSelectedBooking(null);
       await loadData({ silent: true });
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message || SELLER_MANAGED_BOOKING_TOAST);
+      setSelectedBooking(null);
     }
   };
 
   const rejectBooking = async (booking, reason) => {
     if (!token) return;
-    setError('');
-    setInfo('');
     try {
       const response = await adminApi.rejectBooking(token, booking._id || booking.id, { reason });
-      setInfo(response.message);
+      toast.success(response.message || 'Booking rejected.');
       setSelectedBooking(null);
       await loadData({ silent: true });
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
+      setSelectedBooking(null);
     }
+  };
+
+  const openBookingDetails = (booking) => {
+    if (isSellerManagedManualBooking(booking)) {
+      toast.info(SELLER_MANAGED_BOOKING_TOAST);
+      setSelectedBooking(null);
+      return;
+    }
+    setSelectedBooking(booking);
   };
 
   const updateServiceBookingMode = async (service, bookingMode) => {
@@ -435,7 +458,7 @@ export default function AdminDashboard() {
                 modeErrors={modeErrors}
               />
             )}
-            {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingTable bookings={bookings} onView={setSelectedBooking} />}
+            {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingTable bookings={bookings} onView={openBookingDetails} />}
             {!loading && view === 'bookings' && bookingSubTab === 'rebook-requests' && <AdminRebookRequests />}
             {!loading && view === 'bookings' && bookingSubTab === 'verification' && <BookingVerification token={token} verify={adminApi.verifyBooking} />}
             {!loading && view === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} />}
@@ -660,8 +683,8 @@ function UserGroups({ users, selectedUserIds, setSelectedUserIds, onDeleteSelect
 
 function BookingTable({ bookings, onView }) {
   const { language } = useLanguage();
-  return <SimpleTable rows={bookings} columns={[t('sellerDash.bookingId', language), t('bookingCode', language), t('sellerDash.customer', language), t('sellerDash.service', language), t('customerDash.business', language), t('status', language), t('sellerDash.payment', language), t('completed', language), t('actions', language)]} map={(booking) => [
-    booking._id,
+  return <SimpleTable rows={bookings} columns={[t('booking.bookingDate', language), t('bookingCode', language), t('sellerDash.customer', language), t('sellerDash.service', language), t('customerDash.business', language), t('status', language), t('sellerDash.payment', language), t('completed', language), t('actions', language)]} map={(booking) => [
+    formatAdminBookingDate(booking),
     booking.bookingCode || booking._id?.slice(-8),
     booking.userId?.name || booking.touristId?.name || booking.userId?.email || booking.touristId?.email || t('sellerDash.customer', language),
     booking.serviceId?.title || booking.assignmentLabel || booking.destinationPlace,
@@ -673,6 +696,18 @@ function BookingTable({ bookings, onView }) {
       <button type="button" onClick={() => onView(booking)} className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{t('view', language)}</button>
     </div>,
   ]} />;
+}
+
+function formatAdminBookingDate(booking) {
+  const raw = booking.bookingDetails?.bookingDate
+    || booking.bookingDate
+    || booking.checkIn
+    || booking.startDate
+    || booking.createdAt;
+  if (!raw) return '-';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return String(raw).slice(0, 10);
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function RevenueList({ revenueByType, transactions, summary, financeSummary, payouts = [], payoutStatusFilter, setPayoutStatusFilter, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect, onSync }) {
@@ -1065,6 +1100,9 @@ export function AnnouncementForm({ form, setForm, onSubmit }) {
 export function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange }) {
   const { language } = useLanguage();
   const rulesText = (form.bookingRules || []).join('\n');
+  const loadDefaultRules = () => {
+    setForm((prev) => ({ ...prev, bookingRules: [...DEFAULT_MARKETPLACE_BOOKING_RULES] }));
+  };
   return (
     <form onSubmit={onSubmit} className="grid gap-5">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
@@ -1081,7 +1119,17 @@ export function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange 
       <AdminInput label={t('admin.defaultCommission', language)} type="number" value={form.defaultCommissionPercentage} onChange={(value) => setForm((prev) => ({ ...prev, defaultCommissionPercentage: Number(value) }))} required />
       <label className="block md:col-span-2">
         <span className="text-sm font-semibold text-gray-700">{t('admin.globalRules', language)}</span>
-        <textarea value={rulesText} onChange={(event) => setForm((prev) => ({ ...prev, bookingRules: event.target.value.split('\n') }))} rows={7} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3" />
+        <p className="mt-1 text-xs text-gray-500">{t('admin.globalRulesHelp', language)}</p>
+        <textarea
+          value={rulesText}
+          onChange={(event) => setForm((prev) => ({ ...prev, bookingRules: event.target.value.split('\n') }))}
+          rows={8}
+          placeholder={DEFAULT_MARKETPLACE_BOOKING_RULES.join('\n')}
+          className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 font-normal"
+        />
+        <button type="button" onClick={loadDefaultRules} className="mt-2 text-sm font-bold text-primary hover:underline">
+          {t('admin.loadDefaultRules', language)}
+        </button>
       </label>
       <p className="text-xs font-semibold text-blue-700">{t('admin.modeSavesNow', language)}</p>
       <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white md:w-fit">{t('admin.saveRules', language)}</button>
@@ -1175,17 +1223,10 @@ function AdminBookingDetailModal({ booking, defaultCommission, onApprove, onReje
   const { language } = useLanguage();
   const [decision, setDecision] = useState({ totalPrice: booking.totalPrice || booking.bookingDetails?.listedPriceRwf || '', commissionPercentage: booking.commissionPercentage || defaultCommission || 10, paymentReason: booking.paymentReason || '' });
   const [reason, setReason] = useState('');
-  const sellerManaged = isSellerManagedManualBooking(booking);
-  const canDecide = ['pending', 'reviewing'].includes(booking.status) && !sellerManaged;
+  const canDecide = ['pending', 'reviewing'].includes(booking.status);
   return (
     <Modal title="Review Booking Request" onClose={onClose}>
       <InlineBookingDetails booking={booking} />
-      {sellerManaged && (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h3 className="font-bold text-amber-950">Service provider approval required</h3>
-          <p className="mt-1 text-sm text-amber-800">This manual booking is handled by the service provider. Admin can monitor it here, but the provider must approve it with the final price and payment deadline.</p>
-        </div>
-      )}
       {canDecide && (
         <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
           <h3 className="font-bold text-blue-950">Admin decision</h3>

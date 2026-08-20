@@ -42,6 +42,16 @@ export function emptyLocationDetails() {
     sector: '',
     cell: '',
     village: '',
+    area: '',
+    placeName: '',
+    formattedAddress: '',
+    fullAddress: '',
+    latitude: null,
+    longitude: null,
+    latitudeRaw: '',
+    longitudeRaw: '',
+    placeId: '',
+    locationSource: '',
   };
 }
 
@@ -51,6 +61,8 @@ export function normalizeLocationDetails(input = {}) {
   const state = String(input.state || input.province || '').trim();
   const city = String(input.city || input.district || '').trim();
   const sector = String(input.sector || input.area || '').trim();
+  const latitude = Number(input.latitude);
+  const longitude = Number(input.longitude);
   return {
     country,
     countryCode,
@@ -59,19 +71,58 @@ export function normalizeLocationDetails(input = {}) {
     province: state,
     district: city,
     sector,
+    area: sector,
     cell: String(input.cell || '').trim(),
     village: String(input.village || '').trim(),
+    placeName: String(input.placeName || '').trim(),
+    formattedAddress: String(input.formattedAddress || input.fullAddress || '').trim(),
+    fullAddress: String(input.fullAddress || input.formattedAddress || '').trim(),
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
+    latitudeRaw: input.latitudeRaw != null && input.latitudeRaw !== ''
+      ? String(input.latitudeRaw)
+      : (Number.isFinite(latitude) ? String(latitude) : ''),
+    longitudeRaw: input.longitudeRaw != null && input.longitudeRaw !== ''
+      ? String(input.longitudeRaw)
+      : (Number.isFinite(longitude) ? String(longitude) : ''),
+    placeId: String(input.placeId || '').trim(),
+    locationSource: String(input.locationSource || '').trim(),
   };
 }
 
 export function formatLocationLine(input) {
   const location = normalizeLocationDetails(input);
-  return [location.sector, location.city, location.state, location.country].filter(Boolean).join(', ');
+  const named = [
+    location.placeName,
+    location.formattedAddress,
+    location.sector,
+    location.city,
+    location.state,
+    location.country,
+  ].filter(Boolean);
+  if (named.length) {
+    // Prefer a compact human line without duplicating the full address twice.
+    if (location.placeName && location.city) {
+      return [location.placeName, location.city, location.country].filter(Boolean).join(', ');
+    }
+    if (location.formattedAddress) return location.formattedAddress;
+    return [location.sector, location.city, location.state, location.country].filter(Boolean).join(', ');
+  }
+  if (location.latitude != null && location.longitude != null) {
+    return `${location.latitude}, ${location.longitude}`;
+  }
+  return '';
 }
 
 export function isAdministrativeLocationComplete(input) {
   const location = normalizeLocationDetails(input);
   return Boolean(location.country && location.city);
+}
+
+/** Customer booking: a map pin is enough even when the place has no name. */
+export function isCustomerMapLocationComplete(input) {
+  const location = normalizeLocationDetails(input);
+  return location.latitude != null && location.longitude != null;
 }
 
 export async function listCountries() {

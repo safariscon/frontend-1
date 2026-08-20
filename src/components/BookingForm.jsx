@@ -23,13 +23,18 @@ import {
   parseOptionAvailability,
   validateOptionSchedule,
 } from '../lib/availability';
-import AdministrativeLocationFields from './AdministrativeLocationFields';
-import { emptyLocationDetails, formatLocationLine, isAdministrativeLocationComplete, normalizeLocationDetails } from '../lib/places';
+import CustomerLocationPicker from './CustomerLocationPicker';
+import { emptyLocationDetails, formatLocationLine, isCustomerMapLocationComplete, normalizeLocationDetails } from '../lib/places';
 import { emptyListingAttributes, validateSchemaValues, categorySupportsOptions } from '../lib/serviceSchema';
 import { MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
+import { resolveCustomerBookingRules } from '../lib/bookingRules';
 
 const TODAY = new Date().toISOString().split('T')[0];
-const OUTDATED_RULE = /30%|remaining balance is paid|advance money is not refunded|pay the 30%/i;
+
+const clampBookingDate = (minDate, maxDate) => {
+  if (TODAY >= minDate && (!maxDate || TODAY <= maxDate)) return TODAY;
+  return minDate || TODAY;
+};
 
 const currentBookingRules = (listing, language) => {
   const hours = listingCancelHours(listing);
@@ -51,8 +56,8 @@ const BASE_VALUES = {
   phone: '',
   fullName: '',
   email: '',
-  bookingDate: '',
-  endBookingDate: '',
+  bookingDate: TODAY,
+  endBookingDate: TODAY,
   startTime: '',
   endTime: '',
   numberOfPeople: '1',
@@ -129,6 +134,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             email: getAuthData()?.user?.email || '',
             fullName: getAuthData()?.user?.name || '',
             phone: getAuthData()?.user?.phone || '',
+            bookingDate: prev.bookingDate || TODAY,
+            endBookingDate: prev.endBookingDate || prev.bookingDate || TODAY,
           }));
           const categoryKey = found.categoryId || found.category?._id || found.categorySlug || found.type;
           if (!snapshotSchema.length && categoryKey) {
@@ -192,21 +199,29 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const dateMin = optionMinDate(optionSchedule, TODAY);
   const dateMax = optionMaxDate(optionSchedule);
   const overnightHours = Boolean(optionSchedule.openTime && optionSchedule.closeTime && optionSchedule.openTime > optionSchedule.closeTime);
+  const preferredBookingDate = clampBookingDate(dateMin, dateMax);
+  const bookingDateValue = (
+    values.bookingDate
+    && values.bookingDate >= dateMin
+    && (!dateMax || values.bookingDate <= dateMax)
+  ) ? values.bookingDate : preferredBookingDate;
   const activePromotion = getVisiblePromotion(business?.promotion);
   const effectiveMode = marketplaceSettings.bookingMode === 'service-level'
     ? business?.bookingMode || service?.bookingMode || 'manual'
     : marketplaceSettings.bookingMode || 'manual';
   const isUnavailable = (service?.status || business?.status) === 'unavailable';
-  const displayedRules = useMemo(() => {
-    const defaults = currentBookingRules(business || service, language);
-    const extras = marketplaceRules.filter((rule) => rule && !OUTDATED_RULE.test(rule) && !defaults.includes(rule));
-    return [...defaults, ...extras];
-  }, [business, service, marketplaceRules, language]);
+  const displayedRules = useMemo(() => (
+    resolveCustomerBookingRules({
+      marketplaceRules,
+      listing: business || service,
+      fallbackRules: currentBookingRules(business || service, language),
+    })
+  ), [business, service, marketplaceRules, language]);
 
-  const alignedEndBookingDate = (optionSchedule.sameDayOnly || !optionSchedule.requiresEndDate) && values.bookingDate
-    ? values.bookingDate
-    : values.endBookingDate;
-  const bookingValues = { ...values, endBookingDate: alignedEndBookingDate };
+  const alignedEndBookingDate = (optionSchedule.sameDayOnly || !optionSchedule.requiresEndDate)
+    ? bookingDateValue
+    : (values.endBookingDate || bookingDateValue);
+  const bookingValues = { ...values, bookingDate: bookingDateValue, endBookingDate: alignedEndBookingDate };
 
   const updateValue = (key, value) => {
     setValues((prev) => {
@@ -236,7 +251,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (scheduleError) return scheduleError;
     if (Number(values.numberOfPeople) < 1) return t('booking.peopleMin', language);
     if (Number(values.quantity) < 1) return t('booking.quantityMin', language);
-    if (!isAdministrativeLocationComplete(values.customerLocationDetails)) return t('booking.selectCountryCity', language);
+    if (!isCustomerMapLocationComplete(values.customerLocationDetails)) return t('booking.selectMapLocation', language);
     if (!values.agreeToTerms) return t('booking.agreeTerms', language);
     if (useRebook && !rebookId.trim()) return t('booking.enterRebookId', language);
     if (useRebook && verifiedRebookId !== rebookId.trim().toUpperCase()) return t('booking.verifyRebookFirst', language);
@@ -307,9 +322,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         quantity,
         totalConsumptionUnits: numberOfPeople * quantity,
         totalPrice: 0,
-        startDate: values.bookingDate,
-        endDate: bookingValues.endBookingDate || values.bookingDate,
-        endBookingDate: bookingValues.endBookingDate || values.bookingDate,
+        startDate: bookingValues.bookingDate,
+        endDate: bookingValues.endBookingDate || bookingValues.bookingDate,
+        endBookingDate: bookingValues.endBookingDate || bookingValues.bookingDate,
         startTime: values.startTime || undefined,
         endTime: values.endTime || undefined,
         destinationPlace: values.destinationPlace,
@@ -330,8 +345,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           fullName: values.fullName,
           email: values.email,
           phone: values.phone,
-          bookingDate: values.bookingDate,
-          endBookingDate: bookingValues.endBookingDate || values.bookingDate,
+          bookingDate: bookingValues.bookingDate,
+          endBookingDate: bookingValues.endBookingDate || bookingValues.bookingDate,
           startTime: values.startTime || '',
           endTime: values.endTime || '',
           numberOfPeople,
@@ -380,74 +395,102 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl mx-auto">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">{service.title || service.name}</h2>
-          <p className="text-gray-600">
-            {business.location} - {bookingConfig.label}
+    <form onSubmit={handleSubmit} className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-xl sm:p-7">
+      <div className="mb-6 flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-black text-slate-950">{service.title || service.name}</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {business.location} · {bookingConfig.label}
           </p>
         </div>
         {onClose && (
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition" aria-label={t('booking.closeForm', language)}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={t('booking.closeForm', language)}>
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         )}
       </div>
 
+      <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <label className="flex items-start gap-3 text-sm font-bold text-blue-950">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={useRebook}
+            onChange={(event) => { setUseRebook(event.target.checked); setVerifiedRebookId(''); setError(''); }}
+          />
+          <span>{t('booking.useRebook', language)}</span>
+        </label>
+        {useRebook && (
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={rebookId}
+              onChange={(event) => { setRebookId(event.target.value.toUpperCase()); setVerifiedRebookId(''); }}
+              placeholder="RBK-2026-00124"
+              className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2.5 font-mono uppercase"
+            />
+            <button type="button" disabled={verifyingRebook} onClick={verifyRebook} className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
+              {verifyingRebook ? t('booking.verifying', language) : t('booking.verifyId', language)}
+            </button>
+          </div>
+        )}
+        {useRebook && verifiedRebookId && <p className="mt-2 text-xs font-bold text-emerald-700">{t('booking.rebookVerified', language)}</p>}
+      </div>
+
       {Array.isArray(service.rules) && service.rules.length > 0 && (
         <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-bold">{t('booking.providerRules', language)}</p>
-          <ul className="mt-2 list-disc pl-5">
-            {service.rules.map((rule) => <li key={rule}>{rule}</li>)}
-          </ul>
+          <ul className="mt-2 list-disc pl-5">{service.rules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
         </div>
       )}
 
       {displayedRules.length > 0 && (
-        <div className="mb-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-950">
+        <div className="mb-5 rounded-xl bg-blue-50 p-4 text-sm text-blue-950">
           <p className="font-bold">{t('booking.marketplaceRules', language)}</p>
-          <ul className="mt-2 list-disc pl-5">{displayedRules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
+          <ul className="mt-2 list-disc space-y-1 pl-5">{displayedRules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
         </div>
       )}
 
-      {supportsOptions ? (
-        <>
-          <label className="mb-5 block">
-            <span className="text-sm font-bold text-gray-800">{t('booking.chooseService', language)}</span>
-            <select disabled={Boolean(quoteResult)} value={selectedOffer} onChange={(event) => setSelectedOffer(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 disabled:bg-gray-100" required>
+      <section className="mb-6 space-y-3">
+        <h3 className="text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.chooseService', language)}</h3>
+        {supportsOptions ? (
+          <>
+            <select
+              disabled={Boolean(quoteResult)}
+              value={selectedOffer}
+              onChange={(event) => setSelectedOffer(event.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 disabled:bg-slate-100"
+              required
+            >
               <option value="">{t('booking.selectFromTable', language)}</option>
               {offers.map((row) => (
                 <option key={row.id} value={row.cells?.service}>{row.cells?.service} — {formatRwf(Number(row.cells?.price || 0))}</option>
               ))}
             </select>
-          </label>
-
-          {selectedOfferRow && (
-            <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <strong>{selectedOfferRow.cells?.service}</strong>
-                  <p className="mt-1 text-xs">
+            {selectedOfferRow && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-900">{selectedOfferRow.cells?.service}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">
                     {optionSchedule.availableFrom || optionSchedule.availableTo
                       ? `${formatDisplayDate(optionSchedule.availableFrom)} – ${optionSchedule.availableTo ? formatDisplayDate(optionSchedule.availableTo) : t('booking.open', language)}`
                       : t('booking.noDateWindow', language)}
                   </p>
                 </div>
-                <button type="button" onClick={() => setDetailsOpen(true)} className="rounded-lg bg-white px-3 py-2 font-bold text-primary">{t('booking.viewDetails', language)}</button>
+                <button type="button" onClick={() => setDetailsOpen(true)} className="shrink-0 rounded-lg bg-white px-3 py-2 text-sm font-bold text-primary shadow-sm">
+                  {t('booking.viewDetails', language)}
+                </button>
               </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-950">
-          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">{t('booking.chooseService', language)}</p>
-          <p className="mt-1 text-lg font-black">{service.title || service.name}</p>
-          <p className="mt-1 font-bold text-primary">{basePrice > 0 ? formatRwf(basePrice) : t('booking.manualQuote', language)}</p>
-        </div>
-      )}
+            )}
+          </>
+        ) : (
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+            <p className="text-lg font-black">{service.title || service.name}</p>
+            <p className="mt-1 font-bold text-primary">{basePrice > 0 ? formatRwf(basePrice) : t('booking.manualQuote', language)}</p>
+          </div>
+        )}
+      </section>
 
       {activePromotion && (
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -457,62 +500,74 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FixedInput label={t('booking.fullName', language)} value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
-        <PhoneNumberField label={t('booking.phoneNumber', language)} value={values.phone} onChange={(value) => updateValue('phone', value)} required />
-        <FixedInput label={t('booking.email', language)} type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
-        <FixedInput
-          label={t('booking.bookingDate', language)}
-          type="date"
-          min={dateMin}
-          max={dateMax || undefined}
-          value={values.bookingDate}
-          onChange={(value) => updateValue('bookingDate', value)}
-          required
-          hint={dateHint(optionSchedule, dateMin, dateMax, language)}
-        />
-        {(optionSchedule.requiresEndDate || optionSchedule.sameDayOnly) && (
+      <section className="mb-6">
+        <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.yourDetails', language)}</h3>
+        <div className="grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2">
+          <FixedInput label={t('booking.fullName', language)} value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
+          <PhoneNumberField label={t('booking.phoneNumber', language)} value={values.phone} onChange={(value) => updateValue('phone', value)} required />
+          <FixedInput label={t('booking.email', language)} type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
           <FixedInput
-            label={t('booking.endBookingDate', language)}
+            label={t('booking.bookingDate', language)}
             type="date"
-            min={values.bookingDate || dateMin}
+            min={dateMin}
             max={dateMax || undefined}
-            value={alignedEndBookingDate}
-            onChange={(value) => updateValue('endBookingDate', value)}
-            required={optionSchedule.requiresEndDate}
-            hint={optionSchedule.sameDayOnly ? t('booking.sameDayOnly', language) : t('booking.stayInsideDates', language)}
+            value={bookingDateValue}
+            onChange={(value) => updateValue('bookingDate', value)}
+            required
+            hint={dateHint(optionSchedule, dateMin, dateMax, language)}
           />
-        )}
-        <FixedInput
-          label={t('booking.startTime', language)}
-          type="time"
-          min={overnightHours ? undefined : optionSchedule.openTime || undefined}
-          max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
-          value={values.startTime}
-          onChange={(value) => updateValue('startTime', value)}
-          required={optionSchedule.requiresTime}
-          hint={timeHint(optionSchedule, 'start', language)}
-        />
-        <FixedInput
-          label={t('booking.endTime', language)}
-          type="time"
-          min={overnightHours ? undefined : optionSchedule.openTime || undefined}
-          max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
-          value={values.endTime}
-          onChange={(value) => updateValue('endTime', value)}
-          required={optionSchedule.requiresTime}
-          hint={timeHint(optionSchedule, 'end', language)}
-        />
-        <FixedInput label={t('booking.numberOfPeople', language)} type="number" min="1" value={values.numberOfPeople} onChange={(value) => updateValue('numberOfPeople', value)} required />
-        <FixedInput label={t('booking.quantityUnits', language)} type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
-        <CustomerLocationFields location={values.customerLocationDetails} onChange={updateCustomerLocation} />
-        <label className="block"><span className="mb-1 block text-sm font-medium text-gray-700">{t('booking.paymentMethod', language)}</span><select value={values.paymentMethod} onChange={(event) => updateValue('paymentMethod', event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3"><option value="mobile-money">{t('booking.mobileMoney', language)}</option><option value="bank">{t('bank', language)}</option></select></label>
+          {(optionSchedule.requiresEndDate || optionSchedule.sameDayOnly) && (
+            <FixedInput
+              label={t('booking.endBookingDate', language)}
+              type="date"
+              min={bookingDateValue || dateMin}
+              max={dateMax || undefined}
+              value={alignedEndBookingDate}
+              onChange={(value) => updateValue('endBookingDate', value)}
+              required={optionSchedule.requiresEndDate}
+              hint={optionSchedule.sameDayOnly ? t('booking.sameDayOnly', language) : t('booking.stayInsideDates', language)}
+            />
+          )}
+          <FixedInput
+            label={t('booking.startTime', language)}
+            type="time"
+            min={overnightHours ? undefined : optionSchedule.openTime || undefined}
+            max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
+            value={values.startTime}
+            onChange={(value) => updateValue('startTime', value)}
+            required={optionSchedule.requiresTime}
+            hint={timeHint(optionSchedule, 'start', language)}
+          />
+          <FixedInput
+            label={t('booking.endTime', language)}
+            type="time"
+            min={overnightHours ? undefined : optionSchedule.openTime || undefined}
+            max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
+            value={values.endTime}
+            onChange={(value) => updateValue('endTime', value)}
+            required={optionSchedule.requiresTime}
+            hint={timeHint(optionSchedule, 'end', language)}
+          />
+          <FixedInput label={t('booking.numberOfPeople', language)} type="number" min="1" value={values.numberOfPeople} onChange={(value) => updateValue('numberOfPeople', value)} required />
+          <FixedInput label={t('booking.quantityUnits', language)} type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-sm font-medium text-slate-700">{t('booking.paymentMethod', language)}</span>
+            <select value={values.paymentMethod} onChange={(event) => updateValue('paymentMethod', event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3">
+              <option value="mobile-money">{t('booking.mobileMoney', language)}</option>
+              <option value="bank">{t('bank', language)}</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <div className="mb-6">
+        <CustomerLocationPicker value={values.customerLocationDetails} onChange={updateCustomerLocation} />
       </div>
 
       {bookingFieldSchema.length > 0 && (
         <div className="mb-6 rounded-xl border border-slate-200 p-4">
-          <h3 className="font-bold text-gray-900">Booking details</h3>
-          <p className="mt-1 text-sm text-gray-500">Required fields for this service.</p>
+          <h3 className="font-bold text-slate-900">{t('booking.bookingDetails', language)}</h3>
+          <p className="mt-1 text-sm text-slate-500">{t('booking.requiredFields', language)}</p>
           <div className="mt-4">
             <SchemaFields
               schema={bookingFieldSchema}
@@ -527,42 +582,35 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         </div>
       )}
 
-      {customFields.length > 0 && <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
-        {customFields.map((item) => (
-          <DynamicField
-            key={item.id || item.name}
-            field={item}
-            value={customFields.length ? customValues[item.id] : values[item.name] || ''}
-            onChange={(value) => customFields.length ? setCustomValues((prev) => ({ ...prev, [item.id]: value })) : updateValue(item.name, value)}
-          />
-        ))}
-      </div>}
+      {customFields.length > 0 && (
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {customFields.map((item) => (
+            <DynamicField
+              key={item.id || item.name}
+              field={item}
+              value={customFields.length ? customValues[item.id] : values[item.name] || ''}
+              onChange={(value) => (customFields.length ? setCustomValues((prev) => ({ ...prev, [item.id]: value })) : updateValue(item.name, value))}
+            />
+          ))}
+        </div>
+      )}
 
-      <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
-        <label className="flex items-center gap-3 text-sm font-bold text-blue-950">
-          <input type="checkbox" checked={useRebook} onChange={(event) => { setUseRebook(event.target.checked); setVerifiedRebookId(''); setError(''); }} />
-          {t('booking.useRebook', language)}
-        </label>
-        {useRebook && <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input value={rebookId} onChange={(event) => { setRebookId(event.target.value.toUpperCase()); setVerifiedRebookId(''); }} placeholder="RBK-2026-00124" className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono uppercase" />
-          <button type="button" disabled={verifyingRebook} onClick={verifyRebook} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{verifyingRebook ? t('booking.verifying', language) : t('booking.verifyId', language)}</button>
-        </div>}
-        {useRebook && verifiedRebookId && <p className="mt-2 text-xs font-bold text-emerald-700">{t('booking.rebookVerified', language)}</p>}
-      </div>
+      <label className="mb-5 flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-sm text-slate-700">
+        <input type="checkbox" className="mt-0.5" checked={values.agreeToTerms} onChange={(event) => updateValue('agreeToTerms', event.target.checked)} required />
+        <AgreeTermsText />
+      </label>
 
-      <label className="mb-5 flex items-start gap-3 rounded-xl border border-gray-200 p-4 text-sm text-gray-700"><input type="checkbox" checked={values.agreeToTerms} onChange={(event) => updateValue('agreeToTerms', event.target.checked)} required /><AgreeTermsText /></label>
-
-      <div className="bg-gray-50 rounded-xl p-4 mb-6 text-sm text-gray-700">
+      <div className="mb-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
         {effectiveMode === 'automatic' ? t('booking.automaticHint', language) : t('booking.manualHint', language)}
       </div>
 
-      {isUnavailable && <div className="mb-4 p-3 bg-amber-50 text-amber-700 rounded-lg text-sm">{t('booking.currentlyUnavailable', language)}</div>}
-      {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
+      {isUnavailable && <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">{t('booking.currentlyUnavailable', language)}</div>}
+      {error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>}
 
       <button
         type="submit"
         disabled={loading || isUnavailable || Boolean(quoteResult)}
-        className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? (
           <>
@@ -599,12 +647,12 @@ function AgreeTermsText() {
 function FixedInput({ label, value, onChange, type = 'text', min, max, required = false, hint }) {
   const { language } = useLanguage();
   return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium text-gray-700">
-        {label}{required ? '' : <span className="font-normal text-gray-400"> {t('booking.optional', language)}</span>}
+    <label className="flex h-full flex-col">
+      <span className="mb-1 block text-sm font-medium text-slate-700">
+        {label}{required ? '' : <span className="font-normal text-slate-400"> {t('booking.optional', language)}</span>}
       </span>
-      <input type={type} min={min} max={max} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3" />
-      {hint && <span className="mt-1 block text-xs text-gray-500">{hint}</span>}
+      <input type={type} min={min} max={max} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3" />
+      {hint ? <span className="mt-1 block min-h-[2.5rem] text-xs leading-5 text-slate-500">{hint}</span> : <span className="mt-1 block min-h-[2.5rem]" aria-hidden="true" />}
     </label>
   );
 }
@@ -629,19 +677,6 @@ function timeHint(option, kind, language) {
     return t('booking.timeBetween', language, { kind: kindLabel, open: formatTime(option.openTime), close: formatTime(option.closeTime) });
   }
   return t('booking.timeRequired', language, { kind: kindLabel });
-}
-
-function CustomerLocationFields({ location, onChange }) {
-  const { language } = useLanguage();
-  return (
-    <fieldset className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 sm:col-span-2">
-      <legend className="px-1 text-sm font-black text-blue-950">{t('booking.customerLocation', language)}</legend>
-      <p className="mt-1 text-xs font-semibold text-blue-800">{t('booking.customerLocationHelp', language)}</p>
-      <div className="mt-4">
-        <AdministrativeLocationFields value={location} onChange={onChange} />
-      </div>
-    </fieldset>
-  );
 }
 
 function QuoteCard({ result, paymentMethod, onPaid }) {

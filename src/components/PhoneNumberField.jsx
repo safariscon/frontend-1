@@ -71,7 +71,7 @@ export default function PhoneNumberField({
           className={`min-w-0 flex-1 ${FIELD_CLASS}`}
         />
       </div>
-      <span className="mt-1 block text-xs text-gray-500">{phoneValidationMessage(country)}</span>
+      <span className="mt-1 block min-h-[2.5rem] text-xs leading-5 text-gray-500">{phoneValidationMessage(country)}</span>
     </label>
   );
 }

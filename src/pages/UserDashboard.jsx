@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { bookingApi, getAuthData } from '../lib/api';
+import { bookingApi, getAuthData, rebookApi } from '../lib/api';
 import { findBookingByFocusId } from '../lib/dashboard';
 import { formatLocationLine } from '../lib/places';
 import { formatRwf } from '../lib/currency';
@@ -39,8 +39,30 @@ export default function UserDashboard() {
   const [changeBookingId, setChangeBookingId] = useState('');
   const [changeRequestsVersion, setChangeRequestsVersion] = useState(0);
   const [cancelBooking, setCancelBooking] = useState(null);
+  const [rebookRequests, setRebookRequests] = useState([]);
+  const [rebookFreshnessMs] = useState(() => Date.now());
   const openedFocusId = useRef('');
   const { language } = useLanguage();
+
+  useEffect(() => {
+    if (!user) return undefined;
+    let active = true;
+    rebookApi.getCustomerRequests(getAuthData()?.token)
+      .then((response) => { if (active) setRebookRequests(response.requests || []); })
+      .catch(() => { if (active) setRebookRequests([]); });
+    return () => { active = false; };
+  }, [user, changeRequestsVersion]);
+
+  const usableRebookByBookingId = useMemo(() => {
+    const map = new Map();
+    rebookRequests.forEach((request) => {
+      if (request.status !== 'rebook_id_generated' || !request.rebookId) return;
+      if (request.expiresAt && new Date(request.expiresAt).getTime() <= rebookFreshnessMs) return;
+      const bookingId = String(request.originalBookingId?._id || request.originalBookingId || '');
+      if (bookingId) map.set(bookingId, request);
+    });
+    return map;
+  }, [rebookRequests, rebookFreshnessMs]);
 
   useEffect(() => {
     if (authLoading) return undefined;
@@ -181,6 +203,18 @@ export default function UserDashboard() {
                   const remainingBalance = remainingAtVenue(booking);
                   const selected = selectedBooking?._id === booking._id;
                   const showInlineDetails = false;
+                  const usableRebook = usableRebookByBookingId.get(String(booking._id));
+                  const canRequestRebook = Boolean(
+                    depositPaid
+                    && !['completed', 'cancelled', 'rejected'].includes(booking.status)
+                    && (booking.canCancel === true || booking.canRequestChange !== false)
+                  );
+                  const rebookServiceId = usableRebook?.serviceId?._id
+                    || usableRebook?.serviceId
+                    || serviceToShow?._id
+                    || serviceToShow?.id
+                    || booking.serviceId?._id
+                    || booking.serviceId;
 
                   return (
                     <article key={booking._id} className={`border-b border-slate-200 bg-white transition ${selected ? 'opacity-70 ring-2 ring-blue-300' : 'hover:bg-slate-50'}`}>
@@ -195,7 +229,29 @@ export default function UserDashboard() {
                           <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setSelectedBooking(booking); }} className="col-span-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white sm:col-span-1">{t('view', language)}</button>
                           {canPay && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setPaymentBooking(booking); }} className="rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white">{t('pay', language, { amount: formatRwf(amountDueNow(booking)) })}</button>}
                           {booking.canCancel === true && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setCancelBooking(booking); }} className="rounded-lg border border-red-200 bg-white px-3 py-2.5 text-xs font-bold text-red-700">{t('cancel', language)}</button>}
-                          {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setChangeBookingId(booking._id); }} className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-700">{t('requestChange', language)}</button>}
+                          {canRequestRebook && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setSelectedBooking(booking);
+                                setChangeBookingId(booking._id);
+                              }}
+                              className="rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-700"
+                            >
+                              {t('rebook.rebook', language)}
+                            </button>
+                          )}
+                          {usableRebook?.rebookId && rebookServiceId && (
+                            <Link
+                              to={`/booking/${rebookServiceId}?rebookId=${encodeURIComponent(usableRebook.rebookId)}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="rounded-lg bg-violet-600 px-3 py-2.5 text-center text-xs font-bold text-white"
+                            >
+                              {t('rebook.useRebook', language)}
+                            </Link>
+                          )}
                           <span className={`flex min-h-10 items-center justify-center rounded-full px-3 py-1 text-center text-[11px] font-bold ${statusStyle[booking.status] || 'bg-gray-100 text-gray-800'}`}>{formatStatus(booking.status)}</span>
                         </div>
                       </div>
@@ -365,6 +421,7 @@ export default function UserDashboard() {
           booking={selectedBooking}
           language={language}
           changeOpen={changeBookingId === selectedBooking._id}
+          usableRebook={usableRebookByBookingId.get(String(selectedBooking._id))}
           onClose={() => setSelectedBooking(null)}
           onPay={() => setPaymentBooking(selectedBooking)}
           onRequestChange={() => setChangeBookingId(selectedBooking._id)}
@@ -399,7 +456,7 @@ function Detail({ label, value, tone = 'blue' }) {
   return <p className={`rounded-lg border bg-white p-2.5 shadow-sm ${toneStyle}`}><span className="block text-[10px] font-bold uppercase tracking-wide">{label}</span><span className="mt-0.5 block break-words font-bold capitalize text-slate-900">{value || '-'}</span></p>;
 }
 
-function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onRequestChange, onCancel, onCloseChange, onChangeSubmitted }) {
+function BookingDetailModal({ booking, language, changeOpen, usableRebook, onClose, onPay, onRequestChange, onCancel, onCloseChange, onChangeSubmitted }) {
   const assignedBusiness = booking.businessId || booking.hotelId;
   const preferredBusiness = booking.preferredBusinessId || booking.preferredHotelId;
   const business = assignedBusiness || preferredBusiness;
@@ -424,6 +481,15 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
   const summaryLocation = locationUnlocked
     ? address
     : formatLocationLine(serviceLocation) || formatDestination(booking);
+  const canRequestRebook = Boolean(
+    depositPaid
+    && !['completed', 'cancelled', 'rejected'].includes(booking.status)
+    && (booking.canCancel === true || booking.canRequestChange !== false)
+  );
+  const rebookServiceId = usableRebook?.serviceId?._id
+    || usableRebook?.serviceId
+    || service?._id
+    || service?.id;
 
   return (
     <Modal title={t('customerDash.detailsTitle', language)} onClose={onClose}>
@@ -498,7 +564,15 @@ function BookingDetailModal({ booking, language, changeOpen, onClose, onPay, onR
       <div className="mt-5 flex flex-wrap gap-2">
         {canPay && <button type="button" onClick={onPay} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">{t('pay', language, { amount: formatRwf(depositAmount) })}</button>}
         {booking.canCancel === true && <button type="button" onClick={onCancel} className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700">{t('cancel', language)}</button>}
-        {depositPaid && !['completed', 'cancelled', 'rejected'].includes(booking.status) && <button type="button" onClick={onRequestChange} className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700">{t('requestChange', language)}</button>}
+        {canRequestRebook && <button type="button" onClick={onRequestChange} className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700">{t('rebook.rebook', language)}</button>}
+        {usableRebook?.rebookId && rebookServiceId && (
+          <Link
+            to={`/booking/${rebookServiceId}?rebookId=${encodeURIComponent(usableRebook.rebookId)}`}
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white"
+          >
+            {t('rebook.useRebook', language)} ({usableRebook.rebookId})
+          </Link>
+        )}
         {depositPaid && booking.verificationToken && <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Download PDF</a>}
         {depositPaid && booking.verificationToken && <a href={bookingApi.getPrintableReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Print PDF</a>}
         {depositPaid && booking.verificationToken && <Link to={`/verify/${booking.verificationToken}`} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Verify Booking</Link>}
