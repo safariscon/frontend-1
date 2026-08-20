@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import SearchBar from '../components/SearchBar';
@@ -53,12 +53,12 @@ export default function HomePage() {
           ])
         ).values(),
       ].filter((option) => option.value),
-    [hotels]
+    [hotels, language]
   );
 
   const featuredHotels = useMemo(() => hotels.slice(0, 6), [hotels]);
 
-  const loadHotels = async ({ silent = false } = {}) => {
+  const loadHotels = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoadingHotels(true);
     setServicesError('');
 
@@ -71,7 +71,7 @@ export default function HomePage() {
     } finally {
       if (!silent) setLoadingHotels(false);
     }
-  };
+  }, [language]);
 
   useEffect(() => {
     Promise.resolve().then(() => loadHotels());
@@ -85,7 +85,7 @@ export default function HomePage() {
       ],
       () => loadHotels({ silent: true })
     );
-  }, []);
+  }, [loadHotels]);
 
   const seo = getHomeSeo(language);
 
@@ -109,10 +109,13 @@ export default function HomePage() {
             <p className="inline-flex rounded-full border border-white/30 bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-wide text-blue-50 shadow-sm backdrop-blur">
               {t('home.badge', language)}
             </p>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-6xl">
+            <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-4xl">
               {t('home.heroTitle', language)}
             </h1>
-            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-lg">
+            <p className="mt-3 max-w-2xl text-lg font-bold italic tracking-wide text-blue-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] md:text-xl">
+              {t('home.heroSlogan', language)}
+            </p>
+            <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-base md:leading-7">
               {t('home.heroLead', language)}
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
@@ -129,7 +132,7 @@ export default function HomePage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 md:p-8">
-            <p className="mb-3 text-sm font-black text-slate-900 dark:text-white">{t('home.searchProviders', language)}</p>
+            <p className="mb-4 text-sm font-black tracking-tight text-slate-900 dark:text-white">{t('home.searchProviders', language)}</p>
             <SearchBar variant="hero" serviceOptions={serviceOptions} locationOptions={locationOptions} />
             <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
               <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('home.acceptedPayments', language)}</p>

@@ -300,6 +300,24 @@ export default function HotelDashboard() {
   const [finance, setFinance] = useState(null);
   const token = getAuthData()?.token;
 
+  const resetForm = () => {
+    setEditingService(null);
+    setForm({
+      ...EMPTY_FORM,
+      serviceLocation: { ...EMPTY_FORM.serviceLocation },
+      locationDetails: emptyLocationDetails(),
+      payoutDetails: { ...EMPTY_FORM.payoutDetails },
+      contactDetails: { ...EMPTY_FORM.contactDetails },
+      promotion: { ...EMPTY_FORM.promotion },
+      rebookSettings: { ...EMPTY_FORM.rebookSettings },
+      existingImages: [],
+      imageFiles: [],
+      promotionHistory: [],
+      availabilityTable: normalizeTableForForm(EMPTY_FORM.availabilityTable),
+      bookingForm: normalizeBookingFormForForm(EMPTY_FORM.bookingForm),
+    });
+  };
+
   const loadData = async ({ silent = false } = {}) => {
     if (!token) return;
     if (!silent) setLoading(true);

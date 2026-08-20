@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { publicApi } from '../lib/api';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
@@ -6,13 +6,16 @@ import { t } from '../lib/translations';
 
 export default function AnnouncementBar() {
   const { language } = useLanguage();
-  const defaultAnnouncements = [
-    {
-      text: t('announcement.defaultText', language),
-      linkUrl: '/services',
-      linkLabel: t('announcement.defaultLink', language),
-    },
-  ];
+  const defaultAnnouncements = useMemo(
+    () => [
+      {
+        text: t('announcement.defaultText', language),
+        linkUrl: '/services',
+        linkLabel: t('announcement.defaultLink', language),
+      },
+    ],
+    [language]
+  );
   const [announcementFeed, setAnnouncementFeed] = useState({ enabled: true, items: defaultAnnouncements, intervalSeconds: 5 });
   const [announcementIndex, setAnnouncementIndex] = useState(0);
 
@@ -41,7 +44,7 @@ export default function AnnouncementBar() {
 
     loadAnnouncement();
     return subscribeToRealtime([REALTIME_EVENTS.CATALOG_CHANGED, 'catalogChanged'], loadAnnouncement);
-  }, [language]);
+  }, [defaultAnnouncements]);
 
   useEffect(() => {
     if (!announcementFeed.enabled || announcementFeed.items.length < 2) return undefined;
