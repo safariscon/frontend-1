@@ -296,6 +296,24 @@ export default function HotelDashboard() {
   const [finance, setFinance] = useState(null);
   const token = getAuthData()?.token;
 
+  const resetForm = () => {
+    setEditingService(null);
+    setForm({
+      ...EMPTY_FORM,
+      serviceLocation: { ...EMPTY_FORM.serviceLocation },
+      locationDetails: emptyLocationDetails(),
+      payoutDetails: { ...EMPTY_FORM.payoutDetails },
+      contactDetails: { ...EMPTY_FORM.contactDetails },
+      promotion: { ...EMPTY_FORM.promotion },
+      rebookSettings: { ...EMPTY_FORM.rebookSettings },
+      existingImages: [],
+      imageFiles: [],
+      promotionHistory: [],
+      availabilityTable: normalizeTableForForm(EMPTY_FORM.availabilityTable),
+      bookingForm: normalizeBookingFormForForm(EMPTY_FORM.bookingForm),
+    });
+  };
+
   const loadData = async ({ silent = false } = {}) => {
     if (!token) return;
     if (!silent) setLoading(true);
@@ -863,16 +881,14 @@ function MenuItem({ label, onClick, danger = false }) {
 }
 
 function CoverPreview({ file, url }) {
-  const [preview, setPreview] = useState(url || '');
+  const objectUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+
   useEffect(() => {
-    if (!file) {
-      setPreview(url || '');
-      return undefined;
-    }
-    const objectUrl = URL.createObjectURL(file);
-    setPreview(objectUrl);
+    if (!objectUrl) return undefined;
     return () => URL.revokeObjectURL(objectUrl);
-  }, [file, url]);
+  }, [objectUrl]);
+
+  const preview = objectUrl || url || '';
   if (!preview) return null;
   return <img src={preview} alt="Primary cover" className="h-full w-full object-cover" />;
 }

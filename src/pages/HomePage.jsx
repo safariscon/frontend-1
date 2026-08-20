@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import SearchBar from '../components/SearchBar';
@@ -53,12 +53,12 @@ export default function HomePage() {
           ])
         ).values(),
       ].filter((option) => option.value),
-    [hotels]
+    [hotels, language]
   );
 
   const featuredHotels = useMemo(() => hotels.slice(0, 6), [hotels]);
 
-  const loadHotels = async ({ silent = false } = {}) => {
+  const loadHotels = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoadingHotels(true);
     setServicesError('');
 
@@ -71,7 +71,7 @@ export default function HomePage() {
     } finally {
       if (!silent) setLoadingHotels(false);
     }
-  };
+  }, [language]);
 
   useEffect(() => {
     Promise.resolve().then(() => loadHotels());
@@ -85,7 +85,7 @@ export default function HomePage() {
       ],
       () => loadHotels({ silent: true })
     );
-  }, []);
+  }, [loadHotels]);
 
   const seo = getHomeSeo(language);
 
@@ -109,10 +109,10 @@ export default function HomePage() {
             <p className="inline-flex rounded-full border border-white/30 bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-wide text-blue-50 shadow-sm backdrop-blur">
               {t('home.badge', language)}
             </p>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-6xl">
+            <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.45)] md:text-4xl">
               {t('home.heroTitle', language)}
             </h1>
-            <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-lg">
+            <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-slate-100 drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] md:text-base md:leading-7">
               {t('home.heroLead', language)}
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
