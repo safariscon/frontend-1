@@ -6,7 +6,6 @@ import { guestCancelCopy } from '../lib/payments';
 export default function HotelCard({ hotel, compact = false, showProvider = false }) {
   const { language } = useLanguage();
   const hotelId = hotel.id || hotel._id;
-  const amenities = Array.isArray(hotel.amenities) ? hotel.amenities : [];
   const isNotAvailable = hotel.status === 'unavailable';
   const availabilityText = isNotAvailable
     ? t('catalog.notAvailable', language)
@@ -90,19 +89,6 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
 
         {availabilityText && <p className="mb-3 text-sm font-bold text-primary dark:text-blue-300">{availabilityText}</p>}
         <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{guestCancelCopy(hotel)}</p>
-
-        <div className="mb-4 flex flex-wrap gap-2">
-          {amenities.slice(0, 3).map((amenity) => (
-            <span key={amenity} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              {amenity}
-            </span>
-          ))}
-          {amenities.length > 3 && (
-            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              +{amenities.length - 3} {t('more', language)}
-            </span>
-          )}
-        </div>
 
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">

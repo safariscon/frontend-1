@@ -4,8 +4,8 @@ import DashboardLayout from '../components/DashboardLayout';
 import SchemaFields from '../components/SchemaFields';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { getAuthData, hotelApi } from '../lib/api';
-import { emptyListingAttributes, validateSchemaValues } from '../lib/serviceSchema';
+import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
+import { emptyListingAttributes, sortSchemaFields, validateSchemaValues } from '../lib/serviceSchema';
 import { formatRwf } from '../lib/currency';
 import { isSellerRole } from '../lib/dashboard';
 
@@ -13,17 +13,6 @@ const EMPTY_OPTION = {
   name: '',
   price: '',
   currency: 'RWF',
-  priceType: 'fixed',
-  calculationField: 'fixed',
-  durationUnit: 'none',
-  maximumDuration: '',
-  capacity: '',
-  availableFrom: '',
-  availableTo: '',
-  availableStartTime: '',
-  availableEndTime: '',
-  requiresTime: false,
-  details: '',
   attributes: {},
 };
 
@@ -35,15 +24,13 @@ export default function SellerServiceOptionsPage() {
   const token = getAuthData()?.token;
   const [service, setService] = useState(null);
   const [options, setOptions] = useState([]);
+  const [optionSchema, setOptionSchema] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_OPTION);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const optionSchema = service?.schemaSnapshot?.optionFieldSchema
-    || service?.category?.optionFieldSchema
-    || [];
   const supportsOptions = service?.supportsOptions
     ?? service?.category?.supportsOptions
     ?? service?.schemaSnapshot?.supportsOptions
@@ -57,8 +44,19 @@ export default function SellerServiceOptionsPage() {
         hotelApi.getService(token, serviceId),
         hotelApi.getServiceOptions(token, serviceId),
       ]);
-      setService(serviceResp.service || serviceResp);
+      const nextService = serviceResp.service || serviceResp;
+      setService(nextService);
       setOptions(optionsResp.options || optionsResp || []);
+
+      let schema = nextService?.schemaSnapshot?.optionFieldSchema
+        || nextService?.category?.optionFieldSchema
+        || [];
+      const categoryKey = nextService.categoryId || nextService.category?._id || nextService.categorySlug;
+      if ((!schema || !schema.length) && categoryKey) {
+        const detail = await categoriesApi.get(categoryKey).catch(() => null);
+        schema = detail?.category?.optionFieldSchema || [];
+      }
+      setOptionSchema(sortSchemaFields(schema));
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -92,8 +90,9 @@ export default function SellerServiceOptionsPage() {
     setEditingId(option._id || option.id);
     setForm({
       ...EMPTY_OPTION,
-      ...option,
+      name: option.name || '',
       price: option.price ?? '',
+      currency: option.currency || 'RWF',
       attributes: option.attributes || emptyListingAttributes(optionSchema),
     });
     setErrors({});
@@ -114,11 +113,10 @@ export default function SellerServiceOptionsPage() {
     setSaving(true);
     try {
       const payload = {
-        ...form,
         name: form.name.trim(),
         price: Number(form.price),
-        capacity: form.capacity === '' ? undefined : Number(form.capacity),
-        maximumDuration: form.maximumDuration === '' ? undefined : Number(form.maximumDuration),
+        currency: form.currency || 'RWF',
+        attributes: form.attributes || {},
       };
       const response = editingId === 'new'
         ? await hotelApi.createServiceOption(token, serviceId, payload)
@@ -151,7 +149,7 @@ export default function SellerServiceOptionsPage() {
     <DashboardLayout>
       <main className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl">
-          <Link to="/dashboard/seller/services" className="text-sm font-semibold text-primary">← Back to services</Link>
+          <Link to={`/dashboard/seller/services/${serviceId}/edit`} className="text-sm font-semibold text-primary">← Back to service</Link>
           <div className="mt-3 mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-3xl font-black text-slate-950">Service options</h1>
@@ -168,7 +166,7 @@ export default function SellerServiceOptionsPage() {
           {loading ? <p className="rounded-2xl bg-white p-6 text-slate-600">Loading options…</p> : !supportsOptions ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
               <p className="font-black">This category does not use options</p>
-              <p className="mt-1 text-sm">Set a base price on the service editor instead. Options are only for categories like car rental or hotels with packages.</p>
+              <p className="mt-1 text-sm">Set a base price on the service editor instead.</p>
               <Link to={`/dashboard/seller/services/${serviceId}/edit`} className="mt-4 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">Edit service</Link>
             </div>
           ) : (
@@ -186,7 +184,21 @@ export default function SellerServiceOptionsPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="text-lg font-black text-slate-950">{option.name}</h2>
-                      <p className="mt-1 text-sm text-slate-500">{formatRwf(option.price)} · {String(option.priceType || '').replace(/-/g, ' ')}</p>
+                      <p className="mt-1 text-sm text-slate-500">{formatRwf(option.price)}</p>
+                      {optionSchema.length > 0 && (
+                        <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {optionSchema.map((field) => {
+                            const value = option.attributes?.[field.id];
+                            if (value === undefined || value === null || String(value).trim() === '') return null;
+                            return (
+                              <div key={field.id} className="rounded-lg bg-slate-50 px-3 py-2">
+                                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{field.label}</dt>
+                                <dd className="mt-0.5 text-sm font-semibold text-slate-800">{Array.isArray(value) ? value.join(', ') : String(value)}</dd>
+                              </div>
+                            );
+                          })}
+                        </dl>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => startEdit(option)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold">Edit</button>
@@ -211,32 +223,24 @@ export default function SellerServiceOptionsPage() {
                       <span className="text-sm font-semibold text-slate-700">Price (RWF) *</span>
                       <input required type="number" min="1" value={form.price} onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))} placeholder="85000" className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
                     </label>
-                    <label className="block">
-                      <span className="text-sm font-semibold text-slate-700">Price type</span>
-                      <select value={form.priceType} onChange={(event) => setForm((prev) => ({ ...prev, priceType: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
-                        {['fixed', 'per-person', 'per-room', 'per-night', 'per-day', 'per-hour', 'per-item', 'per-ticket', 'per-package', 'per-session'].map((item) => (
-                          <option key={item} value={item}>{item.replace(/-/g, ' ')}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="text-sm font-semibold text-slate-700">Capacity</span>
-                      <input type="number" min="0" value={form.capacity} onChange={(event) => setForm((prev) => ({ ...prev, capacity: event.target.value }))} placeholder="Example: 2" className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
-                    </label>
-                    <label className="block md:col-span-2">
-                      <span className="text-sm font-semibold text-slate-700">Details</span>
-                      <textarea rows={3} value={form.details} onChange={(event) => setForm((prev) => ({ ...prev, details: event.target.value }))} placeholder="Amenities or package inclusions" className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
-                    </label>
                   </div>
-                  {optionSchema.length > 0 && (
-                    <div className="mt-4">
-                      <SchemaFields
-                        schema={optionSchema}
-                        values={form.attributes}
-                        errors={errors}
-                        onChange={(attributes) => setForm((prev) => ({ ...prev, attributes }))}
-                      />
+                  {optionSchema.length > 0 ? (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                      <h3 className="font-bold text-slate-900">Category option fields</h3>
+                      <p className="mt-1 text-sm text-slate-500">Only fields configured by admin for this category.</p>
+                      <div className="mt-4">
+                        <SchemaFields
+                          schema={optionSchema}
+                          values={form.attributes}
+                          errors={errors}
+                          onChange={(attributes) => setForm((prev) => ({ ...prev, attributes }))}
+                        />
+                      </div>
                     </div>
+                  ) : (
+                    <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
+                      No extra option fields are configured for this category yet. Admin can add them under Categories → Option fields.
+                    </p>
                   )}
                   <div className="mt-5 flex justify-end gap-2">
                     <button type="button" onClick={() => setEditingId(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold">Cancel</button>

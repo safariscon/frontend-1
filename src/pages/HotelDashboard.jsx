@@ -10,6 +10,7 @@ import { formatRwf } from '../lib/currency';
 import { getCategoryDisplayLabel } from '../data/serviceCategories';
 import useServiceCategories from '../hooks/useServiceCategories';
 import { MAX_UPLOAD_FILE_SIZE_BYTES, MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
+import { resolveCategoryId, serviceCategoryId, serviceCategoryLabel } from '../lib/serviceSchema';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
 import ServiceDetailsView from '../components/ServiceDetailsView';
@@ -280,8 +281,12 @@ export default function HotelDashboard() {
   const view = ['services', 'bookings', 'finance'].includes(section) ? section : 'dashboard';
   const basePath = getDashboardRoute(user) || '/dashboard/seller';
   const [searchParams, setSearchParams] = useSearchParams();
-  const categorySlugFilter = searchParams.get('categorySlug') || '';
+  const categoryIdFilterRaw = searchParams.get('categoryId') || searchParams.get('categorySlug') || '';
   const { categories: catalogCategories } = useServiceCategories({ seller: true });
+  const categoryIdFilter = useMemo(
+    () => resolveCategoryId(catalogCategories, categoryIdFilterRaw),
+    [catalogCategories, categoryIdFilterRaw]
+  );
   const [overview, setOverview] = useState(null);
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -324,7 +329,7 @@ export default function HotelDashboard() {
     try {
       const [overviewResp, servicesResp, bookingsResp, settingsResp, payoutResp, financeResp] = await Promise.all([
         hotelApi.getOverview(token),
-        hotelApi.getMyServices(token),
+        hotelApi.getMyServices(token, categoryIdFilter ? { categoryId: categoryIdFilter } : {}),
         hotelApi.getMyBookings(token),
         publicApi.getMarketplaceSettings().catch(() => ({ settings: { bookingMode: 'manual' } })),
         hotelApi.getPayoutDetails(token).catch(() => ({ payoutDetails: null })),
@@ -354,7 +359,7 @@ export default function HotelDashboard() {
     }
     Promise.resolve().then(() => loadData());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, navigate]);
+  }, [user, navigate, categoryIdFilter]);
 
   useEffect(() => {
     if (!token || !user || !isSellerRole(user.role)) return undefined;
@@ -365,7 +370,7 @@ export default function HotelDashboard() {
       () => loadData({ silent: true })
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, user]);
+  }, [token, user, categoryIdFilter]);
 
   const stats = useMemo(() => {
     const activeServices = services.filter((service) => service.status === 'available' && service.isActive !== false);
@@ -630,11 +635,14 @@ export default function HotelDashboard() {
   const visibleServices = services.filter((service) => {
     const approval = serviceApprovalStatus(service);
     if (serviceStatusFilter !== 'all' && approval !== serviceStatusFilter) return false;
-    if (!categorySlugFilter) return true;
-    const slug = service.category?.slug || service.categorySlug || service.serviceType || service.category || '';
-    return String(slug) === String(categorySlugFilter);
+    if (!categoryIdFilter) return true;
+    return serviceCategoryId(service) === String(categoryIdFilter);
   });
-  const openAddService = () => {
+  const openAddService = (category) => {
+    if (category?._id) {
+      navigate(`/dashboard/seller/services/new?categoryId=${encodeURIComponent(category._id)}`);
+      return;
+    }
     navigate('/dashboard/seller/services/new');
   };
 
@@ -694,25 +702,17 @@ export default function HotelDashboard() {
                 services={visibleServices}
                 allServices={services}
                 categories={catalogCategories}
-                categorySlugFilter={categorySlugFilter}
-                onCategoryFilter={(slug) => {
+                categoryIdFilter={categoryIdFilter}
+                onCategoryFilter={(nextId) => {
                   const next = new URLSearchParams(searchParams);
-                  if (slug) next.set('categorySlug', slug);
-                  else next.delete('categorySlug');
+                  next.delete('categorySlug');
+                  if (nextId) next.set('categoryId', nextId);
+                  else next.delete('categoryId');
                   setSearchParams(next, { replace: true });
                 }}
                 statusFilter={serviceStatusFilter}
                 setStatusFilter={setServiceStatusFilter}
-                onAdd={(category) => {
-                  if (category?._id || category?.slug) {
-                    const params = new URLSearchParams();
-                    if (category._id) params.set('categoryId', category._id);
-                    else params.set('categorySlug', category.slug);
-                    navigate(`/dashboard/seller/services/new?${params.toString()}`);
-                    return;
-                  }
-                  openAddService();
-                }}
+                onAdd={openAddService}
                 onView={openViewDetails}
                 onEdit={startEdit}
                 onOptions={(service) => navigate(`/dashboard/seller/services/${service._id || service.id}/options`)}
@@ -759,7 +759,7 @@ function ServiceGrid({
   services,
   allServices = [],
   categories = [],
-  categorySlugFilter = '',
+  categoryIdFilter = '',
   onCategoryFilter,
   statusFilter,
   setStatusFilter,
@@ -774,10 +774,10 @@ function ServiceGrid({
   const grouped = useMemo(() => {
     const map = new Map();
     services.forEach((service) => {
-      const slug = service.category?.slug || service.categorySlug || service.serviceType || service.category || 'other';
-      const name = service.category?.name || service.categoryName || getCategoryDisplayLabel(slug, language) || slug;
-      const key = String(slug);
-      if (!map.has(key)) map.set(key, { slug: key, name, items: [] });
+      const id = serviceCategoryId(service) || service.categorySlug || 'other';
+      const name = serviceCategoryLabel(service) || getCategoryDisplayLabel(service.categorySlug, language) || id;
+      const key = String(id);
+      if (!map.has(key)) map.set(key, { categoryId: key, name, items: [] });
       map.get(key).items.push(service);
     });
     return [...map.values()];
@@ -792,13 +792,13 @@ function ServiceGrid({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
-            value={categorySlugFilter}
+            value={categoryIdFilter}
             onChange={(event) => onCategoryFilter?.(event.target.value)}
             className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold"
           >
             <option value="">All categories</option>
             {categories.map((category) => (
-              <option key={category._id || category.slug} value={category.slug}>{category.group ? `${category.group} · ` : ''}{category.name}</option>
+              <option key={category._id || category.slug} value={category._id}>{category.group ? `${category.group} · ` : ''}{category.name}</option>
             ))}
           </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold">
@@ -807,7 +807,7 @@ function ServiceGrid({
             <option value="approved">{t('rebook.approved', language)}</option>
             <option value="rejected">{t('rejected', language)}</option>
           </select>
-          <button type="button" onClick={onAdd} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ {t('sellerDash.addService', language)}</button>
+          <button type="button" onClick={() => onAdd()} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ {t('sellerDash.addService', language)}</button>
         </div>
       </div>
 
@@ -832,17 +832,17 @@ function ServiceGrid({
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
           <p className="font-black text-slate-900">{t('sellerDash.noServicesYet', language)}</p>
           <p className="mt-1 text-sm text-slate-600">{t('sellerDash.noServicesLead', language)}</p>
-          <button type="button" onClick={onAdd} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">{t('sellerDash.addService', language)}</button>
+          <button type="button" onClick={() => onAdd()} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">{t('sellerDash.addService', language)}</button>
         </div>
       ) : (
         <div className="space-y-8">
           {grouped.map((group) => (
-            <section key={group.slug}>
+            <section key={group.categoryId}>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-base font-black text-slate-900">{group.name}</h3>
                 <button
                   type="button"
-                  onClick={() => onAdd(categories.find((c) => c.slug === group.slug) || { slug: group.slug })}
+                  onClick={() => onAdd(categories.find((c) => String(c._id) === String(group.categoryId)) || { _id: group.categoryId })}
                   className="text-sm font-semibold text-primary"
                 >
                   + Add in {group.name}
@@ -923,7 +923,7 @@ function ServiceCard({ service, language, onView, onEdit, onOptions, onDelete, o
         </div>
         <div className="p-4 pr-12">
           <h3 className="truncate text-lg font-black text-slate-950">{service.title || service.name}</h3>
-          <p className="mt-0.5 text-sm font-semibold text-slate-500">{service.category?.name || service.categoryName || getCategoryDisplayLabel(service.serviceType || service.categorySlug || service.category, language)}</p>
+          <p className="mt-0.5 text-sm font-semibold text-slate-500">{serviceCategoryLabel(service) || getCategoryDisplayLabel(service.categorySlug || service.serviceType || service.category, language)}</p>
           <p className="seller-service-description mt-3 line-clamp-2 text-sm leading-5 text-slate-600">{service.description || t('serviceView.noDescription', language)}</p>
           <p className="mt-3 text-xs font-semibold text-slate-400">
             {optionCount ? `${optionCount} bookable option${optionCount === 1 ? '' : 's'}` : 'No options yet'}

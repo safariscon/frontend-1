@@ -17,22 +17,25 @@ export const normalizeHotel = (hotel) => {
   const basePrice = Number(hotel.basePrice ?? hotel.price ?? 0);
   const rating = Number(hotel.rating ?? 4.5);
   const reviewCount = Number(hotel.reviewCount ?? 0);
-  const categorySlug = hotel.category?.slug || hotel.categorySlug || hotel.type || hotel.category || 'service';
-  const categoryName = hotel.category?.name || hotel.categoryName || categorySlug;
+  const categoryId = hotel.categoryId || hotel.category?._id || '';
+  const categorySlug = hotel.categorySlug || hotel.category?.slug || hotel.type || '';
+  const categoryName = hotel.categoryName || hotel.category?.name || categorySlug || 'service';
 
   return {
     ...hotel,
     id,
     name,
-    type: categorySlug,
+    type: categorySlug || categoryName,
     contactInfo: hotel.contactInfo || '',
     image,
     primaryImage: image,
     images: orderedImages.length ? orderedImages : (image ? [image] : []),
     services: Array.isArray(hotel.services) ? hotel.services : [],
-    serviceCategory: categorySlug,
-    businessType: categorySlug,
-    categoryId: hotel.categoryId || hotel.category?._id || '',
+    serviceCategory: categorySlug || categoryName,
+    businessType: categorySlug || categoryName,
+    categoryId,
+    categorySlug,
+    categoryName,
     schemaSnapshot: hotel.schemaSnapshot || null,
     platformCommissionPercent: hotel.platformCommissionPercent ?? hotel.commissionPercentage,
     primaryService: {
@@ -40,9 +43,11 @@ export const normalizeHotel = (hotel) => {
       _id: id,
       title: name,
       name,
-      category: categorySlug,
+      categoryId,
+      categorySlug,
       categoryName,
-      serviceType: categorySlug,
+      category: categorySlug || categoryName,
+      serviceType: categorySlug || categoryName,
       location: hotel.location || hotel.serviceLocation,
       status: hotel.status || 'available',
       priceText: hotel.priceText || (basePrice ? `${basePrice}` : ''),

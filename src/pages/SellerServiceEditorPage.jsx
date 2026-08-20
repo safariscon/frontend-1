@@ -13,6 +13,7 @@ import {
   buildLocationPayload,
   emptyListingAttributes,
   getServiceCover,
+  resolveCategoryId,
   validateSchemaValues,
 } from '../lib/serviceSchema';
 import { isSellerRole } from '../lib/dashboard';
@@ -67,7 +68,7 @@ export default function SellerServiceEditorPage() {
   const [saving, setSaving] = useState(false);
 
   const selectedCategory = useMemo(
-    () => categories.find((item) => String(item._id) === String(categoryId) || item.slug === categoryId) || category,
+    () => categories.find((item) => String(item._id) === String(categoryId)) || category,
     [categories, category, categoryId]
   );
   const listingSchema = selectedCategory?.listingFieldSchema || [];
@@ -101,7 +102,8 @@ export default function SellerServiceEditorPage() {
           const service = serviceResp.service || serviceResp;
           const cover = getServiceCover(service);
           const loc = service.location || service.serviceLocation || service.catalogLocation || emptyLocation;
-          setCategoryId(service.categoryId || service.categorySlug || '');
+          const boundId = resolveCategoryId(list, service.categoryId || service.category?._id || '');
+          setCategoryId(boundId);
           setTitle(service.title || service.name || '');
           setDescription(service.description || '');
           setStatus(service.status === 'unavailable' ? 'unavailable' : 'available');
@@ -125,17 +127,30 @@ export default function SellerServiceEditorPage() {
             requestDeadlineHours: Number(service.rebookSettings?.requestDeadlineHours ?? 24),
             rebookIdValidityHours: Number(service.rebookSettings?.rebookIdValidityHours ?? 72),
           });
-          if (service.categoryId || service.categorySlug) {
-            const detail = await categoriesApi.get(service.categoryId || service.categorySlug).catch(() => null);
-            if (active && detail?.category) setCategory(detail.category);
+          if (boundId || service.categorySlug) {
+            const detail = await categoriesApi.get(boundId || service.categorySlug).catch(() => null);
+            if (active && detail?.category) {
+              setCategory(detail.category);
+              if (detail.category._id) setCategoryId(String(detail.category._id));
+            }
           }
-        } else if (searchParams.get('categoryId') || searchParams.get('categorySlug')) {
-          const key = searchParams.get('categoryId') || searchParams.get('categorySlug');
-          setCategoryId(key);
-          const detail = await categoriesApi.get(key).catch(() => null);
-          if (active && detail?.category) {
-            setCategory(detail.category);
-            setListingAttributes(emptyListingAttributes(detail.category.listingFieldSchema));
+        } else {
+          const rawKey = searchParams.get('categoryId') || searchParams.get('categorySlug') || '';
+          if (rawKey) {
+            const boundId = resolveCategoryId(list, rawKey);
+            setCategoryId(boundId);
+            const fromList = list.find((item) => String(item._id) === String(boundId));
+            if (fromList) {
+              setCategory(fromList);
+              setListingAttributes(emptyListingAttributes(fromList.listingFieldSchema));
+            } else {
+              const detail = await categoriesApi.get(rawKey).catch(() => null);
+              if (active && detail?.category) {
+                setCategory(detail.category);
+                if (detail.category._id) setCategoryId(String(detail.category._id));
+                setListingAttributes(emptyListingAttributes(detail.category.listingFieldSchema));
+              }
+            }
           }
         }
       } catch (error) {
@@ -154,6 +169,7 @@ export default function SellerServiceEditorPage() {
     categoriesApi.get(categoryId).then((response) => {
       if (!active || !response?.category) return;
       setCategory(response.category);
+      if (response.category._id) setCategoryId(String(response.category._id));
       setListingAttributes(emptyListingAttributes(response.category.listingFieldSchema));
     }).catch(() => {});
     return () => { active = false; };
@@ -162,7 +178,8 @@ export default function SellerServiceEditorPage() {
   const save = async (event) => {
     event.preventDefault();
     if (!token) return;
-    if (!selectedCategory?._id && !categoryId) {
+    const boundCategoryId = selectedCategory?._id || resolveCategoryId(categories, categoryId);
+    if (!boundCategoryId) {
       toast.error('Choose a service category.');
       return;
     }
@@ -219,7 +236,7 @@ export default function SellerServiceEditorPage() {
       const phoneIso = detectPhoneCountry(phoneE164).iso;
       const whatsappIso = whatsappE164 ? detectPhoneCountry(whatsappE164).iso : '';
       const payload = {
-        categoryId: selectedCategory?._id || categoryId,
+        categoryId: boundCategoryId,
         title: title.trim(),
         description: description.trim(),
         status,
@@ -288,11 +305,17 @@ export default function SellerServiceEditorPage() {
                 >
                   <option value="">Select category</option>
                   {categories.map((item) => (
-                    <option key={item._id || item.slug} value={item._id || item.slug}>
+                    <option key={item._id} value={item._id}>
                       {item.group ? `${item.group} · ` : ''}{item.name}
                     </option>
                   ))}
                 </select>
+                {selectedCategory?.name ? (
+                  <span className="mt-1 block text-xs text-slate-500">
+                    Linked as {selectedCategory.name}
+                    {selectedCategory.slug ? ` (${selectedCategory.slug})` : ''}
+                  </span>
+                ) : null}
               </label>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -362,8 +385,37 @@ export default function SellerServiceEditorPage() {
                 onChange={setImages}
               />
 
+              {supportsOptions && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <h3 className="font-black text-emerald-950">Service options</h3>
+                  <p className="mt-1 text-sm text-emerald-900">
+                    {editing
+                      ? 'Add or edit packages for this service (only admin option fields + name/price).'
+                      : 'After you save this service, you will manage its bookable options next.'}
+                  </p>
+                  {editing ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/dashboard/seller/services/${serviceId}/options`)}
+                      className="mt-3 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white"
+                    >
+                      Manage options
+                    </button>
+                  ) : null}
+                </div>
+              )}
+
               <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
                 <button type="button" onClick={() => navigate('/dashboard/seller/services')} className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700">Cancel</button>
+                {editing && supportsOptions && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dashboard/seller/services/${serviceId}/options`)}
+                    className="rounded-xl border border-primary px-5 py-3 text-sm font-bold text-primary"
+                  >
+                    Edit options
+                  </button>
+                )}
                 <button type="submit" disabled={saving} className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
                   {saving ? 'Saving…' : editing ? 'Save service' : supportsOptions ? 'Save & manage options' : 'Save service'}
                 </button>

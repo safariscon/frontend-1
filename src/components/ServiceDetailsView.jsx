@@ -181,10 +181,10 @@ function OptionCard({ row, index }) {
           {extras.map(([key, value]) => <Fact key={key} label={pretty(key)} value={pretty(value)} />)}
         </div>
       )}
-      {(cells.details || cells.amenities) && (
+      {(cells.details) && (
         <div className="mt-4 rounded-xl bg-white px-4 py-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('serviceView.details', language)}</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{cells.details || cells.amenities}</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{cells.details}</p>
         </div>
       )}
     </article>
@@ -231,7 +231,10 @@ function pretty(value) {
 }
 
 function hasValue(value) {
-  return value !== undefined && value !== null && String(value).trim() !== '';
+  if (value === undefined || value === null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  const text = String(value).trim().toLowerCase();
+  return text !== '' && text !== '-' && text !== 'none' && text !== 'not set' && text !== 'false';
 }
 
 function formatDateValue(value) {

@@ -219,19 +219,21 @@ const timeDiffHours = (start, end) => {
 };
 
 export const availabilityFacts = (option) => {
-  const facts = [
-    ['Price type', option.priceType ? option.priceType.replace(/-/g, ' ') : 'Not set'],
-    ['Slots / capacity', option.capacity > 0 ? `${option.capacity} available` : 'Ask the provider'],
-    ['Duration', option.durationUnit ? option.durationUnit.replace(/-/g, ' ') : 'Not set'],
-    ['Maximum duration', option.maximumDuration ? `${option.maximumDuration} ${option.durationUnit || ''}`.trim() : 'Not limited'],
-    ['Available from', formatDisplayDate(option.availableFrom)],
-    ['Available until', option.availableTo ? formatDisplayDate(option.availableTo) : 'No end date published'],
-    ['Days', formatDays(option.availableDays)],
-    ['Hours', option.openTime && option.closeTime ? `${formatTime(option.openTime)} – ${formatTime(option.closeTime)}` : 'No clock hours published'],
-    ['Times on the form', option.requiresTime ? 'Required for this option' : 'Optional for this option'],
-    ['End date', option.requiresEndDate ? 'Required' : option.sameDayOnly ? 'Same day only' : 'Optional'],
+  const candidates = [
+    ['Price type', option.priceType ? option.priceType.replace(/-/g, ' ') : ''],
+    ['Slots / capacity', option.capacity > 0 ? `${option.capacity} available` : ''],
+    ['Duration', option.durationUnit && option.durationUnit !== 'none' ? option.durationUnit.replace(/-/g, ' ') : ''],
+    ['Maximum duration', option.maximumDuration ? `${option.maximumDuration} ${option.durationUnit || ''}`.trim() : ''],
+    ['Available from', option.availableFrom ? formatDisplayDate(option.availableFrom) : ''],
+    ['Available until', option.availableTo ? formatDisplayDate(option.availableTo) : ''],
+    ['Days', option.availableDays?.length ? formatDays(option.availableDays) : ''],
+    ['Hours', option.openTime && option.closeTime ? `${formatTime(option.openTime)} – ${formatTime(option.closeTime)}` : ''],
+    ['Times on the form', option.requiresTime ? 'Required for this option' : ''],
+    ['End date', option.requiresEndDate ? 'Required' : option.sameDayOnly ? 'Same day only' : ''],
   ];
+  const facts = candidates.filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '');
   if (option.listingNote) facts.push(['Listing note', option.listingNote]);
+  if (option.details) facts.push(['Details', option.details]);
   return facts;
 };
 

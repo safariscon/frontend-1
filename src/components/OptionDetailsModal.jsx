@@ -4,6 +4,18 @@ import { formatRwf } from '../lib/currency';
 export default function OptionDetailsModal({ row, listing, onClose }) {
   const option = parseOptionAvailability(row, listing);
   const facts = availabilityFacts(option);
+  const attributes = row?.attributes || row?.cells?.attributes || {};
+  const schema = listing?.schemaSnapshot?.optionFieldSchema
+    || listing?.category?.optionFieldSchema
+    || [];
+  const publicAttrs = schema
+    .filter((field) => (field.visibility || 'public') === 'public')
+    .map((field) => {
+      const value = attributes[field.id];
+      if (value === undefined || value === null || String(value).trim() === '') return null;
+      return [field.label || field.id, Array.isArray(value) ? value.join(', ') : String(value)];
+    })
+    .filter(Boolean);
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" role="dialog" aria-modal="true">
@@ -17,28 +29,23 @@ export default function OptionDetailsModal({ row, listing, onClose }) {
           <button type="button" onClick={onClose} className="text-2xl text-gray-500" aria-label="Close">×</button>
         </div>
 
-        <dl className="mt-5 grid gap-3 sm:grid-cols-2">
-          {facts.map(([label, value]) => (
-            <div key={label} className="rounded-xl bg-slate-50 p-3">
-              <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</dt>
-              <dd className="mt-1 text-sm font-semibold text-slate-900">{value}</dd>
-            </div>
-          ))}
-        </dl>
-
-        <div className="mt-5">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Amenities & notes</p>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-            {option.details || 'The seller has not added extra amenities for this option.'}
-          </p>
-        </div>
+        {(facts.length > 0 || publicAttrs.length > 0) && (
+          <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+            {[...facts, ...publicAttrs].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-slate-50 p-3">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</dt>
+                <dd className="mt-1 text-sm font-semibold text-slate-900">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
 
         <p className="mt-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-950">
           Choose a booking date{option.requiresEndDate ? ' and end date' : ''} inside this window
-          {option.availableDays.length ? ` on ${facts.find(([label]) => label === 'Days')?.[1]}` : ''}.
+          {option.availableDays.length ? ` on ${facts.find(([label]) => label === 'Days')?.[1] || 'listed days'}` : ''}.
           {option.requiresTime
             ? ` Start and end times are required${option.openTime && option.closeTime ? ` between ${facts.find(([label]) => label === 'Hours')?.[1]}` : ''}.`
-            : ' Clock times are optional for this option.'}
+            : ''}
         </p>
 
         <button type="button" onClick={onClose} className="mt-5 rounded-xl bg-primary px-4 py-2 font-bold text-white">Close</button>

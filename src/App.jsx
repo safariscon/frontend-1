@@ -183,6 +183,7 @@ function App() {
 
 function SellerCategoryServicesRedirect() {
   const { slug } = useParams();
+  // Legacy slug URLs still work; list page resolves slug → categoryId when categories load.
   return <Navigate to={`/dashboard/seller/services?categorySlug=${encodeURIComponent(slug || '')}`} replace />;
 }
 

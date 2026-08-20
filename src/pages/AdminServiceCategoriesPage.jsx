@@ -255,6 +255,12 @@ export function AdminServiceCategoryEditorPage() {
                   ))}
                   <button type="button" onClick={addField} className="ml-auto rounded-xl border border-primary px-4 py-2 text-sm font-bold text-primary">+ Add field</button>
                 </div>
+                {tab === 'option' && (
+                  <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
+                    <p className="font-bold">Built-in option fields (always available)</p>
+                    <p className="mt-1">Sellers always enter <strong>Option name</strong> and <strong>Price (RWF)</strong>. Add only the extra fields you want below (for example Seats, Transmission). Those are the only extra fields shown on the option form and public option cards.</p>
+                  </div>
+                )}
                 <div className="space-y-3">
                   {fields.map((field) => (
                     <div key={field.id} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-4">
@@ -274,7 +280,7 @@ export function AdminServiceCategoryEditorPage() {
                       <button type="button" onClick={() => removeField(field.id)} className="justify-self-end text-sm font-bold text-red-700">Remove</button>
                     </div>
                   ))}
-                  {!fields.length && <p className="text-sm text-slate-500">No fields in this tab yet.</p>}
+                  {!fields.length && <p className="text-sm text-slate-500">{tab === 'option' ? 'No extra option fields yet. Add fields sellers should fill for each package.' : 'No fields in this tab yet.'}</p>}
                 </div>
               </div>
 

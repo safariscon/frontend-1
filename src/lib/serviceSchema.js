@@ -41,6 +41,28 @@ export function getServiceCover(service) {
   return typeof first === 'string' ? first : first?.url || '';
 }
 
+/** Prefer stable categoryId; resolve slug → id from a loaded categories list. */
+export function resolveCategoryId(categories = [], key) {
+  if (!key) return '';
+  const match = (categories || []).find(
+    (item) => String(item._id) === String(key) || item.slug === key
+  );
+  return match?._id ? String(match._id) : String(key);
+}
+
+export function serviceCategoryLabel(service) {
+  return service?.categoryName
+    || service?.category?.name
+    || service?.categorySlug
+    || service?.type
+    || service?.category
+    || 'Category';
+}
+
+export function serviceCategoryId(service) {
+  return String(service?.categoryId || service?.category?._id || '');
+}
+
 export function buildLocationPayload(location = {}) {
   const latitude = Number(location.latitude);
   const longitude = Number(location.longitude);

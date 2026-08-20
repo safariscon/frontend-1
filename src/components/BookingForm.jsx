@@ -122,7 +122,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             fullName: getAuthData()?.user?.name || '',
             phone: getAuthData()?.user?.phone || '',
           }));
-          const categoryKey = found.categoryId || found.category?.slug || found.categorySlug || found.type;
+          const categoryKey = found.categoryId || found.category?._id || found.categorySlug || found.type;
           if (!snapshotSchema.length && categoryKey) {
             categoriesApi.get(categoryKey).then((resp) => {
               const schema = resp.category?.bookingFieldSchema || [];

@@ -218,21 +218,8 @@ export default function HotelDetailsPage() {
                 sortColumn={sortColumn}
                 setSortColumn={setSortColumn}
                 language={language}
+                optionFieldSchema={hotel.schemaSnapshot?.optionFieldSchema || hotel.category?.optionFieldSchema || []}
               />
-
-              <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">{t('amenities', language)}</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {hotel.amenities.map((amenity) => (
-                    <div key={amenity} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="text-sm text-gray-700">{amenity}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             <div className="lg:col-span-1">
@@ -325,8 +312,8 @@ function formatPromotionDate(value, language) {
   return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortColumn, setSortColumn, language }) {
-  if (!columns.length) {
+function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortColumn, setSortColumn, language, optionFieldSchema = [] }) {
+  if (!columns.length && !rows.length) {
     return (
       <div className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
         <h2 className="text-xl font-bold text-gray-900">{t('details.availability', language)}</h2>
@@ -335,7 +322,7 @@ function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortCo
     );
   }
 
-  const visibleSortColumns = columns.filter((column) => !['details'].includes(column.id));
+  const visibleSortColumns = columns.filter((column) => !['details', 'amenities'].includes(column.id));
 
   return (
     <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -355,7 +342,13 @@ function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortCo
 
       <div className="grid gap-3">
         {rows.map((row, index) => (
-          <AvailabilityOptionCard key={row.id || index} row={row} columns={columns} language={language} />
+          <AvailabilityOptionCard
+            key={row.id || index}
+            row={row}
+            columns={columns}
+            language={language}
+            optionFieldSchema={optionFieldSchema}
+          />
         ))}
       </div>
       {!rows.length && <p className="mt-3 text-sm text-gray-500">{t('details.noMatchingRows', language)}</p>}
@@ -363,13 +356,42 @@ function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortCo
   );
 }
 
-function AvailabilityOptionCard({ row, columns, language }) {
+function hasFilledValue(value) {
+  if (value === undefined || value === null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  const text = String(value).trim().toLowerCase();
+  return text !== '' && text !== '-' && text !== 'none' && text !== 'not set' && text !== 'false';
+}
+
+function AvailabilityOptionCard({ row, columns, language, optionFieldSchema = [] }) {
   const cells = row.cells || {};
+  const attributes = row.attributes || cells.attributes || {};
   const optionName = cells.service || cells.name || cells.option || t('details.serviceOption', language);
   const price = Number(cells.price || 0);
   const priceType = String(cells.priceType || '').replace(/-/g, ' ');
-  const details = cells.details || cells.amenities || '';
-  const metaColumns = columns.filter((column) => !['service', 'name', 'option', 'price', 'details', 'amenities'].includes(column.id));
+  const details = cells.details || '';
+  const coreSkip = new Set(['service', 'name', 'option', 'price', 'details', 'amenities', 'attributes']);
+  const publicSchema = (optionFieldSchema || []).filter((field) => (field.visibility || 'public') === 'public');
+
+  const schemaFacts = publicSchema
+    .map((field) => {
+      const value = attributes[field.id] ?? cells[field.id];
+      if (!hasFilledValue(value)) return null;
+      return { id: field.id, label: field.label || field.id, value: Array.isArray(value) ? value.join(', ') : String(value) };
+    })
+    .filter(Boolean);
+
+  const columnFacts = columns
+    .filter((column) => !coreSkip.has(column.id))
+    .map((column) => {
+      const value = cells[column.id];
+      if (!hasFilledValue(value)) return null;
+      if (schemaFacts.some((fact) => fact.id === column.id)) return null;
+      return { id: column.id, label: column.label, value: String(value) };
+    })
+    .filter(Boolean);
+
+  const facts = schemaFacts.length ? schemaFacts : columnFacts;
 
   return (
     <article className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
@@ -381,22 +403,24 @@ function AvailabilityOptionCard({ row, columns, language }) {
         <div className="rounded-xl bg-white px-4 py-3 text-left shadow-sm sm:min-w-36 sm:text-right">
           <p className="text-xs font-bold uppercase text-gray-500">{t('details.price', language)}</p>
           <p className="mt-1 text-lg font-black text-primary">{price ? formatRwf(price) : '-'}</p>
-          {priceType && <p className="text-xs font-semibold capitalize text-gray-500">{priceType}</p>}
+          {hasFilledValue(priceType) && <p className="text-xs font-semibold capitalize text-gray-500">{priceType}</p>}
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {metaColumns.map((column) => (
-          <div key={column.id} className="rounded-xl bg-white px-3 py-2">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{column.label}</p>
-            <p className="mt-1 break-words text-sm font-semibold text-gray-900">{cells[column.id] || '-'}</p>
-          </div>
-        ))}
-      </div>
+      {facts.length > 0 && (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {facts.map((fact) => (
+            <div key={fact.id} className="rounded-xl bg-white px-3 py-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{fact.label}</p>
+              <p className="mt-1 break-words text-sm font-semibold text-gray-900">{fact.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {details && (
+      {hasFilledValue(details) && (
         <div className="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{t('details.detailsAmenities', language)}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Details</p>
           <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-gray-700">{details}</p>
         </div>
       )}
