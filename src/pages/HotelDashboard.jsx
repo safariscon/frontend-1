@@ -15,6 +15,7 @@ import OptionDetailsModal from '../components/OptionDetailsModal';
 import { DAY_OPTIONS, TIME_REQUIREMENT_OPTIONS, parseOptionAvailability, toggleAvailableDay } from '../lib/availability';
 import { emptyLocationDetails, isAdministrativeLocationComplete, normalizeLocationDetails } from '../lib/places';
 import { useLanguage } from '../context/LanguageContext';
+import { useToast } from '../context/ToastContext';
 import { t } from '../lib/translations';
 
 const EMPTY_FORM = {
@@ -40,6 +41,8 @@ const EMPTY_FORM = {
   remainingQuantity: '',
   existingImages: [],
   imageFiles: [],
+  primaryImage: '',
+  primaryImageFile: null,
   promotion: { enabled: false, title: '', percent: '', note: '', startAt: '', endAt: '' },
   rebookSettings: { requestDeadlineHours: 24, rebookIdValidityHours: 72 },
   cancelWindowHours: 6,
@@ -112,13 +115,26 @@ const normalizeServiceLocationForForm = (service) => {
   };
 };
 
-const validateImageFiles = (files) => {
+const validateImageFiles = (files, limit = 3) => {
   const maxSize = 5 * 1024 * 1024;
   const accepted = files.filter((file) => file.type.startsWith('image/') && file.size <= maxSize);
   return {
-    accepted: accepted.slice(0, 3),
-    rejected: files.length !== accepted.length || files.length > 3,
+    accepted: accepted.slice(0, limit),
+    rejected: files.length !== accepted.length || files.length > limit,
   };
+};
+
+const getServiceCoverUrl = (service) => {
+  if (!service) return '';
+  if (service.primaryImage) return service.primaryImage;
+  const first = Array.isArray(service.images) ? service.images.find(Boolean) : '';
+  return typeof first === 'string' ? first : first?.url || '';
+};
+
+const orderImagesWithPrimary = (images = [], primaryImage = '') => {
+  const cleaned = images.filter(Boolean);
+  if (!primaryImage) return cleaned.slice(0, 3);
+  return [primaryImage, ...cleaned.filter((url) => url !== primaryImage)].slice(0, 3);
 };
 
 const toDateTimeInput = (value) => {
@@ -256,6 +272,7 @@ const normalizeBookingFormForForm = (bookingForm) => ({
 export default function HotelDashboard() {
   const { user } = useAuth();
   const { language } = useLanguage();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const { section } = useParams();
@@ -274,8 +291,6 @@ export default function HotelDashboard() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
   const [globalBookingMode, setGlobalBookingMode] = useState('manual');
   const [payoutDetails, setPayoutDetails] = useState(null);
   const [finance, setFinance] = useState(null);
@@ -284,7 +299,6 @@ export default function HotelDashboard() {
   const loadData = async ({ silent = false } = {}) => {
     if (!token) return;
     if (!silent) setLoading(true);
-    setError('');
     try {
       const [overviewResp, servicesResp, bookingsResp, settingsResp, payoutResp, financeResp] = await Promise.all([
         hotelApi.getOverview(token),
@@ -301,7 +315,7 @@ export default function HotelDashboard() {
       setPayoutDetails(payoutResp.payoutDetails || null);
       setFinance(financeResp);
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -373,6 +387,8 @@ export default function HotelDashboard() {
       remainingQuantity: service.availabilityText || '',
       existingImages: Array.isArray(service.images) ? service.images.filter(Boolean).slice(0, 3) : [],
       imageFiles: [],
+      primaryImage: service.primaryImage || (Array.isArray(service.images) ? service.images.find(Boolean) : '') || '',
+      primaryImageFile: null,
       promotion: {
         enabled: service.promotion?.enabled === true,
         title: service.promotion?.title || '',
@@ -397,11 +413,9 @@ export default function HotelDashboard() {
     if (view !== 'services') navigate(`${basePath}/services`);
   };
 
-  const resetForm = () => {
-    setEditingService(null);
-    setForm(EMPTY_FORM);
-    setShowEditor(false);
-    setViewingService(null);
+  const cancelEditing = () => {
+    resetForm();
+    navigate(`${basePath}/services`, { replace: true });
   };
 
   const openViewDetails = async (service) => {
@@ -420,17 +434,30 @@ export default function HotelDashboard() {
   const saveService = async (event) => {
     event.preventDefault();
     if (!token) return;
+    if (!form.primaryImage && !form.primaryImageFile) {
+      toast.error('Add a cover photo — this is the image customers see on the services list.');
+      return;
+    }
     setSaving(true);
-    setError('');
-    setInfo('');
     let uploadedImageUrls = [];
+    let uploadedPrimaryUrl = '';
     try {
-      if (form.imageFiles?.length) {
-        const uploadResponse = await hotelApi.uploadServiceImages(token, form.imageFiles);
-        uploadedImageUrls = uploadResponse.urls || [];
+      const filesToUpload = [
+        ...(form.primaryImageFile ? [form.primaryImageFile] : []),
+        ...(form.imageFiles || []),
+      ];
+      if (filesToUpload.length) {
+        const uploadResponse = await hotelApi.uploadServiceImages(token, filesToUpload);
+        const urls = uploadResponse.urls || [];
+        if (form.primaryImageFile) {
+          uploadedPrimaryUrl = urls[0] || '';
+          uploadedImageUrls = urls.slice(1);
+        } else {
+          uploadedImageUrls = urls;
+        }
       }
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
       setSaving(false);
       return;
     }
@@ -439,6 +466,11 @@ export default function HotelDashboard() {
     const availabilityText = form.status === 'custom' ? form.customAvailability : form.remainingQuantity;
     const quantityMatch = String(form.remainingQuantity || form.customAvailability || '').replace(/,/g, '').match(/\d+(\.\d+)?/);
     const locationDetails = normalizeLocationDetails(form.serviceLocation);
+    const primaryImage = uploadedPrimaryUrl || form.primaryImage || '';
+    const images = orderImagesWithPrimary(
+      [...(form.existingImages || []).filter((url) => url !== primaryImage), ...uploadedImageUrls, primaryImage].filter(Boolean),
+      primaryImage
+    );
     const payload = {
       title: form.title,
       description: form.description,
@@ -452,7 +484,8 @@ export default function HotelDashboard() {
       availableQuantity: quantityMatch ? Number(quantityMatch[0]) : normalizedStatus === 'available' ? 1 : 0,
       availabilityText,
       status: normalizedStatus,
-      images: [...(form.existingImages || []), ...uploadedImageUrls].slice(0, 3),
+      primaryImage: images[0] || '',
+      images,
       promotion: form.promotion,
       rebookSettings: form.rebookSettings,
       cancelWindowHours: Number(form.cancelWindowHours || 6),
@@ -469,12 +502,12 @@ export default function HotelDashboard() {
       const response = editingService
         ? await hotelApi.updateService(token, editingService._id, payload)
         : await hotelApi.createService(token, payload);
-      setInfo(response.message);
+      toast.success(response.message || (editingService ? 'Service updated.' : 'Service created.'));
       resetForm();
       setShowEditor(false);
       await loadData({ silent: true });
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -490,14 +523,16 @@ export default function HotelDashboard() {
       if (!hasPayout) {
         setFinanceSubTab('payout');
         navigate(`${basePath}/finance`);
-        setInfo('Save your MoMo or bank payout details before customers can pay this listing.');
+        toast.info('Save your MoMo or bank payout details before customers can pay this listing.');
         return;
       }
       startEdit(service);
-      setInfo('Complete the exact location, payout account, and Service / Price table before changing availability.');
+      toast.info('Complete the exact location, payout account, and Service / Price table before changing availability.');
       return;
     }
     startEdit(service);
+    const cover = getServiceCoverUrl(service);
+    const images = orderImagesWithPrimary(service.images || [], cover);
     const payload = {
       title: service.title || service.name,
       description: service.description,
@@ -512,7 +547,8 @@ export default function HotelDashboard() {
       availableQuantity: status === 'available' ? 1 : 0,
       availabilityText: service.availabilityText || '',
       status,
-      images: service.images || [],
+      primaryImage: cover || images[0] || '',
+      images,
       promotion: service.promotion || EMPTY_FORM.promotion,
       rebookSettings: service.rebookSettings || EMPTY_FORM.rebookSettings,
       availabilityTable: service.availabilityTable || EMPTY_FORM.availabilityTable,
@@ -521,11 +557,11 @@ export default function HotelDashboard() {
     };
     try {
       const response = await hotelApi.updateService(token, service._id, payload);
-      setInfo(response.message);
+      toast.success(response.message || 'Availability updated.');
       resetForm();
       await loadData({ silent: true });
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     }
   };
 
@@ -533,10 +569,10 @@ export default function HotelDashboard() {
     if (!window.confirm('Delete this business item?')) return;
     try {
       const response = await hotelApi.deleteService(token, serviceId);
-      setInfo(response.message);
+      toast.success(response.message || 'Business deleted successfully.');
       await loadData({ silent: true });
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     }
   };
 
@@ -544,11 +580,11 @@ export default function HotelDashboard() {
     try {
       const payload = typeof statusOrPayload === 'string' ? { status: statusOrPayload } : statusOrPayload;
       const response = await hotelApi.updateBookingStatus(token, bookingId, payload);
-      setInfo(response.message);
+      toast.success(response.message || 'Booking updated.');
       setApprovalBooking(null);
       await loadData({ silent: true });
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     }
   };
 
@@ -583,8 +619,6 @@ export default function HotelDashboard() {
               <button onClick={() => loadData()} className="px-5 py-3 rounded-xl bg-white border border-gray-200 text-gray-700 font-semibold">{t('refresh', language)}</button>
             </div>
           </div>
-
-          {(error || info) && <div className="mb-4 space-y-2">{error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{info && <p className="rounded-xl bg-green-50 p-3 text-sm text-green-700">{info}</p>}</div>}
 
           {view === 'dashboard' && (
             <div className="seller-dashboard-metrics grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -637,8 +671,15 @@ export default function HotelDashboard() {
             )}
             {view === 'services' && showEditor && (
               <div>
-                <button type="button" onClick={resetForm} className="mb-4 text-sm font-semibold text-primary">{t('sellerDash.backToServices', language)}</button>
-                <ServiceForm form={form} setForm={setForm} onSubmit={saveService} saving={saving} editing={Boolean(editingService)} globalBookingMode={globalBookingMode} />
+                <ServiceForm
+                  form={form}
+                  setForm={setForm}
+                  onSubmit={saveService}
+                  onCancel={cancelEditing}
+                  saving={saving}
+                  editing={Boolean(editingService)}
+                  globalBookingMode={globalBookingMode}
+                />
               </div>
             )}
             {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onApproveBooking={setApprovalBooking} onCompleted={() => loadData({ silent: true })} />}
@@ -696,54 +737,144 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, o
           <button type="button" onClick={onAdd} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">{t('sellerDash.addService', language)}</button>
         </div>
       ) : (
-        <div className="seller-service-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <button type="button" onClick={onAdd} className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary/40 bg-blue-50/60 p-4 text-center text-primary hover:bg-blue-50">
-            <span className="text-3xl font-black">+</span>
-            <span className="mt-2 text-sm font-bold">{t('sellerDash.addService', language)}</span>
+        <div className="seller-service-grid grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <button type="button" onClick={onAdd} className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/35 bg-blue-50/50 p-6 text-center text-primary transition hover:border-primary hover:bg-blue-50">
+            <span className="text-4xl font-black leading-none">+</span>
+            <span className="mt-3 text-sm font-bold">{t('sellerDash.addService', language)}</span>
           </button>
           {services.map((service) => (
-            <div key={service._id} className="seller-service-card rounded-xl border border-gray-200 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-bold text-gray-900">{service.title || service.name}</h3>
-                  <p className="text-sm text-gray-600">{getCategoryDisplayLabel(service.serviceType || service.category, language)}</p>
-                </div>
-                <div className="grid gap-1 text-right">
-                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold capitalize text-blue-800">{serviceApprovalStatus(service)}</span>
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{service.availabilityText || formatStatus(service.status, language)}</span>
-                </div>
-              </div>
-              <p className="seller-service-description mt-3 text-sm text-gray-600">{service.description || t('serviceView.noDescription', language)}</p>
-              <p className="mt-3 text-sm font-semibold text-primary">{t('sellerDash.pricesInTable', language)}</p>
-              {Array.isArray(service.images) && service.images.length > 0 && (
-                <div className="seller-service-images mt-4 grid grid-cols-3 gap-2">
-                  {service.images.slice(0, 3).map((image, index) => (
-                    <div key={image} className="relative">
-                      <img src={image} alt={service.title || service.name} className="h-20 w-full rounded-lg object-cover" />
-                      {index === 0 && service.promotion?.enabled && Number(service.promotion?.percent || 0) > 0 && (
-                        <span className="absolute left-1 top-1 rounded bg-amber-400 px-2 py-1 text-[10px] font-black text-amber-950">-{Number(service.promotion.percent)}%</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {service.availabilityTable?.columns?.length > 0 && (
-                <p className="seller-service-meta mt-3 text-xs font-semibold text-gray-500">
-                  Availability table: {service.availabilityTable.rows?.length || 0} rows, {service.availabilityTable.columns.length} columns
-                </p>
-              )}
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => onView(service)} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white">{t('sellerDash.viewDetails', language)}</button>
-                <button type="button" onClick={() => onEdit(service)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{t('edit', language)}</button>
-                <button type="button" onClick={() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available')} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold">{service.status === 'available' ? t('sellerDash.notAvailable', language) : t('sellerDash.available', language)}</button>
-                <button type="button" onClick={() => onDelete(service._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{t('delete', language)}</button>
-              </div>
-            </div>
+            <ServiceCard
+              key={service._id}
+              service={service}
+              language={language}
+              onView={onView}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onStatus={onStatus}
+            />
           ))}
         </div>
       )}
     </div>
   );
+}
+
+function ServiceCard({ service, language, onView, onEdit, onDelete, onStatus }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const cover = getServiceCoverUrl(service);
+  const approval = serviceApprovalStatus(service);
+  const optionCount = service.availabilityTable?.rows?.length || 0;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onPointer = (event) => {
+      if (!menuRef.current?.contains(event.target)) setMenuOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  const run = (action) => {
+    setMenuOpen(false);
+    action();
+  };
+
+  return (
+    <article className="seller-service-card group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
+      <button type="button" onClick={() => onView(service)} className="block w-full text-left">
+        <div className="relative h-44 overflow-hidden bg-slate-100">
+          {cover ? (
+            <img src={cover} alt={service.title || service.name} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+          ) : (
+            <div className="grid h-full place-items-center text-sm font-semibold text-slate-400">No cover photo</div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/55 to-transparent p-3 pt-10">
+            <div className="flex flex-wrap gap-1.5">
+              <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${approval === 'approved' ? 'bg-emerald-500 text-white' : approval === 'rejected' ? 'bg-red-500 text-white' : 'bg-amber-400 text-amber-950'}`}>
+                {approval}
+              </span>
+              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700">
+                {service.availabilityText || formatStatus(service.status, language)}
+              </span>
+              {service.promotion?.enabled && Number(service.promotion?.percent || 0) > 0 && (
+                <span className="rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-black text-amber-950">-{Number(service.promotion.percent)}%</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="p-4 pr-12">
+          <h3 className="truncate text-lg font-black text-slate-950">{service.title || service.name}</h3>
+          <p className="mt-0.5 text-sm font-semibold text-slate-500">{getCategoryDisplayLabel(service.serviceType || service.category, language)}</p>
+          <p className="seller-service-description mt-3 line-clamp-2 text-sm leading-5 text-slate-600">{service.description || t('serviceView.noDescription', language)}</p>
+          <p className="mt-3 text-xs font-semibold text-slate-400">
+            {optionCount ? `${optionCount} bookable option${optionCount === 1 ? '' : 's'}` : 'No options yet'}
+          </p>
+        </div>
+      </button>
+
+      <div className="absolute right-3 top-3" ref={menuRef}>
+        <button
+          type="button"
+          aria-label="Service actions"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+          className="grid h-9 w-9 place-items-center rounded-full border border-white/60 bg-white/95 text-slate-700 shadow-sm backdrop-blur hover:bg-white"
+        >
+          <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="12" cy="19" r="1.8" />
+          </svg>
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+            <MenuItem label={t('sellerDash.viewDetails', language)} onClick={() => run(() => onView(service))} />
+            <MenuItem label={t('edit', language)} onClick={() => run(() => onEdit(service))} />
+            <MenuItem
+              label={service.status === 'available' ? t('sellerDash.notAvailable', language) : t('sellerDash.available', language)}
+              onClick={() => run(() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available'))}
+            />
+            <MenuItem label={t('delete', language)} danger onClick={() => run(() => onDelete(service._id))} />
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function MenuItem({ label, onClick, danger = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`block w-full px-4 py-2.5 text-left text-sm font-semibold ${danger ? 'text-red-700 hover:bg-red-50' : 'text-slate-800 hover:bg-slate-50'}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function CoverPreview({ file, url }) {
+  const [preview, setPreview] = useState(url || '');
+  useEffect(() => {
+    if (!file) {
+      setPreview(url || '');
+      return undefined;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file, url]);
+  if (!preview) return null;
+  return <img src={preview} alt="Primary cover" className="h-full w-full object-cover" />;
 }
 
 function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
@@ -906,7 +1037,7 @@ function Analytics({ stats, services }) {
   );
 }
 
-function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMode }) {
+function ServiceForm({ form, setForm, onSubmit, onCancel, saving, editing, globalBookingMode }) {
   const { language } = useLanguage();
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const setServiceLocation = (serviceLocation) => setForm((prev) => ({
@@ -919,7 +1050,35 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
   const setRebookSetting = (key, value) => setForm((prev) => ({ ...prev, rebookSettings: { ...prev.rebookSettings, [key]: value } }));
   const updateTable = (updater) => setForm((prev) => ({ ...prev, availabilityTable: updater(prev.availabilityTable) }));
   return (
-    <form onSubmit={onSubmit} className="seller-service-form grid gap-4 md:grid-cols-2">
+    <form onSubmit={onSubmit} className="seller-service-form">
+      <div className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:border-primary hover:text-primary"
+            aria-label={t('sellerDash.backToServices', language)}
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wide text-primary">{t('dash.services', language)}</p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950">{editing ? t('editService', language) : t('addService', language)}</h2>
+            <p className="mt-1 text-sm text-slate-500">{editing ? t('sellerDash.yourListings', language) : t('sellerDash.noServicesLead', language)}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+        >
+          {t('cancel', language)}
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
       <Input label={t('serviceName', language)} value={form.title} onChange={(value) => set('title', value)} required />
       <CategorySelect value={form.category} onChange={(value) => set('category', value)} />
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
@@ -993,54 +1152,126 @@ function ServiceForm({ form, setForm, onSubmit, saving, editing, globalBookingMo
           <Input label={t('cancelPenaltyPercent', language)} type="number" value={form.cancelPenaltyPercent ?? 20} onChange={(value) => set('cancelPenaltyPercent', Number(value))} required />
         </div>
       </div>
-      <label className="seller-photo-input block">
-        <span className="text-sm font-semibold text-gray-700">{t('sellerDash.photos', language)}</span>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(event) => {
-            const files = Array.from(event.target.files || []);
-            const { accepted, rejected } = validateImageFiles(files);
-            const remainingSlots = Math.max(0, 3 - form.existingImages.length);
-            set('imageFiles', accepted.slice(0, remainingSlots));
-            if (rejected || accepted.length > remainingSlots) {
-              event.target.value = '';
-              window.alert(t('imageLimit', language));
-            }
-          }}
-          className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3"
-        />
-        <span className="mt-1 block text-xs text-gray-500">{t('sellerDash.photoHint', language)}</span>
-      </label>
-      {(form.existingImages.length > 0 || form.imageFiles.length > 0) && (
-        <div className="seller-photo-grid md:col-span-2 grid grid-cols-3 gap-3">
-          {form.existingImages.map((image) => (
-            <div key={image} className="seller-photo-item relative min-w-0">
-              <img src={image} alt="Business" className="h-24 w-full rounded-xl object-cover" />
-              <button
-                type="button"
-                onClick={() => set('existingImages', form.existingImages.filter((item) => item !== image))}
-                className="absolute right-2 top-2 rounded-lg bg-white/90 px-2 py-1 text-xs font-semibold text-red-700"
-              >
-                {t('admin.remove', language)}
-              </button>
-            </div>
-          ))}
-          {form.imageFiles.map((file) => (
-            <div key={`${file.name}-${file.size}`} className="seller-photo-item min-w-0 break-words rounded-xl border border-dashed border-gray-300 p-3 text-xs text-gray-600">
-              New photo: {file.name}
-            </div>
-          ))}
+      <div className="seller-photo-input md:col-span-2 grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div>
+          <h3 className="font-black text-slate-950">Cover photo</h3>
+          <p className="mt-1 text-sm text-slate-600">This is the single image customers see first on the services list.</p>
+          <div className="mt-3 flex flex-wrap items-start gap-4">
+            {(form.primaryImage || form.primaryImageFile) ? (
+              <div className="relative h-36 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <CoverPreview file={form.primaryImageFile} url={form.primaryImage} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    set('primaryImage', '');
+                    set('primaryImageFile', null);
+                  }}
+                  className="absolute right-2 top-2 rounded-lg bg-white/95 px-2 py-1 text-xs font-semibold text-red-700"
+                >
+                  {t('admin.remove', language)}
+                </button>
+                <span className="absolute bottom-2 left-2 rounded-md bg-primary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white">Primary</span>
+              </div>
+            ) : null}
+            <label className="flex h-36 w-56 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-3 text-center text-sm font-semibold text-slate-600 hover:border-primary hover:text-primary">
+              <span>{form.primaryImage || form.primaryImageFile ? 'Replace cover' : 'Upload cover photo'}</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (!file) return;
+                  const { accepted, rejected } = validateImageFiles([file], 1);
+                  if (rejected || !accepted.length) {
+                    window.alert(t('imageLimit', language));
+                    return;
+                  }
+                  set('primaryImageFile', accepted[0]);
+                }}
+              />
+            </label>
+          </div>
         </div>
-      )}
+
+        <div>
+          <h3 className="font-black text-slate-950">Additional photos</h3>
+          <p className="mt-1 text-sm text-slate-600">Shown in service details only. Up to 2 more images.</p>
+          <label className="mt-3 block">
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => {
+                const files = Array.from(event.target.files || []);
+                const remainingSlots = Math.max(0, 2 - form.existingImages.filter((url) => url && url !== form.primaryImage).length);
+                const { accepted, rejected } = validateImageFiles(files, remainingSlots || 2);
+                set('imageFiles', accepted.slice(0, remainingSlots));
+                if (rejected || accepted.length > remainingSlots) {
+                  event.target.value = '';
+                  window.alert(t('imageLimit', language));
+                }
+              }}
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
+            />
+          </label>
+          {(form.existingImages.filter((url) => url && url !== form.primaryImage).length > 0 || form.imageFiles.length > 0) && (
+            <div className="seller-photo-grid mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {form.existingImages.filter((url) => url && url !== form.primaryImage).map((image) => (
+                <div key={image} className="seller-photo-item relative min-w-0">
+                  <img src={image} alt="Additional" className="h-24 w-full rounded-xl object-cover" />
+                  <div className="absolute inset-x-0 bottom-0 flex gap-1 p-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        set('primaryImage', image);
+                        set('primaryImageFile', null);
+                      }}
+                      className="rounded-lg bg-white/95 px-2 py-1 text-[10px] font-bold text-primary"
+                    >
+                      Make primary
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => set('existingImages', form.existingImages.filter((item) => item !== image))}
+                      className="rounded-lg bg-white/95 px-2 py-1 text-[10px] font-semibold text-red-700"
+                    >
+                      {t('admin.remove', language)}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {form.imageFiles.map((file) => (
+                <div key={`${file.name}-${file.size}`} className="seller-photo-item min-w-0 break-words rounded-xl border border-dashed border-gray-300 bg-white p-3 text-xs text-gray-600">
+                  New photo: {file.name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       <AvailabilityTableBuilder table={form.availabilityTable} updateTable={updateTable} />
       <details className="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-4">
         <summary className="cursor-pointer font-black text-slate-900">{t('sellerDash.optionalQuestions', language)}</summary>
         <p className="mt-2 text-sm text-slate-500">{t('sellerDash.optionalQuestionsLead', language)}</p>
         <div className="mt-4"><BookingFormBuilder bookingForm={form.bookingForm} setBookingForm={(bookingForm) => set('bookingForm', bookingForm)} /></div>
       </details>
-      <button type="submit" disabled={saving} className="md:col-span-2 rounded-xl bg-primary px-5 py-3 font-semibold text-white disabled:opacity-60">{saving ? t('savingEllipsis', language) : editing ? t('editService', language) : t('addService', language)}</button>
+      </div>
+
+      <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+        >
+          {t('cancel', language)}
+        </button>
+        <button type="submit" disabled={saving} className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
+          {saving ? t('savingEllipsis', language) : editing ? t('editService', language) : t('addService', language)}
+        </button>
+      </div>
     </form>
   );
 }
@@ -1381,24 +1612,21 @@ function AvailabilityTableBuilder({ table, updateTable }) {
 
 function CompleteBookingPanel({ onCompleted }) {
   const { language } = useLanguage();
+  const toast = useToast();
   const [code, setCode] = useState('');
   const [summary, setSummary] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
   const token = getAuthData()?.token;
 
   const verify = async (event) => {
     event.preventDefault();
     setBusy(true);
-    setError('');
-    setMessage('');
     setSummary(null);
     try {
       const response = await hotelApi.verifyBookingCode(token, code.trim());
       setSummary(response.booking);
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       setBusy(false);
     }
@@ -1407,19 +1635,17 @@ function CompleteBookingPanel({ onCompleted }) {
   const complete = async () => {
     if (!summary?.bookingId) return;
     setBusy(true);
-    setError('');
-    setMessage('');
     try {
       const response = await hotelApi.completeVerifiedBooking(token, {
         bookingId: summary.bookingId,
         code: code.trim(),
       });
-      setMessage(response.message);
+      toast.success(response.message || 'Booking completed.');
       setCode('');
       setSummary(null);
       onCompleted?.();
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       setBusy(false);
     }
@@ -1433,8 +1659,6 @@ function CompleteBookingPanel({ onCompleted }) {
         <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder={t('bookingCode', language)} className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono uppercase" />
         <button disabled={busy || !code.trim()} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busy ? `${t('verify.checking', language)}...` : t('booking.verifyId', language)}</button>
       </form>
-      {error && <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {message && <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
       {summary && (
         <div className="mt-4 rounded-xl bg-white p-4 text-sm">
           <dl className="grid gap-3 md:grid-cols-3">
@@ -1547,19 +1771,18 @@ function BookingDetailModal({ booking, onClose }) {
 
 function SellerBookingVerification({ token }) {
   const { language } = useLanguage();
+  const toast = useToast();
   const [lookup, setLookup] = useState('');
   const [booking, setBooking] = useState(null);
-  const [error, setError] = useState('');
   const submit = async (event) => {
     event.preventDefault();
     if (!lookup.trim()) return;
-    setError('');
     setBooking(null);
     try {
       const response = await hotelApi.verifyBooking(token, lookup.trim().replace(/^.*\/verify\//, ''));
       setBooking(response.booking);
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     }
   };
   return (
@@ -1569,7 +1792,6 @@ function SellerBookingVerification({ token }) {
         <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white">{t('verify.title', language)}</button>
       </form>
       <p className="text-sm text-gray-500">Staff can paste a scanned QR verification URL or enter the booking ID.</p>
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {booking && <div className="rounded-xl border border-gray-200 p-4"><BookingDetailBody booking={booking} /></div>}
     </div>
   );
@@ -1624,6 +1846,7 @@ function ResponseList({ responses }) {
 
 function PayoutDetailsForm({ token, initial, onSaved }) {
   const { language } = useLanguage();
+  const toast = useToast();
   const [catalog, setCatalog] = useState(null);
   const [form, setForm] = useState({
     method: initial?.method === 'bank' ? 'bank' : 'momo',
@@ -1632,8 +1855,6 @@ function PayoutDetailsForm({ token, initial, onSaved }) {
     accountNumber: initial?.accountNumber || initial?.msisdn || '',
   });
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
 
   useEffect(() => {
     paymentsApi.getMethods().then(setCatalog).catch(() => setCatalog(null));
@@ -1644,14 +1865,12 @@ function PayoutDetailsForm({ token, initial, onSaved }) {
   const save = async (event) => {
     event.preventDefault();
     setSaving(true);
-    setError('');
-    setMessage('');
     try {
       const response = await hotelApi.savePayoutDetails(token, form);
-      setMessage(response.message || t('profilePage.payoutSavedMsg', language));
+      toast.success(response.message || t('profilePage.payoutSavedMsg', language));
       onSaved?.();
     } catch (requestError) {
-      setError(requestError.message);
+      toast.error(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -1670,8 +1889,6 @@ function PayoutDetailsForm({ token, initial, onSaved }) {
       </label>
       <Input label={t('accountName', language)} value={form.accountName} onChange={(value) => setForm((prev) => ({ ...prev, accountName: value }))} required />
       <Input label={form.method === 'bank' ? t('accountNumber', language) : t('profilePage.momoNumber', language)} value={form.accountNumber} onChange={(value) => setForm((prev) => ({ ...prev, accountNumber: value }))} required />
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {message && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p>}
       <button disabled={saving} className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50">{saving ? t('savingEllipsis', language) : t('profilePage.savePayout', language)}</button>
     </form>
   );
