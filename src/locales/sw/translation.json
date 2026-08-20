@@ -854,7 +854,7 @@
   "secondPhone": "WhatsApp / nambari ya pili ya simu",
   "cancelWindowHours": "Dirisha la kughairi (masaa kabla ya huduma)",
   "cancelPenaltyPercent": "Asilimia ya adhabu ya kughairi",
-  "imageLimit": "Tafadhali chagua hadi faili 3 za picha. Kila picha lazima iwe 5 MB au ndogo.",
+  "imageLimit": "Tafadhali chagua hadi faili 3 za picha. Kila picha lazima iwe 10 MB au ndogo.",
   "admin": {
     "users": "Watumiaji",
     "businesses": "Biashara",
@@ -1562,7 +1562,7 @@
     "guestCancelRules": "Kanuni za kughairi za mgeni",
     "guestCancelRulesLead": "Masaa kabla ya huduma ambapo kughairi hufunga, na asilimia ambayo mgeni anapoteza akighairi. Chaguo-msingi ni masaa 6 na 20%.",
     "photos": "Picha",
-    "photoHint": "Pakia faili 1, 2, au 3 za picha. Kiwango cha juu 5 MB kila moja.",
+    "photoHint": "Pakia faili 1, 2, au 3 za picha. Kiwango cha juu 10 MB kila moja.",
     "optionalQuestions": "Maswali si lazima ya muuzaji baada ya fomu thabiti ya uhifadhi",
     "optionalQuestionsLead": "Sehemu zinazohitajika za mteja hapo juu zinabaki mahali. Fungua sehemu hii tu huduma yako inapohitaji maswali ya ziada.",
     "optionalCustomerQuestions": "Maswali si lazima ya mteja",

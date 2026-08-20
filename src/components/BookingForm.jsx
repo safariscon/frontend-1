@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
-import { bookingApi, getAuthData, publicApi, rebookApi } from '../lib/api';
+import SchemaFields from './SchemaFields';
+import { bookingApi, categoriesApi, getAuthData, publicApi, rebookApi } from '../lib/api';
 import { amountDueNow, completeBookingPayment, listingCancelHours, listingCancelPenalty } from '../lib/payments';
 import { formatRwf } from '../lib/currency';
 import { normalizeHotels } from '../lib/hotelMapper';
@@ -24,6 +25,8 @@ import {
 } from '../lib/availability';
 import AdministrativeLocationFields from './AdministrativeLocationFields';
 import { emptyLocationDetails, formatLocationLine, isAdministrativeLocationComplete, normalizeLocationDetails } from '../lib/places';
+import { emptyListingAttributes, validateSchemaValues } from '../lib/serviceSchema';
+import { MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 
 const TODAY = new Date().toISOString().split('T')[0];
 const OUTDATED_RULE = /30%|remaining balance is paid|advance money is not refunded|pay the 30%/i;
@@ -67,6 +70,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [business, setBusiness] = useState(null);
   const [values, setValues] = useState(BASE_VALUES);
   const [customValues, setCustomValues] = useState({});
+  const [bookingAttributes, setBookingAttributes] = useState({});
+  const [bookingAttributeErrors, setBookingAttributeErrors] = useState({});
+  const [liveBookingSchema, setLiveBookingSchema] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
@@ -101,6 +107,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             customDefaults[fieldItem.id] = fieldItem.type === 'checkbox' ? [] : fieldItem.defaultValue || '';
           });
             setCustomValues(customDefaults);
+            const snapshotSchema = found.schemaSnapshot?.bookingFieldSchema
+              || service?.schemaSnapshot?.bookingFieldSchema
+              || [];
+            setBookingAttributes(emptyListingAttributes(snapshotSchema));
             const firstOffer = found.availabilityTable?.rows?.[0]?.cells?.service || '';
             setSelectedOffer(firstOffer);
           setValues((prev) => ({
@@ -112,6 +122,16 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             fullName: getAuthData()?.user?.name || '',
             phone: getAuthData()?.user?.phone || '',
           }));
+          const categoryKey = found.categoryId || found.category?.slug || found.categorySlug || found.type;
+          if (!snapshotSchema.length && categoryKey) {
+            categoriesApi.get(categoryKey).then((resp) => {
+              const schema = resp.category?.bookingFieldSchema || [];
+              setLiveBookingSchema(schema);
+              setBookingAttributes(emptyListingAttributes(schema));
+            }).catch(() => {});
+          } else {
+            setLiveBookingSchema([]);
+          }
         }
       } finally {
         setLoadingBusiness(false);
@@ -127,9 +147,19 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
   const service = useMemo(() => getSelectedService(business), [business]);
   const bookingConfig = useMemo(() => getBookingConfig({ business, service, language }), [business, service, language]);
+  const bookingFieldSchema = useMemo(() => {
+    const snapshot = business?.schemaSnapshot?.bookingFieldSchema
+      || service?.schemaSnapshot?.bookingFieldSchema
+      || [];
+    return snapshot.length ? snapshot : liveBookingSchema;
+  }, [business, service, liveBookingSchema]);
   const customFields = useMemo(
-    () => (business?.bookingForm?.isPublished ? (business.bookingForm.fields || []).filter((item) => item.enabled !== false) : []),
-    [business]
+    () => (
+      bookingFieldSchema.length
+        ? []
+        : (business?.bookingForm?.isPublished ? (business.bookingForm.fields || []).filter((item) => item.enabled !== false) : [])
+    ),
+    [business, bookingFieldSchema]
   );
   const offers = business?.availabilityTable?.rows || [];
   const selectedOfferRow = offers.find((row) => row.cells?.service === selectedOffer);
@@ -188,6 +218,15 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (!values.agreeToTerms) return t('booking.agreeTerms', language);
     if (useRebook && !rebookId.trim()) return t('booking.enterRebookId', language);
     if (useRebook && verifiedRebookId !== rebookId.trim().toUpperCase()) return t('booking.verifyRebookFirst', language);
+    if (bookingFieldSchema.length) {
+      const schemaErrors = validateSchemaValues(bookingFieldSchema, bookingAttributes);
+      if (Object.keys(schemaErrors).length) {
+        setBookingAttributeErrors(schemaErrors);
+        const first = Object.values(schemaErrors)[0];
+        return first || t('booking.completeField', language, { label: 'booking details' });
+      }
+      setBookingAttributeErrors({});
+    }
     const missingCustom = customFields.find((item) => item.required && (Array.isArray(customValues[item.id]) ? customValues[item.id].length === 0 : !String(customValues[item.id] || '').trim()));
     if (missingCustom) return t('booking.completeField', language, { label: missingCustom.label });
     return '';
@@ -235,6 +274,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       const quantity = Math.max(1, Number(values.quantity) || 1);
       const response = await bookingApi.bookService(authData.token, {
         serviceId: service._id,
+        optionId: selectedOfferRow?.optionId || selectedOfferRow?.id || undefined,
         rebookId: useRebook ? verifiedRebookId : undefined,
         numberOfPeople,
         quantity,
@@ -251,11 +291,12 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         packageType: values.packageType,
         customerLocation: customerLocationText,
         customerLocationDetails,
+        bookingAttributes: bookingFieldSchema.length ? bookingAttributes : undefined,
         bookingDetails: {
           customerLocationDetails,
           serviceName: service.title || service.name,
           requestedService: selectedOffer,
-          selectedOptionId: selectedOfferRow?.id,
+          selectedOptionId: selectedOfferRow?.optionId || selectedOfferRow?.id,
           listedPriceRwf: selectedOfferRow?.cells?.price || '',
           fullName: values.fullName,
           email: values.email,
@@ -273,6 +314,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           bookingType: bookingConfig.type,
           providerRules: Array.isArray(service.rules) ? service.rules : [],
           customFormTitle: business?.bookingForm?.title || '',
+          bookingAttributes: bookingFieldSchema.length ? bookingAttributes : undefined,
           customResponses: customFields.map((fieldItem) => ({
             fieldId: fieldItem.id,
             label: fieldItem.label,
@@ -430,6 +472,24 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         <CustomerLocationFields location={values.customerLocationDetails} onChange={updateCustomerLocation} />
         <label className="block"><span className="mb-1 block text-sm font-medium text-gray-700">{t('booking.paymentMethod', language)}</span><select value={values.paymentMethod} onChange={(event) => updateValue('paymentMethod', event.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3"><option value="mobile-money">{t('booking.mobileMoney', language)}</option><option value="bank">{t('bank', language)}</option></select></label>
       </div>
+
+      {bookingFieldSchema.length > 0 && (
+        <div className="mb-6 rounded-xl border border-slate-200 p-4">
+          <h3 className="font-bold text-gray-900">Booking details</h3>
+          <p className="mt-1 text-sm text-gray-500">Required fields for this service.</p>
+          <div className="mt-4">
+            <SchemaFields
+              schema={bookingFieldSchema}
+              values={bookingAttributes}
+              errors={bookingAttributeErrors}
+              onChange={(next) => {
+                setBookingAttributes(next);
+                setBookingAttributeErrors({});
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {customFields.length > 0 && <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
         {customFields.map((item) => (
@@ -689,10 +749,10 @@ function DynamicField({ field: item, value, onChange }) {
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (!file) return onChange('');
-            const maxBytes = Number(item.validation?.maxFileSizeMb || 5) * 1024 * 1024;
+            const maxBytes = Number(item.validation?.maxFileSizeMb || MAX_UPLOAD_FILE_SIZE_MB) * 1024 * 1024;
             if (file.size > maxBytes) {
               event.target.value = '';
-              window.alert(t('booking.maxFileSize', language, { n: item.validation?.maxFileSizeMb || 5 }));
+              window.alert(t('booking.maxFileSize', language, { n: item.validation?.maxFileSizeMb || MAX_UPLOAD_FILE_SIZE_MB }));
               return;
             }
             onChange(file);

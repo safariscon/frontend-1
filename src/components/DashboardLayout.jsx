@@ -28,6 +28,7 @@ export default function DashboardLayout({ children }) {
         { to: '/admin-dashboard', label: t('dash.analytics', language), icon: 'dashboard', match: ['/admin-dashboard'], exact: true },
         { to: '/admin-dashboard/users', label: t('dash.users', language), icon: 'user', match: ['/admin-dashboard/users'] },
         { to: '/admin-dashboard/services', label: t('dash.services', language), icon: 'services', match: ['/admin-dashboard/services'] },
+        { to: '/admin-dashboard/service-categories', label: 'Categories', icon: 'grid', match: ['/admin-dashboard/service-categories'] },
         { to: '/admin-dashboard/bookings', label: t('dash.bookings', language), icon: 'bookings', match: ['/admin-dashboard/bookings'] },
         { to: '/admin-dashboard/revenue', label: t('dash.revenue', language), icon: 'revenue', match: ['/admin-dashboard/revenue'] },
         { to: '/services', label: t('dash.browseServices', language), icon: 'grid', match: ['/services', '/hotels', '/hotel/', '/business/', '/booking/'] },

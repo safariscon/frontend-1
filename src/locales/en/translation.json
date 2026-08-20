@@ -854,7 +854,7 @@
   "secondPhone": "WhatsApp / second phone number",
   "cancelWindowHours": "Cancel window (hours before service)",
   "cancelPenaltyPercent": "Cancel penalty percent",
-  "imageLimit": "Please choose up to 3 image files. Each image must be 5 MB or smaller.",
+  "imageLimit": "Please choose up to 3 image files. Each image must be 10 MB or smaller.",
   "admin": {
     "users": "Users",
     "businesses": "Businesses",
@@ -1562,7 +1562,7 @@
     "guestCancelRules": "Guest cancellation rules",
     "guestCancelRulesLead": "Hours before the service when cancel closes, and the percent the guest loses if they cancel. Defaults are 6 hours and 20%.",
     "photos": "Photos",
-    "photoHint": "Upload 1, 2, or 3 image files. Maximum 5 MB each.",
+    "photoHint": "Upload 1, 2, or 3 image files. Maximum 10 MB each.",
     "optionalQuestions": "Optional seller questions after the fixed booking form",
     "optionalQuestionsLead": "The required customer fields above always stay in place. Open this section only when your service needs extra questions.",
     "optionalCustomerQuestions": "Optional Customer Questions",

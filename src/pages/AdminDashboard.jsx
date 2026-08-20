@@ -4,7 +4,6 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { adminApi, bookingApi, getAuthData, publicApi } from '../lib/api';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
-import { SERVICE_CATEGORY_TUPLES as BUSINESS_TYPE_GROUPS } from '../data/serviceCategories';
 import AdminRebookRequests from '../components/rebook/AdminRebookRequests';
 import { isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashboard';
 import { useLanguage } from '../context/LanguageContext';

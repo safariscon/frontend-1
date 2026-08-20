@@ -4,7 +4,7 @@ export const normalizeHotel = (hotel) => {
   const id = hotel._id || hotel.id;
   const name = hotel.name || hotel.title || hotel.serviceName || '';
   const uploadedImages = Array.isArray(hotel.images)
-    ? hotel.images.filter((item) => /^https?:\/\//.test(String(item || ""))).slice(0, 3)
+    ? hotel.images.filter((item) => /^https?:\/\//.test(String(item || ''))).slice(0, 5)
     : [];
   const legacyImage = /^https?:\/\//.test(String(hotel.image || '')) ? hotel.image : '';
   const primaryImage = /^https?:\/\//.test(String(hotel.primaryImage || ''))
@@ -12,31 +12,38 @@ export const normalizeHotel = (hotel) => {
     : '';
   const image = primaryImage || uploadedImages[0] || legacyImage;
   const orderedImages = image
-    ? [image, ...uploadedImages.filter((url) => url !== image)].slice(0, 3)
+    ? [image, ...uploadedImages.filter((url) => url !== image)].slice(0, 5)
     : uploadedImages;
   const basePrice = Number(hotel.basePrice ?? hotel.price ?? 0);
   const rating = Number(hotel.rating ?? 4.5);
   const reviewCount = Number(hotel.reviewCount ?? 0);
+  const categorySlug = hotel.category?.slug || hotel.categorySlug || hotel.type || hotel.category || 'service';
+  const categoryName = hotel.category?.name || hotel.categoryName || categorySlug;
 
   return {
     ...hotel,
     id,
     name,
-    type: hotel.type || hotel.category || hotel.serviceType || 'service',
+    type: categorySlug,
     contactInfo: hotel.contactInfo || '',
     image,
     primaryImage: image,
     images: orderedImages.length ? orderedImages : (image ? [image] : []),
     services: Array.isArray(hotel.services) ? hotel.services : [],
-    serviceCategory: hotel.type || hotel.category || 'service',
-    businessType: hotel.type || hotel.category || 'service',
+    serviceCategory: categorySlug,
+    businessType: categorySlug,
+    categoryId: hotel.categoryId || hotel.category?._id || '',
+    schemaSnapshot: hotel.schemaSnapshot || null,
+    platformCommissionPercent: hotel.platformCommissionPercent ?? hotel.commissionPercentage,
     primaryService: {
+      ...hotel,
       _id: id,
       title: name,
       name,
-      category: hotel.type || hotel.category || 'service',
-      serviceType: hotel.type || hotel.category || 'service',
-      location: hotel.location,
+      category: categorySlug,
+      categoryName,
+      serviceType: categorySlug,
+      location: hotel.location || hotel.serviceLocation,
       status: hotel.status || 'available',
       priceText: hotel.priceText || (basePrice ? `${basePrice}` : ''),
       pricing: { amount: basePrice, currency: 'RWF', unit: 'service' },
@@ -45,6 +52,12 @@ export const normalizeHotel = (hotel) => {
       images: orderedImages,
       bookingForm: hotel.bookingForm,
       bookingMode: hotel.bookingMode || 'manual',
+      schemaSnapshot: hotel.schemaSnapshot || null,
+      availabilityTable: hotel.availabilityTable,
+      listingAttributes: hotel.listingAttributes,
+      cancelPenaltyPercent: hotel.cancelPenaltyPercent,
+      platformCommissionPercent: hotel.platformCommissionPercent ?? hotel.commissionPercentage,
+      cancelWindowHours: hotel.cancelWindowHours,
     },
     price: basePrice,
     basePrice,

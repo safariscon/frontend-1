@@ -854,7 +854,7 @@
   "secondPhone": "WhatsApp / nimero ya kabiri",
   "cancelWindowHours": "Igihe cyo guhagarika (amasaha mbere ya serivisi)",
   "cancelPenaltyPercent": "Ijanisha ry'igihano cyo kuhagarika",
-  "imageLimit": "Hitamo kugeza amafoto 3. Buri ifoto igomba kuba iri munsi ya 5 MB.",
+  "imageLimit": "Hitamo kugeza amafoto 3. Buri ifoto igomba kuba iri munsi ya 10 MB.",
   "admin": {
     "users": "Abakoresha",
     "businesses": "Ubucuruzi",
@@ -1562,7 +1562,7 @@
     "guestCancelRules": "Amabwiriza yo kuhagarika y'umushyitsi",
     "guestCancelRulesLead": "Amasaha mbere ya serivisi aho kuhagarika bifungwa, n'ijanisha umushyitsi atakaza niba ahagaritse. Bisanzwe ni amasaha 6 na 20%.",
     "photos": "Amafoto",
-    "photoHint": "Shyiramo amadosiye y'amafoto 1, 2, cyangwa 3. Buri ifoto irenze 5 MB ntarengwa.",
+    "photoHint": "Shyiramo amadosiye y'amafoto 1, 2, cyangwa 3. Buri ifoto irenze 10 MB ntarengwa.",
     "optionalQuestions": "Ibibazo by'utanga serivisi bitari ngombwa nyuma y'ifishi ihamye yo gufata umwanya",
     "optionalQuestionsLead": "Ibyiciro by'umukiriya birakenewe hejuru biguma aho. Fungura iki gice gusa niba serivisi yawe ikeneye ibindi bibazo.",
     "optionalCustomerQuestions": "Ibibazo by'umukiriya bitari ngombwa",

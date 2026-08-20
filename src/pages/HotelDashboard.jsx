@@ -7,7 +7,9 @@ import { getAuthData, hotelApi, paymentsApi, publicApi } from '../lib/api';
 import { payoutStatusLabel } from '../lib/payments';
 import { REALTIME_EVENTS, joinRealtimeChannel, subscribeToRealtime } from '../lib/realtime';
 import { formatRwf } from '../lib/currency';
-import { SERVICE_CATEGORY_TUPLES as SERVICE_CATEGORIES, getCategoryDisplayLabel, getCategoryGroupDisplayLabel } from '../data/serviceCategories';
+import { getCategoryDisplayLabel } from '../data/serviceCategories';
+import useServiceCategories from '../hooks/useServiceCategories';
+import { MAX_UPLOAD_FILE_SIZE_BYTES, MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
 import ServiceDetailsView from '../components/ServiceDetailsView';
@@ -116,8 +118,7 @@ const normalizeServiceLocationForForm = (service) => {
 };
 
 const validateImageFiles = (files, limit = 3) => {
-  const maxSize = 5 * 1024 * 1024;
-  const accepted = files.filter((file) => file.type.startsWith('image/') && file.size <= maxSize);
+  const accepted = files.filter((file) => file.type.startsWith('image/') && file.size <= MAX_UPLOAD_FILE_SIZE_BYTES);
   return {
     accepted: accepted.slice(0, limit),
     rejected: files.length !== accepted.length || files.length > limit,
@@ -243,7 +244,7 @@ const QUICK_QUESTIONS = [
     group: 'Extra Information',
     items: [
       { label: 'Special requests', type: 'textarea', placeholder: 'Write any extra details here', required: false },
-      { label: 'Upload document', type: 'file', required: false, validation: { maxFileSizeMb: 5, acceptedFileTypes: 'image/*,.pdf' } },
+      { label: 'Upload document', type: 'file', required: false, validation: { maxFileSizeMb: MAX_UPLOAD_FILE_SIZE_MB, acceptedFileTypes: 'image/*,.pdf' } },
       { label: 'Website or reference link', type: 'url', placeholder: 'https://example.com', required: false },
     ],
   },
@@ -278,6 +279,9 @@ export default function HotelDashboard() {
   const { section } = useParams();
   const view = ['services', 'bookings', 'finance'].includes(section) ? section : 'dashboard';
   const basePath = getDashboardRoute(user) || '/dashboard/seller';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categorySlugFilter = searchParams.get('categorySlug') || '';
+  const { categories: catalogCategories } = useServiceCategories({ seller: true });
   const [overview, setOverview] = useState(null);
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -408,9 +412,16 @@ export default function HotelDashboard() {
       bookingForm: normalizeBookingFormForForm(service.bookingForm),
       bookingMode: service.bookingMode || 'manual',
     });
-    setShowEditor(true);
+    setShowEditor(false);
     setViewingService(null);
-    if (view !== 'services') navigate(`${basePath}/services`);
+    navigate(`/dashboard/seller/services/${service._id || service.id}/edit`);
+  };
+
+  const resetForm = () => {
+    setEditingService(null);
+    setForm(EMPTY_FORM);
+    setShowEditor(false);
+    setViewingService(null);
   };
 
   const cancelEditing = () => {
@@ -598,12 +609,13 @@ export default function HotelDashboard() {
   }[view];
   const visibleServices = services.filter((service) => {
     const approval = serviceApprovalStatus(service);
-    return serviceStatusFilter === 'all' || approval === serviceStatusFilter;
+    if (serviceStatusFilter !== 'all' && approval !== serviceStatusFilter) return false;
+    if (!categorySlugFilter) return true;
+    const slug = service.category?.slug || service.categorySlug || service.serviceType || service.category || '';
+    return String(slug) === String(categorySlugFilter);
   });
   const openAddService = () => {
-    resetForm();
-    setShowEditor(true);
-    if (view !== 'services') navigate(`${basePath}/services`);
+    navigate('/dashboard/seller/services/new');
   };
 
   return (
@@ -660,26 +672,38 @@ export default function HotelDashboard() {
             {!loading && view === 'services' && !showEditor && (
               <ServiceGrid
                 services={visibleServices}
+                allServices={services}
+                categories={catalogCategories}
+                categorySlugFilter={categorySlugFilter}
+                onCategoryFilter={(slug) => {
+                  const next = new URLSearchParams(searchParams);
+                  if (slug) next.set('categorySlug', slug);
+                  else next.delete('categorySlug');
+                  setSearchParams(next, { replace: true });
+                }}
                 statusFilter={serviceStatusFilter}
                 setStatusFilter={setServiceStatusFilter}
-                onAdd={openAddService}
+                onAdd={(category) => {
+                  if (category?._id || category?.slug) {
+                    const params = new URLSearchParams();
+                    if (category._id) params.set('categoryId', category._id);
+                    else params.set('categorySlug', category.slug);
+                    navigate(`/dashboard/seller/services/new?${params.toString()}`);
+                    return;
+                  }
+                  openAddService();
+                }}
                 onView={openViewDetails}
                 onEdit={startEdit}
+                onOptions={(service) => navigate(`/dashboard/seller/services/${service._id || service.id}/options`)}
                 onDelete={deleteService}
                 onStatus={updateStatus}
               />
             )}
             {view === 'services' && showEditor && (
-              <div>
-                <ServiceForm
-                  form={form}
-                  setForm={setForm}
-                  onSubmit={saveService}
-                  onCancel={cancelEditing}
-                  saving={saving}
-                  editing={Boolean(editingService)}
-                  globalBookingMode={globalBookingMode}
-                />
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                Redirecting to the new service editor…
+                <button type="button" className="ml-3 font-bold text-primary" onClick={() => navigate('/dashboard/seller/services/new')}>Open editor</button>
               </div>
             )}
             {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingList bookings={bookings} onStatus={updateBookingStatus} onApproveBooking={setApprovalBooking} onCompleted={() => loadData({ silent: true })} />}
@@ -711,8 +735,34 @@ function canSellerReviewBooking(booking) {
   return ['pending', 'reviewing', 'requested'].includes(String(booking.status || '').toLowerCase());
 }
 
-function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, onEdit, onDelete, onStatus }) {
+function ServiceGrid({
+  services,
+  allServices = [],
+  categories = [],
+  categorySlugFilter = '',
+  onCategoryFilter,
+  statusFilter,
+  setStatusFilter,
+  onAdd,
+  onView,
+  onEdit,
+  onOptions,
+  onDelete,
+  onStatus,
+}) {
   const { language } = useLanguage();
+  const grouped = useMemo(() => {
+    const map = new Map();
+    services.forEach((service) => {
+      const slug = service.category?.slug || service.categorySlug || service.serviceType || service.category || 'other';
+      const name = service.category?.name || service.categoryName || getCategoryDisplayLabel(slug, language) || slug;
+      const key = String(slug);
+      if (!map.has(key)) map.set(key, { slug: key, name, items: [] });
+      map.get(key).items.push(service);
+    });
+    return [...map.values()];
+  }, [services, language]);
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -721,6 +771,16 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, o
           <p className="text-sm text-slate-500">{t('sellerDash.yourListings', language)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={categorySlugFilter}
+            onChange={(event) => onCategoryFilter?.(event.target.value)}
+            className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold"
+          >
+            <option value="">All categories</option>
+            {categories.map((category) => (
+              <option key={category._id || category.slug} value={category.slug}>{category.group ? `${category.group} · ` : ''}{category.name}</option>
+            ))}
+          </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold">
             <option value="all">{t('sellerDash.all', language)}</option>
             <option value="pending">{t('pending', language)}</option>
@@ -730,6 +790,24 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, o
           <button type="button" onClick={onAdd} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ {t('sellerDash.addService', language)}</button>
         </div>
       </div>
+
+      {categories.length > 0 && !allServices.length && (
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {categories.map((category) => (
+            <button
+              key={category._id || category.slug}
+              type="button"
+              onClick={() => onAdd(category)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm hover:border-primary"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{category.group || 'Category'}</p>
+              <p className="mt-1 font-bold text-slate-900">{category.name}</p>
+              <p className="mt-1 text-xs text-primary">Add listing →</p>
+            </button>
+          ))}
+        </div>
+      )}
+
       {!services.length ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
           <p className="font-black text-slate-900">{t('sellerDash.noServicesYet', language)}</p>
@@ -737,21 +815,34 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, o
           <button type="button" onClick={onAdd} className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">{t('sellerDash.addService', language)}</button>
         </div>
       ) : (
-        <div className="seller-service-grid grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          <button type="button" onClick={onAdd} className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/35 bg-blue-50/50 p-6 text-center text-primary transition hover:border-primary hover:bg-blue-50">
-            <span className="text-4xl font-black leading-none">+</span>
-            <span className="mt-3 text-sm font-bold">{t('sellerDash.addService', language)}</span>
-          </button>
-          {services.map((service) => (
-            <ServiceCard
-              key={service._id}
-              service={service}
-              language={language}
-              onView={onView}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onStatus={onStatus}
-            />
+        <div className="space-y-8">
+          {grouped.map((group) => (
+            <section key={group.slug}>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-base font-black text-slate-900">{group.name}</h3>
+                <button
+                  type="button"
+                  onClick={() => onAdd(categories.find((c) => c.slug === group.slug) || { slug: group.slug })}
+                  className="text-sm font-semibold text-primary"
+                >
+                  + Add in {group.name}
+                </button>
+              </div>
+              <div className="seller-service-grid grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {group.items.map((service) => (
+                  <ServiceCard
+                    key={service._id}
+                    service={service}
+                    language={language}
+                    onView={onView}
+                    onEdit={onEdit}
+                    onOptions={onOptions}
+                    onDelete={onDelete}
+                    onStatus={onStatus}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -759,7 +850,7 @@ function ServiceGrid({ services, statusFilter, setStatusFilter, onAdd, onView, o
   );
 }
 
-function ServiceCard({ service, language, onView, onEdit, onDelete, onStatus }) {
+function ServiceCard({ service, language, onView, onEdit, onOptions, onDelete, onStatus }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const cover = getServiceCoverUrl(service);
@@ -812,7 +903,7 @@ function ServiceCard({ service, language, onView, onEdit, onDelete, onStatus }) 
         </div>
         <div className="p-4 pr-12">
           <h3 className="truncate text-lg font-black text-slate-950">{service.title || service.name}</h3>
-          <p className="mt-0.5 text-sm font-semibold text-slate-500">{getCategoryDisplayLabel(service.serviceType || service.category, language)}</p>
+          <p className="mt-0.5 text-sm font-semibold text-slate-500">{service.category?.name || service.categoryName || getCategoryDisplayLabel(service.serviceType || service.categorySlug || service.category, language)}</p>
           <p className="seller-service-description mt-3 line-clamp-2 text-sm leading-5 text-slate-600">{service.description || t('serviceView.noDescription', language)}</p>
           <p className="mt-3 text-xs font-semibold text-slate-400">
             {optionCount ? `${optionCount} bookable option${optionCount === 1 ? '' : 's'}` : 'No options yet'}
@@ -838,6 +929,9 @@ function ServiceCard({ service, language, onView, onEdit, onDelete, onStatus }) 
           <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
             <MenuItem label={t('sellerDash.viewDetails', language)} onClick={() => run(() => onView(service))} />
             <MenuItem label={t('edit', language)} onClick={() => run(() => onEdit(service))} />
+            {(service.supportsOptions ?? service.category?.supportsOptions ?? true) && (
+              <MenuItem label="Manage options" onClick={() => run(() => onOptions?.(service))} />
+            )}
             <MenuItem
               label={service.status === 'available' ? t('sellerDash.notAvailable', language) : t('sellerDash.available', language)}
               onClick={() => run(() => onStatus(service, service.status === 'available' ? 'unavailable' : 'available'))}
@@ -863,16 +957,22 @@ function MenuItem({ label, onClick, danger = false }) {
 }
 
 function CoverPreview({ file, url }) {
-  const [preview, setPreview] = useState(url || '');
+  const [filePreview, setFilePreview] = useState('');
+
   useEffect(() => {
     if (!file) {
-      setPreview(url || '');
+      setFilePreview('');
       return undefined;
     }
     const objectUrl = URL.createObjectURL(file);
-    setPreview(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file, url]);
+    const timer = window.setTimeout(() => setFilePreview(objectUrl), 0);
+    return () => {
+      window.clearTimeout(timer);
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [file]);
+
+  const preview = file ? filePreview : (url || '');
   if (!preview) return null;
   return <img src={preview} alt="Primary cover" className="h-full w-full object-cover" />;
 }
@@ -1290,7 +1390,7 @@ function BookingFormBuilder({ bookingForm, setBookingForm }) {
     enabled: true,
     options: question.options || [],
     validation: question.type === 'file'
-      ? { maxFileSizeMb: 5, acceptedFileTypes: 'image/*,.pdf', ...(question.validation || {}) }
+      ? { maxFileSizeMb: MAX_UPLOAD_FILE_SIZE_MB, acceptedFileTypes: 'image/*,.pdf', ...(question.validation || {}) }
       : question.validation || {},
   });
   const updateField = (fieldId, patch) => update({
@@ -1401,7 +1501,7 @@ function BookingFormBuilder({ bookingForm, setBookingForm }) {
               {field.type === 'file' && (
                 <div className="grid gap-2 md:grid-cols-2">
                   <Input label="Accepted File Types" value={field.validation?.acceptedFileTypes || ''} onChange={(value) => updateField(field.id, { validation: { ...(field.validation || {}), acceptedFileTypes: value } })} placeholder="image/*,.pdf" />
-                  <Input label="Max File Size MB" type="number" value={field.validation?.maxFileSizeMb || 5} onChange={(value) => updateField(field.id, { validation: { ...(field.validation || {}), maxFileSizeMb: value } })} />
+                  <Input label="Max File Size MB" type="number" value={field.validation?.maxFileSizeMb || MAX_UPLOAD_FILE_SIZE_MB} onChange={(value) => updateField(field.id, { validation: { ...(field.validation || {}), maxFileSizeMb: value } })} />
                 </div>
               )}
               <details className="mt-3 rounded-lg bg-gray-50 p-3">
@@ -1719,13 +1819,19 @@ const PRICE_TABLE_OPTIONS = {
 
 function CategorySelect({ value, onChange }) {
   const { language } = useLanguage();
+  const { categories, groups } = useServiceCategories({ seller: true });
   return (
     <label className="block">
       <span className="text-sm font-semibold text-gray-700">{t('sellerDash.category', language)}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3">
-        {SERVICE_CATEGORIES.map(([group, options]) => (
-          <optgroup key={group} label={getCategoryGroupDisplayLabel(group, language)}>
-            {options.map(([categoryValue, label]) => <option key={categoryValue} value={categoryValue}>{getCategoryDisplayLabel(categoryValue, language) || label}</option>)}
+        <option value="">Select category</option>
+        {(groups.length ? groups : [{ group: 'Categories', categories }]).map((entry) => (
+          <optgroup key={entry.group} label={entry.group}>
+            {(entry.categories || []).map((category) => (
+              <option key={category._id || category.slug} value={category.slug || category._id}>
+                {category.name}
+              </option>
+            ))}
           </optgroup>
         ))}
       </select>

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { InstallProvider } from './context/InstallContext';
 import { useTheme } from './context/ThemeContext';
@@ -24,8 +24,11 @@ import BusinessRegisterPage from './pages/BusinessRegisterPage';
 import UserDashboard from './pages/UserDashboard';
 import HotelDashboard from './pages/HotelDashboard';
 import SellerDashboard from './pages/SellerDashboard';
+import SellerServiceEditorPage from './pages/SellerServiceEditorPage';
+import SellerServiceOptionsPage from './pages/SellerServiceOptionsPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminServiceReviewPage from './pages/AdminServiceReviewPage';
+import AdminServiceCategoriesPage, { AdminServiceCategoryEditorPage } from './pages/AdminServiceCategoriesPage';
 import VerificationPage from './pages/VerificationPage';
 import InstallBanner from './components/InstallBanner';
 import InstallModal from './components/InstallModal';
@@ -146,10 +149,17 @@ function AppContent() {
             <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard/bookings" element={<CustomerBookingsRedirect />} />
             <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />
+            <Route path="/dashboard/seller/services/new" element={<SellerServiceEditorPage />} />
+            <Route path="/dashboard/seller/services/categories/:slug" element={<SellerCategoryServicesRedirect />} />
+            <Route path="/dashboard/seller/services/:serviceId/edit" element={<SellerServiceEditorPage />} />
+            <Route path="/dashboard/seller/services/:serviceId/options" element={<SellerServiceOptionsPage />} />
             <Route path="/dashboard/seller" element={<SellerDashboard />} />
             <Route path="/dashboard/seller/:section" element={<SellerDashboard />} />
             <Route path="/hotel-dashboard" element={<HotelDashboard />} />
             <Route path="/hotel-dashboard/:section" element={<HotelDashboard />} />
+            <Route path="/admin-dashboard/service-categories/new" element={<AdminServiceCategoryEditorPage />} />
+            <Route path="/admin-dashboard/service-categories/:id" element={<AdminServiceCategoryEditorPage />} />
+            <Route path="/admin-dashboard/service-categories" element={<AdminServiceCategoriesPage />} />
             <Route path="/admin-dashboard/services/:serviceId" element={<AdminServiceReviewPage />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/admin-dashboard/:section" element={<AdminDashboard />} />
@@ -169,6 +179,11 @@ function AppContent() {
 
 function App() {
   return <AppContent />;
+}
+
+function SellerCategoryServicesRedirect() {
+  const { slug } = useParams();
+  return <Navigate to={`/dashboard/seller/services?categorySlug=${encodeURIComponent(slug || '')}`} replace />;
 }
 
 export default App;

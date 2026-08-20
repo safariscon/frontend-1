@@ -3,17 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { authApi, saveAuthData } from '../lib/api';
-import { SERVICE_CATEGORY_GROUPS as SERVICE_CATEGORIES, getCategoryDisplayLabel, getCategoryGroupDisplayLabel } from '../data/serviceCategories';
 import PasswordInput from '../components/PasswordInput';
 import SeoHead from '../components/SeoHead';
 import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
 import { getBusinessRegisterSeo } from '../lib/seo';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import useServiceCategories from '../hooks/useServiceCategories';
 
 const initialForm = {
   businessName: '',
-  businessType: 'hotel-rooms',
+  businessType: '',
   ownerName: '',
   email: '',
   phone: '',
@@ -32,6 +32,7 @@ const initialForm = {
 export default function BusinessRegisterPage() {
   const navigate = useNavigate();
   const { language } = useLanguage();
+  const { groups, categories, loading: categoriesLoading } = useServiceCategories();
   const [formData, setFormData] = useState(initialForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -44,6 +45,10 @@ export default function BusinessRegisterPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    if (!formData.businessType) {
+      setError('Select a business category.');
+      return;
+    }
     setLoading(true);
     try {
       const response = await authApi.registerBusiness(formData);
@@ -55,6 +60,8 @@ export default function BusinessRegisterPage() {
       setLoading(false);
     }
   };
+
+  const categoryGroups = groups.length ? groups : [{ group: 'Categories', categories }];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -84,14 +91,19 @@ export default function BusinessRegisterPage() {
                 <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{t('businessRegister.businessType', language)}</span>
                 <select
                   name="businessType"
+                  required
                   value={formData.businessType}
                   onChange={updateField}
+                  disabled={categoriesLoading}
                   className="mt-2 w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-base text-gray-900 focus:border-primary focus:outline-none dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                 >
-                  {SERVICE_CATEGORIES.map((category) => (
-                    <optgroup key={category.label} label={getCategoryGroupDisplayLabel(category.label, language)}>
-                      {category.options.map(([value, label]) => (
-                        <option key={value} value={value}>{getCategoryDisplayLabel(value, language) || label}</option>
+                  <option value="">{categoriesLoading ? 'Loading categories…' : 'Select category'}</option>
+                  {categoryGroups.map((entry) => (
+                    <optgroup key={entry.group} label={entry.group}>
+                      {(entry.categories || []).map((category) => (
+                        <option key={category._id || category.slug} value={category.slug || category._id}>
+                          {category.name}
+                        </option>
                       ))}
                     </optgroup>
                   ))}

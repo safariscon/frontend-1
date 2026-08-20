@@ -530,6 +530,17 @@ export const adminApi = {
       token,
       body: typeof payload === "string" ? { status: payload } : payload,
     }),
+  getServiceCategories: (token) => apiRequest("/api/admin/service-categories", { token }),
+  getServiceCategory: (token, idOrSlug) =>
+    apiRequest(`/api/admin/service-categories/${encodeURIComponent(idOrSlug)}`, { token }),
+  createServiceCategory: (token, payload) =>
+    apiRequest("/api/admin/service-categories", { method: "POST", token, body: payload }),
+  updateServiceCategory: (token, id, payload) =>
+    apiRequest(`/api/admin/service-categories/${id}`, { method: "PUT", token, body: payload }),
+  updateServiceCategoryFields: (token, id, payload) =>
+    apiRequest(`/api/admin/service-categories/${id}/fields`, { method: "PUT", token, body: payload }),
+  deleteServiceCategory: (token, id) =>
+    apiRequest(`/api/admin/service-categories/${id}`, { method: "DELETE", token }),
   getTransactions: (token, query = "") => apiRequest("/api/admin/transactions" + query, { token }),
   getStorageOverview: (token) => apiRequest("/api/admin/storage/overview", { token }),
   getMongoStorage: (token) => apiRequest("/api/admin/storage/mongodb", { token }),
@@ -655,11 +666,13 @@ export const hotelApi = {
       token,
       body: payload,
     }),
-  getMyServices: (token) => apiRequest("/api/hotel/services", { token }),
+  getMyServices: (token, query = {}) =>
+    apiRequest("/api/hotel/services" + buildQueryString(query), { token }),
   getService: (token, serviceId) => apiRequest(`/api/hotel/services/${serviceId}`, { token }),
+  getServiceCategories: (token) => apiRequest("/api/hotel/service-categories", { token }),
   uploadServiceImages: (token, files = []) => {
     const formData = new FormData();
-    files.slice(0, 3).forEach((file) => formData.append("images", file));
+    files.slice(0, 5).forEach((file) => formData.append("images", file));
     return uploadRequest("/api/hotel/uploads/images", {
       method: "POST",
       token,
@@ -695,6 +708,25 @@ export const hotelApi = {
       method: "DELETE",
       token,
     }),
+  getServiceOptions: (token, serviceId) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options`, { token }),
+  createServiceOption: (token, serviceId, payload) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options`, {
+      method: "POST",
+      token,
+      body: payload,
+    }),
+  updateServiceOption: (token, serviceId, optionId, payload) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options/${optionId}`, {
+      method: "PUT",
+      token,
+      body: payload,
+    }),
+  deleteServiceOption: (token, serviceId, optionId) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options/${optionId}`, {
+      method: "DELETE",
+      token,
+    }),
   deleteRoom: (token, roomId) =>
     apiRequest(`/api/hotel/rooms/${roomId}`, {
       method: "DELETE",
@@ -712,6 +744,11 @@ export const hotelApi = {
     apiRequest(`/api/hotel/booking-verification/${encodeURIComponent(lookup)}`, { token }),
 };
 
+export const categoriesApi = {
+  list: () => apiRequest("/api/service-categories"),
+  get: (idOrSlug) => apiRequest(`/api/service-categories/${encodeURIComponent(idOrSlug)}`),
+};
+
 export const bookingApi = {
   requestBooking: (token, payload) =>
     apiRequest("/api/bookings/request", {
@@ -726,6 +763,7 @@ export const bookingApi = {
       token,
       body: {
         hotelId: payload.serviceId,
+        optionId: payload.optionId || undefined,
         rebookId: payload.rebookId || undefined,
         quantity: payload.quantity,
         numberOfPeople: payload.numberOfPeople,
@@ -742,6 +780,7 @@ export const bookingApi = {
         destinationLocation: payload.destinationLocation,
         customerLocation: payload.customerLocation,
         customerLocationDetails: payload.customerLocationDetails,
+        bookingAttributes: payload.bookingAttributes || undefined,
         bookingDetails: payload.bookingDetails,
       },
     }),

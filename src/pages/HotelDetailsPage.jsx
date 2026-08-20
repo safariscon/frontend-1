@@ -71,11 +71,11 @@ export default function HotelDetailsPage() {
     );
   }
   const isNotAvailable = hotel.status === 'unavailable';
-  const primaryCover = hotel.primaryImage || hotel.image || '';
+  const primaryCover = hotel.primaryImage || (Array.isArray(hotel.images) ? hotel.images.find(Boolean) : '') || hotel.image || '';
   const images = (() => {
     const list = Array.isArray(hotel.images) ? hotel.images.filter(Boolean) : [];
-    if (primaryCover) return [primaryCover, ...list.filter((url) => url !== primaryCover)].slice(0, 3);
-    return list.slice(0, 3);
+    if (primaryCover) return [primaryCover, ...list.filter((url) => url !== primaryCover)].slice(0, 5);
+    return list.slice(0, 5);
   })();
   const showPreviousImage = () => setSelectedImage((current) => (current === 0 ? images.length - 1 : current - 1));
   const showNextImage = () => setSelectedImage((current) => (current + 1) % images.length);

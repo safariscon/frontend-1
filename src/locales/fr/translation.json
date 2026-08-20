@@ -854,7 +854,7 @@
   "secondPhone": "WhatsApp / second numéro de téléphone",
   "cancelWindowHours": "Délai d'annulation (heures avant le service)",
   "cancelPenaltyPercent": "Pourcentage de pénalité d'annulation",
-  "imageLimit": "Veuillez choisir jusqu'à 3 fichiers image. Chaque image doit faire 5 Mo ou moins.",
+  "imageLimit": "Veuillez choisir jusqu'à 3 fichiers image. Chaque image doit faire 10 Mo ou moins.",
   "admin": {
     "users": "Utilisateurs",
     "businesses": "Entreprises",
@@ -1562,7 +1562,7 @@
     "guestCancelRules": "Règles d'annulation pour les voyageurs",
     "guestCancelRulesLead": "Heures avant le service à partir desquelles l'annulation se ferme, et le pourcentage que le voyageur perd en cas d'annulation. Les valeurs par défaut sont 6 heures et 20 %.",
     "photos": "Photos",
-    "photoHint": "Téléversez 1, 2 ou 3 fichiers image. Maximum 5 Mo chacun.",
+    "photoHint": "Téléversez 1, 2 ou 3 fichiers image. Maximum 10 Mo chacun.",
     "optionalQuestions": "Questions facultatives du vendeur après le formulaire de réservation fixe",
     "optionalQuestionsLead": "Les champs clients obligatoires ci-dessus restent toujours en place. Ouvrez cette section uniquement si votre service nécessite des questions supplémentaires.",
     "optionalCustomerQuestions": "Questions clients facultatives",
