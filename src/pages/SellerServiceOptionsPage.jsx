@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import SchemaFields from '../components/SchemaFields';
+import AvailabilityEditor from '../components/AvailabilityEditor';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
@@ -16,6 +17,16 @@ const EMPTY_OPTION = {
   attributes: {},
 };
 
+const EMPTY_AVAILABILITY = {
+  isAnytime: false,
+  windowStartDate: '',
+  windowEndDate: '',
+  daysOfWeek: [],
+  dayStartTime: '',
+  dayEndTime: '',
+  capacityTotal: 1,
+};
+
 export default function SellerServiceOptionsPage() {
   const { serviceId } = useParams();
   const { user } = useAuth();
@@ -25,8 +36,10 @@ export default function SellerServiceOptionsPage() {
   const [service, setService] = useState(null);
   const [options, setOptions] = useState([]);
   const [optionSchema, setOptionSchema] = useState([]);
+  const [availabilityPolicy, setAvailabilityPolicy] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_OPTION);
+  const [availabilityForm, setAvailabilityForm] = useState(EMPTY_AVAILABILITY);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,6 +49,7 @@ export default function SellerServiceOptionsPage() {
     service?.category?.supportsOptions,
     service?.schemaSnapshot?.supportsOptions
   );
+  const requireOptionAvailability = Boolean(availabilityPolicy?.optionRequiresAvailability);
 
   const load = async () => {
     if (!token || !serviceId) return;
@@ -56,6 +70,14 @@ export default function SellerServiceOptionsPage() {
       if ((!schema || !schema.length) && categoryKey) {
         const detail = await categoriesApi.get(categoryKey).catch(() => null);
         schema = detail?.category?.optionFieldSchema || [];
+        setAvailabilityPolicy(detail?.category?.availabilityPolicy || null);
+      } else if (categoryKey) {
+        const detail = await categoriesApi.get(categoryKey).catch(() => null);
+        setAvailabilityPolicy(
+          detail?.category?.availabilityPolicy
+          || nextService?.schemaSnapshot?.availabilityPolicy
+          || null
+        );
       }
       setOptionSchema(sortSchemaFields(schema));
     } catch (error) {
@@ -84,10 +106,11 @@ export default function SellerServiceOptionsPage() {
   const startCreate = () => {
     setEditingId('new');
     setForm({ ...EMPTY_OPTION, attributes: emptyListingAttributes(optionSchema) });
+    setAvailabilityForm(EMPTY_AVAILABILITY);
     setErrors({});
   };
 
-  const startEdit = (option) => {
+  const startEdit = async (option) => {
     setEditingId(option._id || option.id);
     setForm({
       ...EMPTY_OPTION,
@@ -97,6 +120,13 @@ export default function SellerServiceOptionsPage() {
       attributes: option.attributes || emptyListingAttributes(optionSchema),
     });
     setErrors({});
+    try {
+      const response = await hotelApi.getServiceAvailability(token, serviceId, option._id || option.id);
+      setAvailabilityForm(response.availability || EMPTY_AVAILABILITY);
+      if (response.availabilityPolicy) setAvailabilityPolicy(response.availabilityPolicy);
+    } catch {
+      setAvailabilityForm(EMPTY_AVAILABILITY);
+    }
   };
 
   const save = async (event) => {
@@ -122,6 +152,10 @@ export default function SellerServiceOptionsPage() {
       const response = editingId === 'new'
         ? await hotelApi.createServiceOption(token, serviceId, payload)
         : await hotelApi.updateServiceOption(token, serviceId, editingId, payload);
+      const optionId = response.option?._id || response.option?.id || (editingId !== 'new' ? editingId : null);
+      if (optionId) {
+        await hotelApi.saveOptionAvailability(token, serviceId, optionId, availabilityForm);
+      }
       toast.success(response.message || 'Option saved.');
       setEditingId(null);
       setForm(EMPTY_OPTION);
@@ -243,6 +277,15 @@ export default function SellerServiceOptionsPage() {
                       No extra option fields are configured for this category yet. Admin can add them under Categories → Option fields.
                     </p>
                   )}
+                  <div className="mt-4">
+                    <AvailabilityEditor
+                      title={requireOptionAvailability ? 'Option availability (required by admin)' : 'Option availability'}
+                      value={availabilityForm}
+                      onChange={setAvailabilityForm}
+                      modes={availabilityPolicy?.modes}
+                      trackCapacity={availabilityPolicy?.trackCapacity !== false}
+                    />
+                  </div>
                   <div className="mt-5 flex justify-end gap-2">
                     <button type="button" onClick={() => setEditingId(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold">Cancel</button>
                     <button type="submit" disabled={saving} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save option'}</button>

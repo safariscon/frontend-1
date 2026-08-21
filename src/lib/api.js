@@ -748,6 +748,23 @@ export const hotelApi = {
       method: "DELETE",
       token,
     }),
+  getServiceAvailability: (token, serviceId, optionId) =>
+    apiRequest(
+      `/api/hotel/services/${serviceId}/availability${optionId ? `?optionId=${encodeURIComponent(optionId)}` : ""}`,
+      { token }
+    ),
+  saveServiceAvailability: (token, serviceId, payload) =>
+    apiRequest(`/api/hotel/services/${serviceId}/availability`, {
+      method: "PUT",
+      token,
+      body: payload,
+    }),
+  saveOptionAvailability: (token, serviceId, optionId, payload) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options/${optionId}/availability`, {
+      method: "PUT",
+      token,
+      body: payload,
+    }),
   deleteRoom: (token, roomId) =>
     apiRequest(`/api/hotel/rooms/${roomId}`, {
       method: "DELETE",
@@ -851,6 +868,10 @@ export const paymentsApi = {
 
 export const publicApi = {
   getHotels: (query = {}) => apiRequest("/api/hotels" + buildQueryString(query)),
+  getServiceAvailability: (hotelId, optionId) =>
+    apiRequest(
+      `/api/hotels/${encodeURIComponent(hotelId)}/availability${optionId ? `?optionId=${encodeURIComponent(optionId)}` : ""}`
+    ),
   getAnnouncement: () => apiRequest("/api/announcement"),
   getMarketplaceSettings: () => apiRequest("/api/marketplace-settings"),
   verifyBooking: (token) => apiRequest(`/api/verify/${token}`),

@@ -79,6 +79,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [bookingAttributeErrors, setBookingAttributeErrors] = useState({});
   const [liveBookingSchema, setLiveBookingSchema] = useState([]);
   const [liveSchemaLoaded, setLiveSchemaLoaded] = useState(false);
+  const [consumptionPolicy, setConsumptionPolicy] = useState({
+    requireConsumptionStartDate: true,
+    requireConsumptionEndDate: false,
+    requireConsumptionStartTime: false,
+    requireConsumptionEndTime: false,
+  });
+  const [publicAvailability, setPublicAvailability] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
@@ -205,6 +212,23 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const selectedOfferRow = supportsOptions
     ? offers.find((row) => row.cells?.service === selectedOffer)
     : null;
+
+  useEffect(() => {
+    if (!hotelId || !business) return undefined;
+    const optionId = supportsOptions
+      ? (selectedOfferRow?.optionId || selectedOfferRow?.id || null)
+      : null;
+    let cancelled = false;
+    publicApi.getServiceAvailability(hotelId, optionId).then((response) => {
+      if (cancelled) return;
+      setPublicAvailability(response.availability || null);
+      if (response.consumptionPolicy) setConsumptionPolicy(response.consumptionPolicy);
+    }).catch(() => {
+      if (!cancelled) setPublicAvailability(null);
+    });
+    return () => { cancelled = true; };
+  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id]);
+
   const optionSchedule = useMemo(
     () => parseOptionAvailability(
       supportsOptions ? selectedOfferRow : {},
@@ -343,6 +367,12 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         endBookingDate: bookingValues.endBookingDate || bookingValues.bookingDate,
         startTime: values.startTime || undefined,
         endTime: values.endTime || undefined,
+        consumption: {
+          consumptionStartDate: bookingValues.bookingDate,
+          consumptionEndDate: bookingValues.endBookingDate || bookingValues.bookingDate,
+          consumptionStartTime: values.startTime || '',
+          consumptionEndTime: values.endTime || '',
+        },
         destinationPlace: values.destinationPlace,
         destinationLocation: values.destinationLocation,
         vehicleType: values.vehicleType,
@@ -365,6 +395,12 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           endBookingDate: bookingValues.endBookingDate || bookingValues.bookingDate,
           startTime: values.startTime || '',
           endTime: values.endTime || '',
+          consumption: {
+            consumptionStartDate: bookingValues.bookingDate,
+            consumptionEndDate: bookingValues.endBookingDate || bookingValues.bookingDate,
+            consumptionStartTime: values.startTime || '',
+            consumptionEndTime: values.endTime || '',
+          },
           numberOfPeople,
           quantity,
           totalConsumptionUnits: numberOfPeople * quantity,
@@ -518,50 +554,72 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
       <section className="mb-6">
         <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.yourDetails', language)}</h3>
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <p className="font-bold text-slate-900">Booking submitted: today</p>
+          <p className="mt-1 text-xs text-slate-500">The system records booking time automatically. Below, choose when you will start and finish consuming the service.</p>
+          {publicAvailability && !publicAvailability.isAnytime && (
+            <p className="mt-2 text-xs font-semibold text-emerald-800">
+              Available
+              {publicAvailability.windowStartDate || publicAvailability.windowEndDate
+                ? ` ${publicAvailability.windowStartDate || '…'} → ${publicAvailability.windowEndDate || '…'}`
+                : ''}
+              {(publicAvailability.daysOfWeek || []).length ? ` · days: ${publicAvailability.daysOfWeek.join(', ')}` : ''}
+              {publicAvailability.dayStartTime || publicAvailability.dayEndTime
+                ? ` · ${publicAvailability.dayStartTime || '…'}–${publicAvailability.dayEndTime || '…'}`
+                : ''}
+              {publicAvailability.trackCapacity
+                ? ` · ${publicAvailability.capacityRemaining ?? publicAvailability.capacityTotal} left`
+                : ''}
+            </p>
+          )}
+          {publicAvailability?.isAnytime && (
+            <p className="mt-2 text-xs font-semibold text-emerald-800">This service/option is available anytime.</p>
+          )}
+        </div>
         <div className="grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2">
           <FixedInput label={t('booking.fullName', language)} value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
           <PhoneNumberField label={t('booking.phoneNumber', language)} value={values.phone} onChange={(value) => updateValue('phone', value)} required />
           <FixedInput label={t('booking.email', language)} type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
           <FixedInput
-            label={t('booking.bookingDate', language)}
+            label="Consumption start date"
             type="date"
             min={dateMin}
             max={dateMax || undefined}
             value={bookingDateValue}
             onChange={(value) => updateValue('bookingDate', value)}
-            required
+            required={consumptionPolicy.requireConsumptionStartDate !== false}
             hint={dateHint(optionSchedule, dateMin, dateMax, language)}
           />
-          {(optionSchedule.requiresEndDate || optionSchedule.sameDayOnly) && (
+          {(consumptionPolicy.requireConsumptionEndDate || optionSchedule.requiresEndDate || optionSchedule.sameDayOnly) && (
             <FixedInput
-              label={t('booking.endBookingDate', language)}
+              label="Consumption end date"
               type="date"
               min={bookingDateValue || dateMin}
               max={dateMax || undefined}
               value={alignedEndBookingDate}
               onChange={(value) => updateValue('endBookingDate', value)}
-              required={optionSchedule.requiresEndDate}
+              required={Boolean(consumptionPolicy.requireConsumptionEndDate || optionSchedule.requiresEndDate)}
               hint={optionSchedule.sameDayOnly ? t('booking.sameDayOnly', language) : t('booking.stayInsideDates', language)}
             />
           )}
           <FixedInput
-            label={t('booking.startTime', language)}
+            label="Consumption start time"
             type="time"
             min={overnightHours ? undefined : optionSchedule.openTime || undefined}
             max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
             value={values.startTime}
             onChange={(value) => updateValue('startTime', value)}
-            required={optionSchedule.requiresTime}
+            required={Boolean(consumptionPolicy.requireConsumptionStartTime || optionSchedule.requiresTime)}
             hint={timeHint(optionSchedule, 'start', language)}
           />
           <FixedInput
-            label={t('booking.endTime', language)}
+            label="Consumption end time"
             type="time"
             min={overnightHours ? undefined : optionSchedule.openTime || undefined}
             max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
             value={values.endTime}
             onChange={(value) => updateValue('endTime', value)}
-            required={optionSchedule.requiresTime}
+            required={Boolean(consumptionPolicy.requireConsumptionEndTime || optionSchedule.requiresTime)}
             hint={timeHint(optionSchedule, 'end', language)}
           />
           <FixedInput label={t('booking.numberOfPeople', language)} type="number" min="1" value={values.numberOfPeople} onChange={(value) => updateValue('numberOfPeople', value)} required />

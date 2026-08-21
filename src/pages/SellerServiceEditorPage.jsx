@@ -5,6 +5,7 @@ import PhoneNumberField from '../components/PhoneNumberField';
 import SchemaFields from '../components/SchemaFields';
 import ServiceImagesEditor from '../components/ServiceImagesEditor';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
+import AvailabilityEditor from '../components/AvailabilityEditor';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
@@ -65,6 +66,15 @@ export default function SellerServiceEditorPage() {
     galleryFiles: [],
   });
   const [rebookSettings, setRebookSettings] = useState({ requestDeadlineHours: 24, rebookIdValidityHours: 72 });
+  const [availabilityForm, setAvailabilityForm] = useState({
+    isAnytime: false,
+    windowStartDate: '',
+    windowEndDate: '',
+    daysOfWeek: [],
+    dayStartTime: '',
+    dayEndTime: '',
+    capacityTotal: 1,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -77,6 +87,7 @@ export default function SellerServiceEditorPage() {
     selectedCategory?.supportsOptions,
     category?.supportsOptions
   );
+  const requireListingAvailability = Boolean(selectedCategory?.availabilityPolicy?.listingRequiresAvailability);
 
   useEffect(() => {
     if (!user) {
@@ -135,6 +146,10 @@ export default function SellerServiceEditorPage() {
               setCategory(detail.category);
               if (detail.category._id) setCategoryId(String(detail.category._id));
             }
+          }
+          const availabilityResp = await hotelApi.getServiceAvailability(token, serviceId).catch(() => null);
+          if (active && availabilityResp?.availability) {
+            setAvailabilityForm((prev) => ({ ...prev, ...availabilityResp.availability }));
           }
         } else {
           const rawKey = searchParams.get('categoryId') || searchParams.get('categorySlug') || '';
@@ -267,6 +282,12 @@ export default function SellerServiceEditorPage() {
         : await hotelApi.createService(token, payload);
       const saved = response.service || response;
       const id = saved._id || saved.id || serviceId;
+      if (!supportsOptions && id) {
+        await hotelApi.saveServiceAvailability(token, id, {
+          ...availabilityForm,
+          forceServiceScope: true,
+        });
+      }
       toast.success(response.message || (editing ? 'Service updated.' : 'Service created.'));
       if (supportsOptions) navigate(`/dashboard/seller/services/${id}/options`);
       else navigate('/dashboard/seller/services');
@@ -365,6 +386,16 @@ export default function SellerServiceEditorPage() {
                     />
                   </div>
                 </div>
+              )}
+
+              {!supportsOptions && (
+                <AvailabilityEditor
+                  title={requireListingAvailability ? 'Service availability (required by admin)' : 'Service availability'}
+                  value={availabilityForm}
+                  onChange={setAvailabilityForm}
+                  modes={selectedCategory?.availabilityPolicy?.modes}
+                  trackCapacity={selectedCategory?.availabilityPolicy?.trackCapacity !== false}
+                />
               )}
 
               <div className="grid gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4 md:grid-cols-2">

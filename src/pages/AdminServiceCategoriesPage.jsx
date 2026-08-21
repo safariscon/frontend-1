@@ -31,6 +31,18 @@ const EMPTY_CATEGORY = {
   listingFieldSchema: [],
   optionFieldSchema: [],
   bookingFieldSchema: [],
+  availabilityPolicy: {
+    listingRequiresAvailability: false,
+    optionRequiresAvailability: false,
+    modes: { dateWindow: true, daysOfWeek: true, timeOfDay: true },
+    trackCapacity: true,
+  },
+  consumptionPolicy: {
+    requireConsumptionStartDate: true,
+    requireConsumptionEndDate: false,
+    requireConsumptionStartTime: false,
+    requireConsumptionEndTime: false,
+  },
 };
 
 export default function AdminServiceCategoriesPage() {
@@ -154,6 +166,18 @@ export function AdminServiceCategoryEditorPage() {
           optionFieldSchema: (parseSupportsOptions(category.supportsOptions) ?? true)
             ? (category.optionFieldSchema || [])
             : [],
+          availabilityPolicy: {
+            ...EMPTY_CATEGORY.availabilityPolicy,
+            ...(category.availabilityPolicy || {}),
+            modes: {
+              ...EMPTY_CATEGORY.availabilityPolicy.modes,
+              ...(category.availabilityPolicy?.modes || {}),
+            },
+          },
+          consumptionPolicy: {
+            ...EMPTY_CATEGORY.consumptionPolicy,
+            ...(category.consumptionPolicy || {}),
+          },
         });
       }).catch((error) => {
         if (!cancelled) {
@@ -219,6 +243,24 @@ export function AdminServiceCategoryEditorPage() {
         listingFieldSchema: form.listingFieldSchema || [],
         optionFieldSchema,
         bookingFieldSchema: form.bookingFieldSchema || [],
+        availabilityPolicy: {
+          ...EMPTY_CATEGORY.availabilityPolicy,
+          ...(form.availabilityPolicy || {}),
+          optionRequiresAvailability: supportsOptions
+            ? Boolean(form.availabilityPolicy?.optionRequiresAvailability)
+            : false,
+          listingRequiresAvailability: supportsOptions
+            ? false
+            : Boolean(form.availabilityPolicy?.listingRequiresAvailability),
+          modes: {
+            ...EMPTY_CATEGORY.availabilityPolicy.modes,
+            ...(form.availabilityPolicy?.modes || {}),
+          },
+        },
+        consumptionPolicy: {
+          ...EMPTY_CATEGORY.consumptionPolicy,
+          ...(form.consumptionPolicy || {}),
+        },
       };
 
       if (isNew) {
@@ -240,13 +282,23 @@ export function AdminServiceCategoryEditorPage() {
           listingFieldSchema: payload.listingFieldSchema,
           optionFieldSchema: payload.optionFieldSchema,
           bookingFieldSchema: payload.bookingFieldSchema,
+          availabilityPolicy: payload.availabilityPolicy,
+          consumptionPolicy: payload.consumptionPolicy,
         });
         await adminApi.updateServiceCategoryFields(token, id, {
           listingFieldSchema: payload.listingFieldSchema,
           optionFieldSchema: payload.optionFieldSchema,
           bookingFieldSchema: payload.bookingFieldSchema,
+          availabilityPolicy: payload.availabilityPolicy,
+          consumptionPolicy: payload.consumptionPolicy,
         });
-        setForm((prev) => ({ ...prev, supportsOptions, optionFieldSchema }));
+        setForm((prev) => ({
+          ...prev,
+          supportsOptions,
+          optionFieldSchema,
+          availabilityPolicy: payload.availabilityPolicy,
+          consumptionPolicy: payload.consumptionPolicy,
+        }));
         toast.success('Category saved.');
       }
     } catch (error) {
@@ -293,6 +345,93 @@ export function AdminServiceCategoryEditorPage() {
                     </span>
                   </span>
                 </label>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
+                  <p className="text-sm font-black text-emerald-950">Provider availability (separate from listing/option attribute fields)</p>
+                  <p className="mt-1 text-xs text-emerald-900">Turn this on so providers must set when the service or option can be consumed (dates, days, times, capacity).</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {!form.supportsOptions ? (
+                      <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={Boolean(form.availabilityPolicy?.listingRequiresAvailability)}
+                          onChange={(event) => set('availabilityPolicy', {
+                            ...form.availabilityPolicy,
+                            listingRequiresAvailability: event.target.checked,
+                          })}
+                        />
+                        Require availability on the service (option-less)
+                      </label>
+                    ) : (
+                      <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={Boolean(form.availabilityPolicy?.optionRequiresAvailability)}
+                          onChange={(event) => set('availabilityPolicy', {
+                            ...form.availabilityPolicy,
+                            optionRequiresAvailability: event.target.checked,
+                          })}
+                        />
+                        Require availability on each option
+                      </label>
+                    )}
+                    <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={form.availabilityPolicy?.trackCapacity !== false}
+                        onChange={(event) => set('availabilityPolicy', {
+                          ...form.availabilityPolicy,
+                          trackCapacity: event.target.checked,
+                        })}
+                      />
+                      Track capacity (reduce after paid booking)
+                    </label>
+                    {['dateWindow', 'daysOfWeek', 'timeOfDay'].map((mode) => (
+                      <label key={mode} className="flex items-start gap-2 text-sm font-semibold text-slate-800">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={form.availabilityPolicy?.modes?.[mode] !== false}
+                          onChange={(event) => set('availabilityPolicy', {
+                            ...form.availabilityPolicy,
+                            modes: {
+                              ...(form.availabilityPolicy?.modes || {}),
+                              [mode]: event.target.checked,
+                            },
+                          })}
+                        />
+                        {mode === 'dateWindow' ? 'Date window (from–until)' : mode === 'daysOfWeek' ? 'Days of week' : 'Times of day'}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 md:col-span-2">
+                  <p className="text-sm font-black text-violet-950">Customer consumption schedule (booking form)</p>
+                  <p className="mt-1 text-xs text-violet-900">Booking time is always today (server). Choose which consumption start/end fields customers must enter. These are validated against availability.</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {[
+                      ['requireConsumptionStartDate', 'Require consumption start date'],
+                      ['requireConsumptionEndDate', 'Require consumption end date'],
+                      ['requireConsumptionStartTime', 'Require consumption start time'],
+                      ['requireConsumptionEndTime', 'Require consumption end time'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="flex items-start gap-2 text-sm font-semibold text-slate-800">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={Boolean(form.consumptionPolicy?.[key])}
+                          onChange={(event) => set('consumptionPolicy', {
+                            ...form.consumptionPolicy,
+                            [key]: event.target.checked,
+                          })}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <label className="block md:col-span-2">
                   <span className="text-sm font-semibold text-slate-700">Description</span>
                   <textarea rows={3} value={form.description || ''} onChange={(event) => set('description', event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3" />
