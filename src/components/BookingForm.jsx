@@ -78,6 +78,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [bookingAttributes, setBookingAttributes] = useState({});
   const [bookingAttributeErrors, setBookingAttributeErrors] = useState({});
   const [liveBookingSchema, setLiveBookingSchema] = useState([]);
+  const [liveSchemaLoaded, setLiveSchemaLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
@@ -94,6 +95,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
   useEffect(() => {
     const loadBusiness = async () => {
+      setLiveSchemaLoaded(false);
+      setLiveBookingSchema([]);
       try {
         const [response, settingsResponse] = await Promise.all([
           publicApi.getHotels(),
@@ -137,16 +140,27 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             bookingDate: prev.bookingDate || TODAY,
             endBookingDate: prev.endBookingDate || prev.bookingDate || TODAY,
           }));
+          // Always load the live category booking schema so the form matches backend
+          // validation (category config is the source of truth, not a stale snapshot).
           const categoryKey = found.categoryId || found.category?._id || found.categorySlug || found.type;
-          if (!snapshotSchema.length && categoryKey) {
+          if (categoryKey) {
+            setLiveSchemaLoaded(false);
             categoriesApi.get(categoryKey).then((resp) => {
               const schema = resp.category?.bookingFieldSchema || [];
               setLiveBookingSchema(schema);
               setBookingAttributes(emptyListingAttributes(schema));
-            }).catch(() => {});
+            }).catch(() => {
+              setLiveBookingSchema([]);
+            }).finally(() => {
+              setLiveSchemaLoaded(true);
+            });
           } else {
             setLiveBookingSchema([]);
+            setLiveSchemaLoaded(true);
           }
+        } else {
+          setLiveBookingSchema([]);
+          setLiveSchemaLoaded(true);
         }
       } finally {
         setLoadingBusiness(false);
@@ -163,11 +177,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const service = useMemo(() => getSelectedService(business), [business]);
   const bookingConfig = useMemo(() => getBookingConfig({ business, service, language }), [business, service, language]);
   const bookingFieldSchema = useMemo(() => {
-    const snapshot = business?.schemaSnapshot?.bookingFieldSchema
+    // Once the live category is loaded, it wins — even when empty (no extra booking fields).
+    if (liveSchemaLoaded) return liveBookingSchema;
+    return business?.schemaSnapshot?.bookingFieldSchema
       || service?.schemaSnapshot?.bookingFieldSchema
+      || liveBookingSchema
       || [];
-    return snapshot.length ? snapshot : liveBookingSchema;
-  }, [business, service, liveBookingSchema]);
+  }, [business, service, liveBookingSchema, liveSchemaLoaded]);
   const customFields = useMemo(
     () => (
       bookingFieldSchema.length
