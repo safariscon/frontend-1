@@ -26,6 +26,7 @@ import HotelDashboard from './pages/HotelDashboard';
 import SellerDashboard from './pages/SellerDashboard';
 import SellerServiceEditorPage from './pages/SellerServiceEditorPage';
 import SellerServiceOptionsPage from './pages/SellerServiceOptionsPage';
+import AccommodationOnboardingPage from './pages/AccommodationOnboardingPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminServiceReviewPage from './pages/AdminServiceReviewPage';
 import AdminServiceCategoriesPage, { AdminServiceCategoryEditorPage } from './pages/AdminServiceCategoriesPage';
@@ -149,6 +150,8 @@ function AppContent() {
             <Route path="/business-register" element={<BusinessRegisterPage />} />
             <Route path="/dashboard/bookings" element={<CustomerBookingsRedirect />} />
             <Route path="/dashboard" element={<DashboardErrorBoundary><UserDashboard /></DashboardErrorBoundary>} />
+            <Route path="/dashboard/seller/stays/new" element={<AccommodationOnboardingPage />} />
+            <Route path="/dashboard/seller/stays/:serviceId" element={<AccommodationOnboardingPage />} />
             <Route path="/dashboard/seller/services/new" element={<SellerServiceEditorPage />} />
             <Route path="/dashboard/seller/services/categories/:slug" element={<SellerCategoryServicesRedirect />} />
             <Route path="/dashboard/seller/services/:serviceId/edit" element={<SellerServiceEditorPage />} />

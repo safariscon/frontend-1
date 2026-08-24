@@ -1,7 +1,7 @@
 import { listingCancelHours, listingCancelPenalty } from './payments';
 
-/** Outdated deposit copy that should never surface on the booking form. */
-export const OUTDATED_BOOKING_RULE = /30%|remaining balance is paid|advance money is not refunded|pay the 30%/i;
+/** Outdated 30% / pay-in-full copy that should never surface on the booking form. */
+export const OUTDATED_BOOKING_RULE = /30%|pay the 30%|pay the full listing price|no remaining balance at the venue|no 30% deposit/i;
 
 /**
  * Default marketplace rules (English). Admins edit these in Settings → Booking rules.
@@ -9,10 +9,10 @@ export const OUTDATED_BOOKING_RULE = /30%|remaining balance is paid|advance mone
  */
 export const DEFAULT_MARKETPLACE_BOOKING_RULES = [
   'Provide accurate booking information.',
-  'Pay the full listing price in the app (Mobile Money or card). There is no 30% deposit and no remaining balance at the venue.',
-  'Payment goes to the SafarisCon wallet. The provider is paid after the cancel window ends — not at the moment you pay.',
-  'You may cancel until {hours} hours before the service. If you cancel in time, you get {refund}% back and {penalty}% is a cancellation fee. This listing may use different hours or %.',
-  'After the deadline, Cancel is hidden and the booking stays valid. Show your booking code at the venue. There is no second payment on arrival.',
+  'Pay the listing deposit in the app (Mobile Money or card). The remaining balance is due at arrival or checkout according to the provider payment policy.',
+  'The deposit goes to the SafarisCon wallet. SafarisCon keeps 10% commission. The provider share is paid after the cancel window ends.',
+  'You may cancel until {hours} hours before the service. Deposit refunds follow this listing\'s cancellation policy ({refund}% refund / {penalty}% fee).',
+  'After the deadline, Cancel is hidden and the booking stays valid. Show your booking code at the venue.',
 ];
 
 export const normalizeBookingRules = (rules = []) =>

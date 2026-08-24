@@ -2,10 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import PhoneNumberField from '../components/PhoneNumberField';
-import SchemaFields from '../components/SchemaFields';
 import ServiceImagesEditor from '../components/ServiceImagesEditor';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
 import AvailabilityEditor from '../components/AvailabilityEditor';
+import ListingFields from '../features/domain/ListingFields';
+import PolicyFields from '../features/domain/PolicyFields';
+import {
+  emptyListingValues,
+  isStayCategory,
+  resolveDomain,
+  resolveSubtype,
+  validateListingClient,
+} from '../features/domain/registry';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
@@ -13,10 +21,8 @@ import { detectPhoneCountry } from '../lib/phone';
 import {
   buildLocationPayload,
   categorySupportsOptions,
-  emptyListingAttributes,
   getServiceCover,
   resolveCategoryId,
-  validateSchemaValues,
 } from '../lib/serviceSchema';
 import { isSellerRole } from '../lib/dashboard';
 
@@ -59,6 +65,12 @@ export default function SellerServiceEditorPage() {
   const [whatsappE164, setWhatsappE164] = useState('');
   const [listingAttributes, setListingAttributes] = useState({});
   const [attributeErrors, setAttributeErrors] = useState({});
+  const [paymentPolicy, setPaymentPolicy] = useState({ depositPercentage: 50, remainingPaymentMethod: 'PAY_AT_ARRIVAL' });
+  const [cancellationPolicy, setCancellationPolicy] = useState({
+    type: 'moderate',
+    freeCancellationUntilHours: 24,
+    depositRefundable: false,
+  });
   const [images, setImages] = useState({
     primaryImage: '',
     primaryImageFile: null,
@@ -82,7 +94,8 @@ export default function SellerServiceEditorPage() {
     () => categories.find((item) => String(item._id) === String(categoryId)) || category,
     [categories, category, categoryId]
   );
-  const listingSchema = selectedCategory?.listingFieldSchema || [];
+  const domain = resolveDomain(selectedCategory);
+  const subtype = resolveSubtype(selectedCategory);
   const supportsOptions = categorySupportsOptions(
     selectedCategory?.supportsOptions,
     category?.supportsOptions
@@ -129,7 +142,16 @@ export default function SellerServiceEditorPage() {
           });
           setPhoneE164(service.contactDetails?.phoneE164 || service.contactDetails?.phone || '');
           setWhatsappE164(service.contactDetails?.whatsappE164 || service.contactDetails?.whatsapp || '');
-          setListingAttributes(service.listingAttributes || {});
+          setListingAttributes(service.listingAttributes || emptyListingValues(resolveDomain(service), resolveSubtype(service)));
+          setPaymentPolicy({
+            depositPercentage: service.paymentPolicy?.depositPercentage ?? 50,
+            remainingPaymentMethod: service.paymentPolicy?.remainingPaymentMethod || 'PAY_AT_ARRIVAL',
+          });
+          setCancellationPolicy({
+            type: service.cancellationPolicy?.type || 'moderate',
+            freeCancellationUntilHours: service.cancellationPolicy?.freeCancellationUntilHours ?? 24,
+            depositRefundable: Boolean(service.cancellationPolicy?.depositRefundable),
+          });
           setImages({
             primaryImage: service.primaryImage || (cover && !(service.images || []).includes(cover) ? cover : service.primaryImage) || '',
             primaryImageFile: null,
@@ -140,11 +162,19 @@ export default function SellerServiceEditorPage() {
             requestDeadlineHours: Number(service.rebookSettings?.requestDeadlineHours ?? 24),
             rebookIdValidityHours: Number(service.rebookSettings?.rebookIdValidityHours ?? 72),
           });
+          if (isStayCategory(service)) {
+            navigate(`/dashboard/seller/stays/${serviceId}`, { replace: true });
+            return;
+          }
           if (boundId || service.categorySlug) {
             const detail = await categoriesApi.get(boundId || service.categorySlug).catch(() => null);
             if (active && detail?.category) {
               setCategory(detail.category);
               if (detail.category._id) setCategoryId(String(detail.category._id));
+              if (isStayCategory(detail.category) || isStayCategory(service)) {
+                navigate(`/dashboard/seller/stays/${serviceId}`, { replace: true });
+                return;
+              }
             }
           }
           const availabilityResp = await hotelApi.getServiceAvailability(token, serviceId).catch(() => null);
@@ -159,13 +189,13 @@ export default function SellerServiceEditorPage() {
             const fromList = list.find((item) => String(item._id) === String(boundId));
             if (fromList) {
               setCategory(fromList);
-              setListingAttributes(emptyListingAttributes(fromList.listingFieldSchema));
+              setListingAttributes(emptyListingValues(resolveDomain(fromList), resolveSubtype(fromList)));
             } else {
               const detail = await categoriesApi.get(rawKey).catch(() => null);
               if (active && detail?.category) {
                 setCategory(detail.category);
                 if (detail.category._id) setCategoryId(String(detail.category._id));
-                setListingAttributes(emptyListingAttributes(detail.category.listingFieldSchema));
+                setListingAttributes(emptyListingValues(resolveDomain(detail.category), resolveSubtype(detail.category)));
               }
             }
           }
@@ -181,16 +211,20 @@ export default function SellerServiceEditorPage() {
   }, [editing, navigate, searchParams, serviceId, toast, token]);
 
   useEffect(() => {
-    if (!categoryId || editing) return undefined;
+    if (!categoryId || editing || loading) return undefined;
     let active = true;
     categoriesApi.get(categoryId).then((response) => {
       if (!active || !response?.category) return;
       setCategory(response.category);
       if (response.category._id) setCategoryId(String(response.category._id));
-      setListingAttributes(emptyListingAttributes(response.category.listingFieldSchema));
+      if (isStayCategory(response.category)) {
+        navigate(`/dashboard/seller/stays/new?categoryId=${encodeURIComponent(response.category._id)}`, { replace: true });
+        return;
+      }
+      setListingAttributes(emptyListingValues(resolveDomain(response.category), resolveSubtype(response.category)));
     }).catch(() => {});
     return () => { active = false; };
-  }, [categoryId, editing]);
+  }, [categoryId, editing, loading, navigate]);
 
   const save = async (event) => {
     event.preventDefault();
@@ -212,7 +246,7 @@ export default function SellerServiceEditorPage() {
       toast.error('Primary phone number is required.');
       return;
     }
-    const schemaErrors = validateSchemaValues(listingSchema, listingAttributes);
+    const schemaErrors = validateListingClient(domain, subtype, listingAttributes);
     setAttributeErrors(schemaErrors);
     if (Object.keys(schemaErrors).length) {
       toast.error('Fill all required category fields.');
@@ -270,6 +304,8 @@ export default function SellerServiceEditorPage() {
           whatsapp: whatsappE164 || undefined,
         },
         listingAttributes,
+        paymentPolicy,
+        cancellationPolicy,
         rebookSettings: {
           requestDeadlineHours: Number(rebookSettings.requestDeadlineHours || 24),
           rebookIdValidityHours: Number(rebookSettings.rebookIdValidityHours || 72),
@@ -308,7 +344,7 @@ export default function SellerServiceEditorPage() {
             <div>
               <Link to="/dashboard/seller/services" className="text-sm font-semibold text-primary">← Back to services</Link>
               <h1 className="mt-2 text-3xl font-black text-slate-950">{editing ? 'Edit service' : 'Add service'}</h1>
-              <p className="mt-1 text-sm text-slate-600">Category fields come from admin. Cancel penalty and commission are set when admin approves.</p>
+              <p className="mt-1 text-sm text-slate-600">Each category has its own listing form. Platform commission stays 10%.</p>
             </div>
             <button type="button" onClick={() => navigate('/dashboard/seller/services')} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Cancel</button>
           </div>
@@ -373,20 +409,26 @@ export default function SellerServiceEditorPage() {
                 <PhoneNumberField label="WhatsApp / second phone" value={whatsappE164} onChange={setWhatsappE164} />
               </div>
 
-              {listingSchema.length > 0 && (
-                <div className="rounded-xl border border-slate-200 p-4">
-                  <h3 className="font-black text-slate-950">Category details</h3>
-                  <p className="mt-1 text-sm text-slate-500">Fields required for {selectedCategory?.name || 'this category'}.</p>
-                  <div className="mt-4">
-                    <SchemaFields
-                      schema={listingSchema}
-                      values={listingAttributes}
-                      errors={attributeErrors}
-                      onChange={setListingAttributes}
-                    />
-                  </div>
-                </div>
-              )}
+              {selectedCategory ? (
+                <ListingFields
+                  category={selectedCategory}
+                  values={listingAttributes}
+                  errors={attributeErrors}
+                  onChange={(next) => {
+                    setListingAttributes(next);
+                    setAttributeErrors({});
+                  }}
+                />
+              ) : null}
+
+              {selectedCategory ? (
+                <PolicyFields
+                  paymentPolicy={paymentPolicy}
+                  cancellationPolicy={cancellationPolicy}
+                  onPaymentChange={setPaymentPolicy}
+                  onCancellationChange={setCancellationPolicy}
+                />
+              ) : null}
 
               {!supportsOptions && (
                 <AvailabilityEditor

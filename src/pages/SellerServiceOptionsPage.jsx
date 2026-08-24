@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
-import SchemaFields from '../components/SchemaFields';
 import AvailabilityEditor from '../components/AvailabilityEditor';
+import InventoryFields from '../features/domain/InventoryFields';
+import { emptyInventoryValues, isStayCategory, resolveDomain, validateInventoryClient } from '../features/domain/registry';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
-import { emptyListingAttributes, sortSchemaFields, validateSchemaValues, categorySupportsOptions } from '../lib/serviceSchema';
+import { categorySupportsOptions } from '../lib/serviceSchema';
 import { formatRwf } from '../lib/currency';
 import { isSellerRole } from '../lib/dashboard';
 
@@ -49,6 +50,9 @@ export default function SellerServiceOptionsPage() {
     service?.category?.supportsOptions,
     service?.schemaSnapshot?.supportsOptions
   );
+  const editorHref = isStayCategory(service)
+    ? `/dashboard/seller/stays/${serviceId}`
+    : `/dashboard/seller/services/${serviceId}/edit`;
   const requireOptionAvailability = Boolean(availabilityPolicy?.optionRequiresAvailability);
 
   const load = async () => {
@@ -105,7 +109,7 @@ export default function SellerServiceOptionsPage() {
 
   const startCreate = () => {
     setEditingId('new');
-    setForm({ ...EMPTY_OPTION, attributes: emptyListingAttributes(optionSchema) });
+    setForm({ ...EMPTY_OPTION, attributes: emptyInventoryValues(resolveDomain(service)) });
     setAvailabilityForm(EMPTY_AVAILABILITY);
     setErrors({});
   };
@@ -117,7 +121,7 @@ export default function SellerServiceOptionsPage() {
       name: option.name || '',
       price: option.price ?? '',
       currency: option.currency || 'RWF',
-      attributes: option.attributes || emptyListingAttributes(optionSchema),
+      attributes: option.attributes || emptyInventoryValues(resolveDomain(service)),
     });
     setErrors({});
     try {
@@ -135,7 +139,7 @@ export default function SellerServiceOptionsPage() {
       toast.error('Option name and price are required.');
       return;
     }
-    const schemaErrors = validateSchemaValues(optionSchema, form.attributes);
+    const schemaErrors = validateInventoryClient(resolveDomain(service), form.attributes);
     setErrors(schemaErrors);
     if (Object.keys(schemaErrors).length) {
       toast.error('Fill required option fields.');
@@ -184,14 +188,14 @@ export default function SellerServiceOptionsPage() {
     <DashboardLayout>
       <main className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-5xl">
-          <Link to={`/dashboard/seller/services/${serviceId}/edit`} className="text-sm font-semibold text-primary">← Back to service</Link>
+          <Link to={editorHref} className="text-sm font-semibold text-primary">← Back to service</Link>
           <div className="mt-3 mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-3xl font-black text-slate-950">Service options</h1>
-              <p className="mt-1 text-sm text-slate-600">{service?.title || service?.name || 'Service'} — packages customers can book</p>
+              <p className="mt-1 text-sm text-slate-600">{service?.title || service?.name || 'Service'} — rooms, vehicles, or packages customers can book</p>
             </div>
             <div className="flex gap-2">
-              <Link to={`/dashboard/seller/services/${serviceId}/edit`} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Edit service</Link>
+              <Link to={editorHref} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Edit service</Link>
               {supportsOptions && (
                 <button type="button" onClick={startCreate} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ Add option</button>
               )}
@@ -202,7 +206,7 @@ export default function SellerServiceOptionsPage() {
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
               <p className="font-black">This category does not use options</p>
               <p className="mt-1 text-sm">Set a base price on the service editor instead.</p>
-              <Link to={`/dashboard/seller/services/${serviceId}/edit`} className="mt-4 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">Edit service</Link>
+              <Link to={editorHref} className="mt-4 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">Edit service</Link>
             </div>
           ) : (
             <div className="space-y-4">
@@ -259,24 +263,14 @@ export default function SellerServiceOptionsPage() {
                       <input required type="number" min="1" value={form.price} onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))} placeholder="85000" className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
                     </label>
                   </div>
-                  {optionSchema.length > 0 ? (
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                      <h3 className="font-bold text-slate-900">Category option fields</h3>
-                      <p className="mt-1 text-sm text-slate-500">Only fields configured by admin for this category.</p>
-                      <div className="mt-4">
-                        <SchemaFields
-                          schema={optionSchema}
-                          values={form.attributes}
-                          errors={errors}
-                          onChange={(attributes) => setForm((prev) => ({ ...prev, attributes }))}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
-                      No extra option fields are configured for this category yet. Admin can add them under Categories → Option fields.
-                    </p>
-                  )}
+                  <div className="mt-4">
+                    <InventoryFields
+                      category={service}
+                      values={form.attributes}
+                      errors={errors}
+                      onChange={(attributes) => setForm((prev) => ({ ...prev, attributes }))}
+                    />
+                  </div>
                   <div className="mt-4">
                     <AvailabilityEditor
                       title={requireOptionAvailability ? 'Option availability (required by admin)' : 'Option availability'}

@@ -11,9 +11,9 @@ export const isPaid = (booking) =>
 
 export const amountDueNow = (booking) =>
   Number(
-    booking?.totalPrice ||
-      booking?.depositAmount ||
+    booking?.depositAmount ||
       booking?.lockedDetails?.visible?.depositAmountRequired ||
+      booking?.totalPrice ||
       0
   );
 

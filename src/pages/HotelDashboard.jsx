@@ -11,6 +11,7 @@ import { getCategoryDisplayLabel } from '../data/serviceCategories';
 import useServiceCategories from '../hooks/useServiceCategories';
 import { MAX_UPLOAD_FILE_SIZE_BYTES, MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 import { categorySupportsOptions, resolveCategoryId, serviceCategoryId, serviceCategoryLabel } from '../lib/serviceSchema';
+import { isStayCategory } from '../features/domain/registry';
 import SellerRebookRequests from '../components/rebook/SellerRebookRequests';
 import ServiceLocationPicker from '../components/ServiceLocationPicker';
 import ServiceDetailsView from '../components/ServiceDetailsView';
@@ -437,7 +438,11 @@ export default function HotelDashboard() {
     });
     setShowEditor(false);
     setViewingService(null);
-    navigate(`/dashboard/seller/services/${service._id || service.id}/edit`);
+    navigate(
+      isStayCategory(service)
+        ? `/dashboard/seller/stays/${service._id || service.id}`
+        : `/dashboard/seller/services/${service._id || service.id}/edit`
+    );
   };
 
   // const resetForm = () => {
@@ -639,6 +644,11 @@ export default function HotelDashboard() {
     return serviceCategoryId(service) === String(categoryIdFilter);
   });
   const openAddService = (category) => {
+    if (isStayCategory(category)) {
+      const id = category?._id ? `?categoryId=${encodeURIComponent(category._id)}` : '';
+      navigate(`/dashboard/seller/stays/new${id}`);
+      return;
+    }
     if (category?._id) {
       navigate(`/dashboard/seller/services/new?categoryId=${encodeURIComponent(category._id)}`);
       return;

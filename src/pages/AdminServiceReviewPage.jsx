@@ -118,7 +118,7 @@ export default function AdminServiceReviewPage() {
                   <p className="mt-1">{missing.join(', ')}</p>
                 </div>
               )}
-              <ServiceDetailsView service={service} />
+              <ServiceDetailsView service={service} showPrivateFields />
 
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-lg font-black text-slate-950">Agreement terms (set on approval)</h2>

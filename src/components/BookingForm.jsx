@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
-import SchemaFields from './SchemaFields';
+import BookingFields from '../features/domain/BookingFields';
+import {
+  emptyBookingValues,
+  mapBookingToSchedule,
+  resolveDomain,
+  validateBookingClient,
+} from '../features/domain/registry';
 import { bookingApi, categoriesApi, getAuthData, publicApi, rebookApi } from '../lib/api';
 import { amountDueNow, completeBookingPayment, listingCancelHours, listingCancelPenalty } from '../lib/payments';
 import { formatRwf } from '../lib/currency';
@@ -25,7 +31,7 @@ import {
 } from '../lib/availability';
 import CustomerLocationPicker from './CustomerLocationPicker';
 import { emptyLocationDetails, formatLocationLine, isCustomerMapLocationComplete, normalizeLocationDetails } from '../lib/places';
-import { emptyListingAttributes, validateSchemaValues, categorySupportsOptions } from '../lib/serviceSchema';
+import { categorySupportsOptions } from '../lib/serviceSchema';
 import { MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 import { resolveCustomerBookingRules } from '../lib/bookingRules';
 
@@ -77,7 +83,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [customValues, setCustomValues] = useState({});
   const [bookingAttributes, setBookingAttributes] = useState({});
   const [bookingAttributeErrors, setBookingAttributeErrors] = useState({});
-  const [liveBookingSchema, setLiveBookingSchema] = useState([]);
+  const [liveCategory, setLiveCategory] = useState(null);
   const [liveSchemaLoaded, setLiveSchemaLoaded] = useState(false);
   const [consumptionPolicy, setConsumptionPolicy] = useState({
     requireConsumptionStartDate: true,
@@ -103,7 +109,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   useEffect(() => {
     const loadBusiness = async () => {
       setLiveSchemaLoaded(false);
-      setLiveBookingSchema([]);
+      setLiveCategory(null);
       try {
         const [response, settingsResponse] = await Promise.all([
           publicApi.getHotels(),
@@ -122,10 +128,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             customDefaults[fieldItem.id] = fieldItem.type === 'checkbox' ? [] : fieldItem.defaultValue || '';
           });
             setCustomValues(customDefaults);
-            const snapshotSchema = found.schemaSnapshot?.bookingFieldSchema
-              || service?.schemaSnapshot?.bookingFieldSchema
-              || [];
-            setBookingAttributes(emptyListingAttributes(snapshotSchema));
+            setBookingAttributes(emptyBookingValues(resolveDomain(found)));
             const supportsOptions = categorySupportsOptions(
               found.supportsOptions,
               found.schemaSnapshot?.supportsOptions,
@@ -153,20 +156,19 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           if (categoryKey) {
             setLiveSchemaLoaded(false);
             categoriesApi.get(categoryKey).then((resp) => {
-              const schema = resp.category?.bookingFieldSchema || [];
-              setLiveBookingSchema(schema);
-              setBookingAttributes(emptyListingAttributes(schema));
+              setLiveCategory(resp.category || null);
+              setBookingAttributes(emptyBookingValues(resolveDomain(resp.category || found)));
             }).catch(() => {
-              setLiveBookingSchema([]);
+              setLiveCategory(null);
             }).finally(() => {
               setLiveSchemaLoaded(true);
             });
           } else {
-            setLiveBookingSchema([]);
+            setLiveCategory(null);
             setLiveSchemaLoaded(true);
           }
         } else {
-          setLiveBookingSchema([]);
+          setLiveCategory(null);
           setLiveSchemaLoaded(true);
         }
       } finally {
@@ -183,14 +185,11 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
   const service = useMemo(() => getSelectedService(business), [business]);
   const bookingConfig = useMemo(() => getBookingConfig({ business, service, language }), [business, service, language]);
+  const domain = resolveDomain(liveCategory || business);
   const bookingFieldSchema = useMemo(() => {
-    // Once the live category is loaded, it wins — even when empty (no extra booking fields).
-    if (liveSchemaLoaded) return liveBookingSchema;
-    return business?.schemaSnapshot?.bookingFieldSchema
-      || service?.schemaSnapshot?.bookingFieldSchema
-      || liveBookingSchema
-      || [];
-  }, [business, service, liveBookingSchema, liveSchemaLoaded]);
+    if (liveSchemaLoaded) return liveCategory?.bookingFieldSchema || [];
+    return business?.schemaSnapshot?.bookingFieldSchema || service?.schemaSnapshot?.bookingFieldSchema || [];
+  }, [business, service, liveCategory, liveSchemaLoaded]);
   const customFields = useMemo(
     () => (
       bookingFieldSchema.length
@@ -287,23 +286,34 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (!values.fullName.trim()) return t('booking.completeName', language);
     if (!isValidPhoneNumber(values.phone)) return t('booking.validPhone', language);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return t('booking.validEmail', language);
-    const scheduleError = validateOptionSchedule(optionSchedule, bookingValues, TODAY);
+    const mapped = mapBookingToSchedule(domain, bookingAttributes);
+    const scheduleError = validateOptionSchedule(
+      optionSchedule,
+      {
+        ...bookingValues,
+        bookingDate: mapped.startDate || bookingValues.bookingDate,
+        endBookingDate: mapped.endDate || bookingValues.endBookingDate,
+        startTime: mapped.startTime || bookingValues.startTime,
+        endTime: mapped.endTime || bookingValues.endTime,
+      },
+      TODAY
+    );
     if (scheduleError) return scheduleError;
-    if (Number(values.numberOfPeople) < 1) return t('booking.peopleMin', language);
     if (Number(values.quantity) < 1) return t('booking.quantityMin', language);
     if (!isCustomerMapLocationComplete(values.customerLocationDetails)) return t('booking.selectMapLocation', language);
     if (!values.agreeToTerms) return t('booking.agreeTerms', language);
     if (useRebook && !rebookId.trim()) return t('booking.enterRebookId', language);
     if (useRebook && verifiedRebookId !== rebookId.trim().toUpperCase()) return t('booking.verifyRebookFirst', language);
-    if (bookingFieldSchema.length) {
-      const schemaErrors = validateSchemaValues(bookingFieldSchema, bookingAttributes);
-      if (Object.keys(schemaErrors).length) {
-        setBookingAttributeErrors(schemaErrors);
-        const first = Object.values(schemaErrors)[0];
-        return first || t('booking.completeField', language, { label: 'booking details' });
-      }
-      setBookingAttributeErrors({});
+    const schemaErrors = validateBookingClient(domain, bookingAttributes, {
+      listing: { ...business, listingAttributes: business?.listingAttributes, subtype: liveCategory?.subtype, categorySlug: business?.categorySlug },
+      inventory: selectedOfferRow?.cells || {},
+    });
+    if (Object.keys(schemaErrors).length) {
+      setBookingAttributeErrors(schemaErrors);
+      const first = Object.values(schemaErrors)[0];
+      return first || t('booking.completeField', language, { label: 'booking details' });
     }
+    setBookingAttributeErrors({});
     const missingCustom = customFields.find((item) => item.required && (Array.isArray(customValues[item.id]) ? customValues[item.id].length === 0 : !String(customValues[item.id] || '').trim()));
     if (missingCustom) return t('booking.completeField', language, { label: missingCustom.label });
     return '';
@@ -347,8 +357,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     try {
       const customerLocationDetails = normalizeLocationDetails(values.customerLocationDetails);
       const customerLocationText = formatLocationLine(customerLocationDetails);
-      const numberOfPeople = Math.max(1, Number(values.numberOfPeople) || 1);
+      const schedule = mapBookingToSchedule(domain, bookingAttributes);
+      const numberOfPeople = Math.max(1, Number(schedule.numberOfPeople || values.numberOfPeople) || 1);
       const quantity = Math.max(1, Number(values.quantity) || 1);
+      const startDate = schedule.startDate || bookingValues.bookingDate;
+      const endDate = schedule.endDate || bookingValues.endBookingDate || startDate;
+      const startTime = schedule.startTime || values.startTime || '';
+      const endTime = schedule.endTime || values.endTime || '';
       const listedPrice = supportsOptions
         ? (selectedOfferRow?.cells?.price || '')
         : basePrice;
@@ -360,18 +375,19 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         rebookId: useRebook ? verifiedRebookId : undefined,
         numberOfPeople,
         quantity,
+        guests: schedule.guests || numberOfPeople,
         totalConsumptionUnits: numberOfPeople * quantity,
         totalPrice: 0,
-        startDate: bookingValues.bookingDate,
-        endDate: bookingValues.endBookingDate || bookingValues.bookingDate,
-        endBookingDate: bookingValues.endBookingDate || bookingValues.bookingDate,
-        startTime: values.startTime || undefined,
-        endTime: values.endTime || undefined,
+        startDate,
+        endDate,
+        endBookingDate: endDate,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
         consumption: {
-          consumptionStartDate: bookingValues.bookingDate,
-          consumptionEndDate: bookingValues.endBookingDate || bookingValues.bookingDate,
-          consumptionStartTime: values.startTime || '',
-          consumptionEndTime: values.endTime || '',
+          consumptionStartDate: startDate,
+          consumptionEndDate: endDate,
+          consumptionStartTime: startTime,
+          consumptionEndTime: endTime,
         },
         destinationPlace: values.destinationPlace,
         destinationLocation: values.destinationLocation,
@@ -379,7 +395,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         packageType: values.packageType,
         customerLocation: customerLocationText,
         customerLocationDetails,
-        bookingAttributes: bookingFieldSchema.length ? bookingAttributes : undefined,
+        bookingAttributes,
         bookingDetails: {
           customerLocationDetails,
           serviceName: service.title || service.name,
@@ -391,15 +407,15 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           fullName: values.fullName,
           email: values.email,
           phone: values.phone,
-          bookingDate: bookingValues.bookingDate,
-          endBookingDate: bookingValues.endBookingDate || bookingValues.bookingDate,
-          startTime: values.startTime || '',
-          endTime: values.endTime || '',
+          bookingDate: startDate,
+          endBookingDate: endDate,
+          startTime,
+          endTime,
           consumption: {
-            consumptionStartDate: bookingValues.bookingDate,
-            consumptionEndDate: bookingValues.endBookingDate || bookingValues.bookingDate,
-            consumptionStartTime: values.startTime || '',
-            consumptionEndTime: values.endTime || '',
+            consumptionStartDate: startDate,
+            consumptionEndDate: endDate,
+            consumptionStartTime: startTime,
+            consumptionEndTime: endTime,
           },
           numberOfPeople,
           quantity,
@@ -410,7 +426,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           bookingType: bookingConfig.type,
           providerRules: Array.isArray(service.rules) ? service.rules : [],
           customFormTitle: business?.bookingForm?.title || '',
-          bookingAttributes: bookingFieldSchema.length ? bookingAttributes : undefined,
+          bookingAttributes,
           customResponses: customFields.map((fieldItem) => ({
             fieldId: fieldItem.id,
             label: fieldItem.label,
@@ -580,49 +596,6 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           <FixedInput label={t('booking.fullName', language)} value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
           <PhoneNumberField label={t('booking.phoneNumber', language)} value={values.phone} onChange={(value) => updateValue('phone', value)} required />
           <FixedInput label={t('booking.email', language)} type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
-          <FixedInput
-            label="Consumption start date"
-            type="date"
-            min={dateMin}
-            max={dateMax || undefined}
-            value={bookingDateValue}
-            onChange={(value) => updateValue('bookingDate', value)}
-            required={consumptionPolicy.requireConsumptionStartDate !== false}
-            hint={dateHint(optionSchedule, dateMin, dateMax, language)}
-          />
-          {(consumptionPolicy.requireConsumptionEndDate || optionSchedule.requiresEndDate || optionSchedule.sameDayOnly) && (
-            <FixedInput
-              label="Consumption end date"
-              type="date"
-              min={bookingDateValue || dateMin}
-              max={dateMax || undefined}
-              value={alignedEndBookingDate}
-              onChange={(value) => updateValue('endBookingDate', value)}
-              required={Boolean(consumptionPolicy.requireConsumptionEndDate || optionSchedule.requiresEndDate)}
-              hint={optionSchedule.sameDayOnly ? t('booking.sameDayOnly', language) : t('booking.stayInsideDates', language)}
-            />
-          )}
-          <FixedInput
-            label="Consumption start time"
-            type="time"
-            min={overnightHours ? undefined : optionSchedule.openTime || undefined}
-            max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
-            value={values.startTime}
-            onChange={(value) => updateValue('startTime', value)}
-            required={Boolean(consumptionPolicy.requireConsumptionStartTime || optionSchedule.requiresTime)}
-            hint={timeHint(optionSchedule, 'start', language)}
-          />
-          <FixedInput
-            label="Consumption end time"
-            type="time"
-            min={overnightHours ? undefined : optionSchedule.openTime || undefined}
-            max={overnightHours ? undefined : optionSchedule.closeTime || undefined}
-            value={values.endTime}
-            onChange={(value) => updateValue('endTime', value)}
-            required={Boolean(consumptionPolicy.requireConsumptionEndTime || optionSchedule.requiresTime)}
-            hint={timeHint(optionSchedule, 'end', language)}
-          />
-          <FixedInput label={t('booking.numberOfPeople', language)} type="number" min="1" value={values.numberOfPeople} onChange={(value) => updateValue('numberOfPeople', value)} required />
           <FixedInput label={t('booking.quantityUnits', language)} type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-sm font-medium text-slate-700">{t('booking.paymentMethod', language)}</span>
@@ -638,23 +611,18 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         <CustomerLocationPicker value={values.customerLocationDetails} onChange={updateCustomerLocation} />
       </div>
 
-      {bookingFieldSchema.length > 0 && (
-        <div className="mb-6 rounded-xl border border-slate-200 p-4">
-          <h3 className="font-bold text-slate-900">{t('booking.bookingDetails', language)}</h3>
-          <p className="mt-1 text-sm text-slate-500">{t('booking.requiredFields', language)}</p>
-          <div className="mt-4">
-            <SchemaFields
-              schema={bookingFieldSchema}
-              values={bookingAttributes}
-              errors={bookingAttributeErrors}
-              onChange={(next) => {
-                setBookingAttributes(next);
-                setBookingAttributeErrors({});
-              }}
-            />
-          </div>
-        </div>
-      )}
+      <div className="mb-6">
+        <BookingFields
+          category={liveCategory || business}
+          listing={business}
+          values={bookingAttributes}
+          errors={bookingAttributeErrors}
+          onChange={(next) => {
+            setBookingAttributes(next);
+            setBookingAttributeErrors({});
+          }}
+        />
+      </div>
 
       {customFields.length > 0 && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">

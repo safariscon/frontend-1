@@ -194,6 +194,23 @@ export default function HotelDetailsPage() {
               <div className="mb-8">
                 <h2 className="text-xl font-bold mb-3">{t('aboutThisService', language)}</h2>
                 <p className="text-gray-600 leading-relaxed">{hotel.description}</p>
+                {Array.isArray(hotel.listingAttributes?.amenities) && hotel.listingAttributes.amenities.length ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {hotel.listingAttributes.amenities.map((item) => (
+                      <span key={item} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-700">
+                        {String(item).replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {hotel.listingAttributes?.checkInTime || hotel.listingAttributes?.checkOutTime ? (
+                  <p className="mt-3 text-sm text-slate-600">
+                    Check-in from {hotel.listingAttributes.checkInFrom || hotel.listingAttributes.checkInTime}
+                    {hotel.listingAttributes.checkOutUntil || hotel.listingAttributes.checkOutTime
+                      ? ` · Check-out until ${hotel.listingAttributes.checkOutUntil || hotel.listingAttributes.checkOutTime}`
+                      : ''}
+                  </p>
+                ) : null}
               </div>
 
               <div className="mb-8 grid gap-4 md:grid-cols-3">

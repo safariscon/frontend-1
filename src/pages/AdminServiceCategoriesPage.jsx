@@ -4,46 +4,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { adminApi, getAuthData } from '../lib/api';
-import { categorySupportsOptions, parseSupportsOptions } from '../lib/serviceSchema';
-
-const EMPTY_FIELD = {
-  id: '',
-  label: '',
-  type: 'text',
-  required: false,
-  placeholder: '',
-  helpText: '',
-  options: [],
-  visibility: 'public',
-  appliesTo: 'listing',
-  sortOrder: 0,
-};
-
-const EMPTY_CATEGORY = {
-  name: '',
-  slug: '',
-  group: '',
-  description: '',
-  supportsOptions: true,
-  isActive: true,
-  sortOrder: 0,
-  defaults: { suggestedCancelWindowHours: 6 },
-  listingFieldSchema: [],
-  optionFieldSchema: [],
-  bookingFieldSchema: [],
-  availabilityPolicy: {
-    listingRequiresAvailability: false,
-    optionRequiresAvailability: false,
-    modes: { dateWindow: true, daysOfWeek: true, timeOfDay: true },
-    trackCapacity: true,
-  },
-  consumptionPolicy: {
-    requireConsumptionStartDate: true,
-    requireConsumptionEndDate: false,
-    requireConsumptionStartTime: false,
-    requireConsumptionEndTime: false,
-  },
-};
+import { categorySupportsOptions } from '../lib/serviceSchema';
 
 export default function AdminServiceCategoriesPage() {
   const { user } = useAuth();
@@ -78,7 +39,7 @@ export default function AdminServiceCategoriesPage() {
   }, [user]);
 
   const deactivate = async (categoryId) => {
-    if (!window.confirm('Deactivate this category?')) return;
+    if (!window.confirm('Deactivate this category? Existing listings keep their domain, but new providers cannot select it.')) return;
     try {
       await adminApi.deleteServiceCategory(token, categoryId);
       toast.success('Category deactivated.');
@@ -94,12 +55,11 @@ export default function AdminServiceCategoriesPage() {
     <DashboardLayout>
       <main className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-black text-slate-950">Service categories</h1>
-              <p className="mt-1 text-sm text-slate-600">Define listing, option, and booking fields per category.</p>
-            </div>
-            <Link to="/admin-dashboard/service-categories/new" className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">+ Add category</Link>
+          <div className="mb-6">
+            <h1 className="text-3xl font-black text-slate-950">Service categories</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Categories are platform-defined. Listing, inventory, and booking contracts live in code — not in admin field builders.
+            </p>
           </div>
           {loading ? <p className="rounded-2xl bg-white p-6">Loading…</p> : (
             <div className="grid gap-3">
@@ -107,15 +67,27 @@ export default function AdminServiceCategoriesPage() {
                 <article key={category._id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
                   <div>
                     <h2 className="font-black text-slate-950">{category.name}</h2>
-                    <p className="text-sm text-slate-500">{category.group} · {category.slug} · {categorySupportsOptions(category.supportsOptions) ? 'options enabled' : 'single price'} · {category.isActive === false ? 'inactive' : 'active'}</p>
+                    <p className="text-sm text-slate-500">
+                      {category.domainLabel || category.group} · {category.slug}
+                      {' · '}
+                      {categorySupportsOptions(category.supportsOptions) ? (category.inventoryLabelPlural || 'inventory') : 'single price'}
+                      {' · '}
+                      {category.isActive === false ? 'inactive' : 'active'}
+                    </p>
                   </div>
                   <div className="flex gap-2">
-                    <Link to={`/admin-dashboard/service-categories/${category._id}`} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold">Edit</Link>
-                    <button type="button" onClick={() => deactivate(category._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">Deactivate</button>
+                    <Link to={`/admin-dashboard/service-categories/${category._id}`} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold">View</Link>
+                    {category.isActive !== false ? (
+                      <button type="button" onClick={() => deactivate(category._id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">Deactivate</button>
+                    ) : null}
                   </div>
                 </article>
               ))}
-              {!categories.length && <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">No categories yet. Seed backend or create one.</p>}
+              {!categories.length && (
+                <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-600">
+                  No categories yet. Restart the API so the platform catalog can seed.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -126,181 +98,47 @@ export default function AdminServiceCategoriesPage() {
 
 export function AdminServiceCategoryEditorPage() {
   const { id } = useParams();
-  const isNew = id === 'new' || !id;
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const token = getAuthData()?.token;
-  const [form, setForm] = useState(EMPTY_CATEGORY);
-  const [tab, setTab] = useState('listing');
-  const [loading, setLoading] = useState(!isNew);
-  const [loadError, setLoadError] = useState('');
+  const [category, setCategory] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const schemaKey = tab === 'listing' ? 'listingFieldSchema' : tab === 'option' ? 'optionFieldSchema' : 'bookingFieldSchema';
-  const fields = form[schemaKey] || [];
+  const [isActive, setIsActive] = useState(true);
+  const [description, setDescription] = useState('');
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/login');
       return undefined;
     }
-    if (isNew) {
-      const timer = window.setTimeout(() => setLoading(false), 0);
-      return () => window.clearTimeout(timer);
+    if (!id || id === 'new') {
+      navigate('/admin-dashboard/service-categories', { replace: true });
+      return undefined;
     }
     let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setLoadError('');
-      adminApi.getServiceCategory(token, id).then((response) => {
-        if (cancelled) return;
-        const category = response.category || response;
-        if (!category?._id && !category?.slug && !category?.name) {
-          setLoadError('Category not found.');
-          return;
-        }
-        setForm({
-          ...EMPTY_CATEGORY,
-          ...category,
-          supportsOptions: parseSupportsOptions(category.supportsOptions) ?? true,
-          optionFieldSchema: (parseSupportsOptions(category.supportsOptions) ?? true)
-            ? (category.optionFieldSchema || [])
-            : [],
-          availabilityPolicy: {
-            ...EMPTY_CATEGORY.availabilityPolicy,
-            ...(category.availabilityPolicy || {}),
-            modes: {
-              ...EMPTY_CATEGORY.availabilityPolicy.modes,
-              ...(category.availabilityPolicy?.modes || {}),
-            },
-          },
-          consumptionPolicy: {
-            ...EMPTY_CATEGORY.consumptionPolicy,
-            ...(category.consumptionPolicy || {}),
-          },
-        });
-      }).catch((error) => {
-        if (!cancelled) {
-          setLoadError(error.message || 'Could not load category.');
-          toast.error(error.message);
-        }
-      }).finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    }, 0);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [id, isNew, navigate, toast, token, user]);
-
-  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-
-  const setSupportsOptions = (enabled) => {
-    setForm((prev) => ({
-      ...prev,
-      supportsOptions: enabled,
-      optionFieldSchema: enabled ? prev.optionFieldSchema : [],
-    }));
-    if (!enabled) setTab((current) => (current === 'option' ? 'listing' : current));
-  };
-
-  const addField = () => {
-    if (tab === 'option' && !form.supportsOptions) return;
-    const next = {
-      ...EMPTY_FIELD,
-      id: `field_${Date.now()}`,
-      label: 'New field',
-      appliesTo: tab === 'booking' ? 'booking' : tab === 'option' ? 'option' : 'listing',
-      sortOrder: fields.length + 1,
-    };
-    set(schemaKey, [...fields, next]);
-  };
-
-  const updateField = (fieldId, patch) => {
-    set(schemaKey, fields.map((field) => (field.id === fieldId ? { ...field, ...patch } : field)));
-  };
-
-  const removeField = (fieldId) => {
-    set(schemaKey, fields.filter((field) => field.id !== fieldId));
-  };
+    adminApi.getServiceCategory(token, id).then((response) => {
+      if (cancelled) return;
+      const next = response.category || response;
+      setCategory(next);
+      setIsActive(next.isActive !== false);
+      setDescription(next.description || '');
+    }).catch((error) => {
+      if (!cancelled) toast.error(error.message);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [id, navigate, toast, token, user]);
 
   const save = async (event) => {
     event.preventDefault();
     setSaving(true);
     try {
-      const supportsOptions = Boolean(form.supportsOptions);
-      const optionFieldSchema = supportsOptions ? (form.optionFieldSchema || []) : [];
-      const payload = {
-        name: form.name,
-        slug: form.slug,
-        group: form.group,
-        description: form.description,
-        supportsOptions,
-        isActive: form.isActive,
-        sortOrder: form.sortOrder,
-        defaults: form.defaults,
-        listingFieldSchema: form.listingFieldSchema || [],
-        optionFieldSchema,
-        bookingFieldSchema: form.bookingFieldSchema || [],
-        availabilityPolicy: {
-          ...EMPTY_CATEGORY.availabilityPolicy,
-          ...(form.availabilityPolicy || {}),
-          optionRequiresAvailability: supportsOptions
-            ? Boolean(form.availabilityPolicy?.optionRequiresAvailability)
-            : false,
-          listingRequiresAvailability: supportsOptions
-            ? false
-            : Boolean(form.availabilityPolicy?.listingRequiresAvailability),
-          modes: {
-            ...EMPTY_CATEGORY.availabilityPolicy.modes,
-            ...(form.availabilityPolicy?.modes || {}),
-          },
-        },
-        consumptionPolicy: {
-          ...EMPTY_CATEGORY.consumptionPolicy,
-          ...(form.consumptionPolicy || {}),
-        },
-      };
-
-      if (isNew) {
-        const response = await adminApi.createServiceCategory(token, payload);
-        toast.success(response.message || 'Category created.');
-        const nextId = response.category?._id;
-        navigate(nextId ? `/admin-dashboard/service-categories/${nextId}` : '/admin-dashboard/service-categories');
-      } else {
-        // Prefer a single PUT with schemas when the backend accepts it; fields endpoint remains the schema write path.
-        await adminApi.updateServiceCategory(token, id, {
-          name: payload.name,
-          slug: payload.slug,
-          group: payload.group,
-          description: payload.description,
-          supportsOptions: payload.supportsOptions,
-          isActive: payload.isActive,
-          sortOrder: payload.sortOrder,
-          defaults: payload.defaults,
-          listingFieldSchema: payload.listingFieldSchema,
-          optionFieldSchema: payload.optionFieldSchema,
-          bookingFieldSchema: payload.bookingFieldSchema,
-          availabilityPolicy: payload.availabilityPolicy,
-          consumptionPolicy: payload.consumptionPolicy,
-        });
-        await adminApi.updateServiceCategoryFields(token, id, {
-          listingFieldSchema: payload.listingFieldSchema,
-          optionFieldSchema: payload.optionFieldSchema,
-          bookingFieldSchema: payload.bookingFieldSchema,
-          availabilityPolicy: payload.availabilityPolicy,
-          consumptionPolicy: payload.consumptionPolicy,
-        });
-        setForm((prev) => ({
-          ...prev,
-          supportsOptions,
-          optionFieldSchema,
-          availabilityPolicy: payload.availabilityPolicy,
-          consumptionPolicy: payload.consumptionPolicy,
-        }));
-        toast.success('Category saved.');
-      }
+      await adminApi.updateServiceCategory(token, id, { isActive, description });
+      toast.success('Category updated.');
+      navigate('/admin-dashboard/service-categories');
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -310,196 +148,53 @@ export function AdminServiceCategoryEditorPage() {
 
   if (!user || user.role !== 'admin') return null;
 
+  const fields = [
+    ['Listing', category?.listingFieldSchema],
+    ['Inventory', category?.optionFieldSchema],
+    ['Booking', category?.bookingFieldSchema],
+  ];
+
   return (
     <DashboardLayout>
       <main className="px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <Link to="/admin-dashboard/service-categories" className="text-sm font-semibold text-primary">← Categories</Link>
-          <h1 className="mt-2 text-3xl font-black text-slate-950">{isNew ? 'New category' : 'Edit category'}</h1>
-          {loading ? <p className="mt-6 rounded-2xl bg-white p-6">Loading…</p> : loadError ? (
-            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900">
-              <p className="font-bold">Could not open this category</p>
-              <p className="mt-1 text-sm">{loadError}</p>
-              <Link to="/admin-dashboard/service-categories" className="mt-4 inline-flex text-sm font-bold text-primary">← Back to categories</Link>
-            </div>
-          ) : (
-            <form onSubmit={save} className="mt-6 space-y-5">
-              <div className="grid gap-4 rounded-2xl bg-white p-5 shadow-sm md:grid-cols-2">
-                <Field label="Name" value={form.name} onChange={(value) => set('name', value)} required />
-                <Field label="Slug" value={form.slug} onChange={(value) => set('slug', value)} placeholder="car-rental" />
-                <Field label="Group" value={form.group} onChange={(value) => set('group', value)} placeholder="Transport Services" />
-                <Field label="Sort order" type="number" value={form.sortOrder} onChange={(value) => set('sortOrder', Number(value))} />
-                <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={Boolean(form.supportsOptions)}
-                    onChange={(event) => setSupportsOptions(event.target.checked)}
-                  />
-                  <span>
-                    <span className="block text-sm font-semibold text-slate-900">This category has priced options / packages</span>
-                    <span className="mt-1 block text-xs text-slate-600">
-                      {form.supportsOptions
-                        ? 'Sellers add named options with prices. Listing, option, and booking field builders are available.'
-                        : 'Sellers set a single base price. Option fields are hidden and cleared when you save.'}
-                    </span>
-                  </span>
-                </label>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
-                  <p className="text-sm font-black text-emerald-950">Provider availability (separate from listing/option attribute fields)</p>
-                  <p className="mt-1 text-xs text-emerald-900">Turn this on so providers must set when the service or option can be consumed (dates, days, times, capacity).</p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {!form.supportsOptions ? (
-                      <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={Boolean(form.availabilityPolicy?.listingRequiresAvailability)}
-                          onChange={(event) => set('availabilityPolicy', {
-                            ...form.availabilityPolicy,
-                            listingRequiresAvailability: event.target.checked,
-                          })}
-                        />
-                        Require availability on the service (option-less)
-                      </label>
-                    ) : (
-                      <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={Boolean(form.availabilityPolicy?.optionRequiresAvailability)}
-                          onChange={(event) => set('availabilityPolicy', {
-                            ...form.availabilityPolicy,
-                            optionRequiresAvailability: event.target.checked,
-                          })}
-                        />
-                        Require availability on each option
-                      </label>
-                    )}
-                    <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={form.availabilityPolicy?.trackCapacity !== false}
-                        onChange={(event) => set('availabilityPolicy', {
-                          ...form.availabilityPolicy,
-                          trackCapacity: event.target.checked,
-                        })}
-                      />
-                      Track capacity (reduce after paid booking)
-                    </label>
-                    {['dateWindow', 'daysOfWeek', 'timeOfDay'].map((mode) => (
-                      <label key={mode} className="flex items-start gap-2 text-sm font-semibold text-slate-800">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={form.availabilityPolicy?.modes?.[mode] !== false}
-                          onChange={(event) => set('availabilityPolicy', {
-                            ...form.availabilityPolicy,
-                            modes: {
-                              ...(form.availabilityPolicy?.modes || {}),
-                              [mode]: event.target.checked,
-                            },
-                          })}
-                        />
-                        {mode === 'dateWindow' ? 'Date window (from–until)' : mode === 'daysOfWeek' ? 'Days of week' : 'Times of day'}
-                      </label>
+        <div className="mx-auto max-w-4xl">
+          <Link to="/admin-dashboard/service-categories" className="text-sm font-semibold text-primary">← Back to categories</Link>
+          <h1 className="mt-3 text-3xl font-black text-slate-950">{category?.name || 'Category'}</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Domain {category?.domain || '—'} · subtype {category?.subtype || category?.slug}. Field contracts are read-only.
+          </p>
+          {loading ? <p className="mt-6 rounded-2xl bg-white p-6">Loading…</p> : (
+            <form onSubmit={save} className="mt-6 space-y-4 rounded-2xl bg-white p-5 shadow-sm">
+              <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
+                <span className="text-sm font-semibold text-slate-700">Active for new listings</span>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Internal description</span>
+                <textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3" />
+              </label>
+              {fields.map(([title, schema]) => (
+                <section key={title} className="rounded-xl border border-slate-200 p-4">
+                  <h2 className="font-black text-slate-950">{title} contract</h2>
+                  <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {(schema || []).map((field) => (
+                      <li key={field.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                        <span className="font-semibold text-slate-800">{field.label}</span>
+                        <span className="ml-2 text-slate-500">{field.type}{field.required ? ' · required' : ''}</span>
+                      </li>
                     ))}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 md:col-span-2">
-                  <p className="text-sm font-black text-violet-950">Customer consumption schedule (booking form)</p>
-                  <p className="mt-1 text-xs text-violet-900">Booking time is always today (server). Choose which consumption start/end fields customers must enter. These are validated against availability.</p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ['requireConsumptionStartDate', 'Require consumption start date'],
-                      ['requireConsumptionEndDate', 'Require consumption end date'],
-                      ['requireConsumptionStartTime', 'Require consumption start time'],
-                      ['requireConsumptionEndTime', 'Require consumption end time'],
-                    ].map(([key, label]) => (
-                      <label key={key} className="flex items-start gap-2 text-sm font-semibold text-slate-800">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={Boolean(form.consumptionPolicy?.[key])}
-                          onChange={(event) => set('consumptionPolicy', {
-                            ...form.consumptionPolicy,
-                            [key]: event.target.checked,
-                          })}
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <label className="block md:col-span-2">
-                  <span className="text-sm font-semibold text-slate-700">Description</span>
-                  <textarea rows={3} value={form.description || ''} onChange={(event) => set('description', event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3" />
-                </label>
-              </div>
-
-              <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {[
-                    ['listing', 'Listing fields'],
-                    ...(form.supportsOptions ? [['option', 'Option fields']] : []),
-                    ['booking', 'Booking fields'],
-                  ].map(([tabId, label]) => (
-                    <button key={tabId} type="button" onClick={() => setTab(tabId)} className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === tabId ? 'bg-primary text-white' : 'border border-slate-200 text-slate-700'}`}>{label}</button>
-                  ))}
-                  <button type="button" onClick={addField} className="ml-auto rounded-xl border border-primary px-4 py-2 text-sm font-bold text-primary">+ Add field</button>
-                </div>
-                {tab === 'option' && form.supportsOptions && (
-                  <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950">
-                    <p className="font-bold">Built-in option fields (always available)</p>
-                    <p className="mt-1">Sellers always enter <strong>Option name</strong> and <strong>Price (RWF)</strong>. Add only the extra fields you want below (for example Seats, Transmission). Those are the only extra fields shown on the option form and public option cards.</p>
-                  </div>
-                )}
-                {!form.supportsOptions && (
-                  <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-950">
-                    Option builder is hidden for this category. Sellers will enter a single base price instead.
-                  </div>
-                )}
-                <div className="space-y-3">
-                  {fields.map((field) => (
-                    <div key={field.id} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-4">
-                      <input value={field.label} onChange={(event) => updateField(field.id, { label: event.target.value })} placeholder="Label" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                      <input value={field.id} onChange={(event) => updateField(field.id, { id: event.target.value })} placeholder="field_id" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
-                      <select value={field.type} onChange={(event) => updateField(field.id, { type: event.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        {['text', 'textarea', 'number', 'tel', 'email', 'url', 'date', 'time', 'datetime-local', 'select', 'radio', 'checkbox', 'boolean', 'file'].map((type) => <option key={type} value={type}>{type}</option>)}
-                      </select>
-                      <select value={field.visibility || 'public'} onChange={(event) => updateField(field.id, { visibility: event.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        <option value="public">public</option>
-                        <option value="after_payment">after_payment</option>
-                        <option value="internal">internal</option>
-                      </select>
-                      <input value={field.placeholder || ''} onChange={(event) => updateField(field.id, { placeholder: event.target.value })} placeholder="Placeholder" className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" />
-                      <input value={(field.options || []).join(', ')} onChange={(event) => updateField(field.id, { options: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Options (comma separated)" className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2" />
-                      <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={Boolean(field.required)} onChange={(event) => updateField(field.id, { required: event.target.checked })} /> Required</label>
-                      <button type="button" onClick={() => removeField(field.id)} className="justify-self-end text-sm font-bold text-red-700">Remove</button>
-                    </div>
-                  ))}
-                  {!fields.length && <p className="text-sm text-slate-500">{tab === 'option' ? 'No extra option fields yet. Add fields sellers should fill for each package.' : 'No fields in this tab yet.'}</p>}
-                </div>
-              </div>
-
+                    {!(schema || []).length ? <li className="text-sm text-slate-500">No extra fields.</li> : null}
+                  </ul>
+                </section>
+              ))}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => navigate('/admin-dashboard/service-categories')} className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold">Cancel</button>
-                <button type="submit" disabled={saving} className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save category'}</button>
+                <button type="button" onClick={() => navigate('/admin-dashboard/service-categories')} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold">Cancel</button>
+                <button type="submit" disabled={saving} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save'}</button>
               </div>
             </form>
           )}
         </div>
       </main>
     </DashboardLayout>
-  );
-}
-
-function Field({ label, value, onChange, type = 'text', required = false, placeholder = '' }) {
-  return (
-    <label className="block">
-      <span className="text-sm font-semibold text-slate-700">{label}</span>
-      <input required={required} type={type} value={value ?? ''} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3" />
-    </label>
   );
 }
