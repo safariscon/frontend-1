@@ -3,10 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import DashboardLayout from '../components/DashboardLayout';
+import StayOptionCard from '../components/listing/StayOptionCard';
+import ReviewsPanel from '../components/listing/ReviewsPanel';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { publicApi } from '../lib/api';
-import { normalizeHotels } from '../lib/hotelMapper';
+import { normalizeHotels, normalizeHotel } from '../lib/hotelMapper';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
 import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
@@ -14,35 +16,58 @@ import { formatRwf } from '../lib/currency';
 import SeoHead from '../components/SeoHead';
 import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
 import { getServiceDetailSeo, noindexSeo } from '../lib/seo';
-import { categorySupportsOptions } from '../lib/serviceSchema';
+import { amenityLabel, listingOptions, optionLeft, policyLabel } from '../lib/stayDisplay';
+
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'rooms', label: 'Info & prices' },
+  { id: 'facilities', label: 'Facilities' },
+  { id: 'rules', label: 'House rules' },
+  { id: 'notes', label: 'Guest notes' },
+  { id: 'reviews', label: 'Reviews' },
+];
 
 export default function HotelDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [hotel, setHotel] = useState(null);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [tableSearch, setTableSearch] = useState('');
-  const [sortColumn, setSortColumn] = useState('');
+  const [selectedOptionId, setSelectedOptionId] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
   const [touchStartX, setTouchStartX] = useState(null);
   const { language } = useLanguage();
 
-  useEffect(() => {
-    const loadHotel = async () => {
-      try {
+  const loadHotel = async () => {
+    try {
+      const detail = await publicApi.getHotel(id).catch(() => null);
+      let found = detail?.hotel || detail?.service || detail ? normalizeHotel(detail.hotel || detail.service || detail) : null;
+      if (!found) {
         const response = await publicApi.getHotels();
-        const hotels = normalizeHotels(response.hotels || []);
-        const found = hotels.find((h) => String(h.id) === String(id));
-        setHotel(found || null);
-        if (found) trackAnalytics(ANALYTICS_EVENTS.SERVICE_VIEW, { serviceId: found.id });
-      } finally {
-        setLoading(false);
+        found = normalizeHotels(response.hotels || []).find((item) => String(item.id) === String(id)) || null;
       }
-    };
+      setHotel(found || null);
+      if (found) {
+        trackAnalytics(ANALYTICS_EVENTS.SERVICE_VIEW, { serviceId: found.id });
+        const options = listingOptions(found);
+        if (options[0] && !selectedOptionId) setSelectedOptionId(String(options[0].id || options[0].optionId || ''));
+        const reviewPayload = await publicApi.getReviews(found.id).catch(() => ({ reviews: [] }));
+        setReviews(reviewPayload.reviews || []);
+        if (reviewPayload.reviewCount != null) {
+          setHotel((current) => current ? { ...current, reviewCount: reviewPayload.reviewCount, ratingAverage: reviewPayload.ratingAverage, rating: reviewPayload.ratingAverage } : current);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    loadHotel();
+  useEffect(() => {
+    Promise.resolve().then(() => loadHotel());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   if (loading) {
@@ -63,47 +88,40 @@ export default function HotelDetailsPage() {
         <div className="flex min-h-[50vh] items-center justify-center">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">{t('hotelNotFound', language)}</h1>
-            <Link to="/services" className="text-primary hover:underline">
-              {t('backToServices', language)}
-            </Link>
+            <Link to="/services" className="text-primary hover:underline">{t('backToServices', language)}</Link>
           </div>
         </div>
       </CatalogShell>
     );
   }
+
   const isNotAvailable = hotel.status === 'unavailable';
+  const listing = hotel.listingAttributes || {};
+  const options = listingOptions(hotel);
+  const selectedOption = options.find((option) => String(option.id || option.optionId) === String(selectedOptionId)) || options[0] || null;
+  const amenities = Array.isArray(listing.amenities) && listing.amenities.length ? listing.amenities : (hotel.amenities || []);
   const primaryCover = hotel.primaryImage || (Array.isArray(hotel.images) ? hotel.images.find(Boolean) : '') || hotel.image || '';
   const images = (() => {
     const list = Array.isArray(hotel.images) ? hotel.images.filter(Boolean) : [];
-    if (primaryCover) return [primaryCover, ...list.filter((url) => url !== primaryCover)].slice(0, 5);
-    return list.slice(0, 5);
+    if (primaryCover) return [primaryCover, ...list.filter((url) => url !== primaryCover)].slice(0, 8);
+    return list.slice(0, 8);
   })();
   const showPreviousImage = () => setSelectedImage((current) => (current === 0 ? images.length - 1 : current - 1));
   const showNextImage = () => setSelectedImage((current) => (current + 1) % images.length);
-  const tableColumns = hotel.availabilityTable?.columns || [];
-  const tableRows = hotel.availabilityTable?.rows || [];
-  const filteredRows = tableRows
-    .filter((row) => {
-      const haystack = tableColumns.map((column) => row.cells?.[column.id] || '').join(' ').toLowerCase();
-      return haystack.includes(tableSearch.toLowerCase());
-    })
-    .sort((a, b) => {
-      if (!sortColumn) return 0;
-      return String(a.cells?.[sortColumn] || '').localeCompare(String(b.cells?.[sortColumn] || ''), undefined, {
-        numeric: true,
-        sensitivity: 'base',
-      });
-    });
-  const inventoryLabel = getInventoryLabel(hotel.inventoryStatus, isNotAvailable, language);
   const promotion = getVisiblePromotion(hotel.promotion);
   const seo = getServiceDetailSeo(hotel, language);
-  const imageAlt = `${hotel.name} — ${hotel.serviceCategory || hotel.type || t('details.serviceOption', language)} · ${hotel.location || 'Rwanda'}`;
-  const supportsOptions = categorySupportsOptions(
-    hotel.supportsOptions,
-    hotel.schemaSnapshot?.supportsOptions,
-    hotel.category?.supportsOptions
-  );
-  const displayBasePrice = Number(hotel.basePrice ?? hotel.price ?? 0);
+  const imageAlt = `${hotel.name} — ${hotel.location || 'Rwanda'}`;
+  const reviewCount = Number(hotel.reviewCount || reviews.length || 0);
+
+  const scrollTo = (tabId) => {
+    setActiveTab(tabId);
+    document.getElementById(tabId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const continueBooking = () => {
+    const optionQuery = selectedOption ? `?optionId=${encodeURIComponent(selectedOption.id || selectedOption.optionId)}` : '';
+    navigate(`/booking/${hotel.id}${optionQuery}`);
+  };
 
   return (
     <CatalogShell authenticated={isAuthenticated}>
@@ -121,14 +139,12 @@ export default function HotelDetailsPage() {
       <main className="flex-1">
         {images.length > 0 && (
           <div
-            className="relative h-72 bg-gray-100 md:h-[30rem]"
+            className="relative h-72 bg-gray-100 md:h-[32rem]"
             onTouchStart={(event) => setTouchStartX(event.touches[0].clientX)}
             onTouchEnd={(event) => {
               if (touchStartX === null || images.length < 2) return;
               const delta = event.changedTouches[0].clientX - touchStartX;
-              if (Math.abs(delta) > 45) {
-                delta > 0 ? showPreviousImage() : showNextImage();
-              }
+              if (Math.abs(delta) > 45) delta > 0 ? showPreviousImage() : showNextImage();
               setTouchStartX(null);
             }}
           >
@@ -137,194 +153,203 @@ export default function HotelDetailsPage() {
             </button>
             {images.length > 1 && (
               <>
-                <button type="button" onClick={showPreviousImage} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">
-                  {t('back', language)}
-                </button>
-                <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">
-                  {t('next', language)}
-                </button>
-                <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
-                  {images.map((_, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      aria-label={t('details.showImage', language, { n: idx + 1 })}
-                      onClick={() => setSelectedImage(idx)}
-                      className={`h-2.5 w-2.5 rounded-full transition ${selectedImage === idx ? 'bg-white' : 'bg-white/50'}`}
-                    />
-                  ))}
-                </div>
+                <button type="button" onClick={showPreviousImage} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">{t('back', language)}</button>
+                <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 font-semibold text-gray-900 shadow">{t('next', language)}</button>
               </>
             )}
           </div>
         )}
         {images.length > 1 && (
-          <div className="max-w-7xl mx-auto px-4 pt-4">
-            <div className="grid grid-cols-3 gap-3">
+          <div className="mx-auto max-w-7xl px-4 pt-4">
+            <div className="grid grid-cols-4 gap-2 md:grid-cols-6">
               {images.map((image, index) => (
-                <button
-                  key={image}
-                  type="button"
-                  onClick={() => setSelectedImage(index)}
-                  className={`h-24 overflow-hidden rounded-lg border ${selectedImage === index ? 'border-primary' : 'border-gray-200'}`}
-                >
-                  <img src={image} alt={`${imageAlt} ${t('catalog.photoN', language, { n: index + 1 })}`} className="h-full w-full object-cover" />
+                <button key={image} type="button" onClick={() => setSelectedImage(index)} className={`h-20 overflow-hidden rounded-lg border ${selectedImage === index ? 'border-primary' : 'border-gray-200'}`}>
+                  <img src={image} alt="" className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
-              <div className="mb-6">
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{hotel.name}</h1>
-                <div className="flex items-center gap-4 text-gray-600 mb-4">
-                  <div className="flex items-center gap-1">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {t('details.districtLine', language, { location: hotel.location })}
-                  </div>
-                </div>
-              </div>
+        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+          <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 py-2">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => scrollTo(tab.id)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-black ${activeTab === tab.id ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                {tab.id === 'reviews' && reviewCount ? `${tab.label} (${reviewCount})` : tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-              <div className="mb-8">
-                <h2 className="text-xl font-bold mb-3">{t('aboutThisService', language)}</h2>
-                <p className="text-gray-600 leading-relaxed">{hotel.description}</p>
-                {Array.isArray(hotel.listingAttributes?.amenities) && hotel.listingAttributes.amenities.length ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {hotel.listingAttributes.amenities.map((item) => (
-                      <span key={item} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-700">
-                        {String(item).replace(/_/g, ' ')}
-                      </span>
+        <div className="mx-auto max-w-7xl px-4 py-8">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-8">
+              <section id="overview" className="scroll-mt-28">
+                <h1 className="text-3xl font-black text-slate-950 md:text-4xl">{hotel.name}</h1>
+                <p className="mt-2 text-slate-600">{t('details.districtLine', language, { location: hotel.location })}</p>
+                {reviewCount ? <p className="mt-2 text-sm font-bold text-slate-800">{hotel.ratingAverage || hotel.rating} · {reviewCount} guest review{reviewCount === 1 ? '' : 's'}</p> : null}
+                {promotion ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-xs font-black uppercase tracking-wide text-amber-900">Offer</p>
+                    <p className="mt-1 font-black text-amber-950">{promotion.title} · {t('details.savePercent', language, { percent: promotion.percent })}</p>
+                  </div>
+                ) : null}
+                <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h2 className="text-xl font-black text-slate-950">About this property</h2>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{hotel.description}</p>
+                  {amenities.length ? (
+                    <div className="mt-6">
+                      <h3 className="text-sm font-black uppercase tracking-wide text-slate-400">Most popular facilities</h3>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {amenities.map((item) => (
+                          <p key={item} className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                            {amenityLabel(item)}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section id="rooms" className="scroll-mt-28 space-y-4">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-950">Info & prices</h2>
+                  <p className="mt-1 text-sm text-slate-600">Choose the room or unit you want to book. Remaining count is what the provider currently has available.</p>
+                </div>
+                {options.length ? options.map((option) => (
+                  <StayOptionCard
+                    key={option.id || option.optionId}
+                    option={option}
+                    selected={String(option.id || option.optionId) === String(selectedOption?.id || selectedOption?.optionId)}
+                    selectable={!isNotAvailable && optionLeft(option) > 0}
+                    onSelect={(next) => setSelectedOptionId(String(next.id || next.optionId))}
+                    ctaLabel="Select this option"
+                  />
+                )) : (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                    <p className="text-3xl font-black text-primary">{hotel.basePrice > 0 ? formatRwf(hotel.basePrice) : 'Quote on request'}</p>
+                    <p className="mt-2 text-sm text-slate-600">{t('details.bookingNote', language)}</p>
+                  </div>
+                )}
+              </section>
+
+              <section id="facilities" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-2xl font-black text-slate-950">Facilities</h2>
+                {amenities.length ? (
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {amenities.map((item) => (
+                      <p key={item} className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800">{amenityLabel(item)}</p>
                     ))}
                   </div>
-                ) : null}
-                {hotel.listingAttributes?.checkInTime || hotel.listingAttributes?.checkOutTime ? (
-                  <p className="mt-3 text-sm text-slate-600">
-                    Check-in from {hotel.listingAttributes.checkInFrom || hotel.listingAttributes.checkInTime}
-                    {hotel.listingAttributes.checkOutUntil || hotel.listingAttributes.checkOutTime
-                      ? ` · Check-out until ${hotel.listingAttributes.checkOutUntil || hotel.listingAttributes.checkOutTime}`
-                      : ''}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="mb-8 grid gap-4 md:grid-cols-3">
-                <InfoTile label={t('details.category', language)} value={hotel.type || hotel.category || t('services', language)} />
-                {promotion ? (
-                  <div className="md:col-span-2 overflow-hidden rounded-xl border border-amber-300 bg-amber-50">
-                    <div className="bg-amber-400 px-4 py-2 text-xs font-black uppercase tracking-wider text-amber-950">★ {t('details.promotion', language)}</div>
-                    <div className="p-4">
-                      <h3 className="text-lg font-black text-amber-700">{promotion.title}</h3>
-                      <p className="mt-1 text-sm text-slate-800">{t('details.savePercent', language, { percent: promotion.percent })}</p>
-                      {promotion.note && <p className="mt-1 text-sm text-slate-700">{promotion.note}</p>}
-                      <p className="mt-2 text-xs font-bold text-orange-600">{t('details.valid', language, { start: formatPromotionDate(promotion.startAt, language), end: formatPromotionDate(promotion.endAt, language) })}</p>
-                    </div>
-                  </div>
                 ) : (
-                  <>
-                    <InfoTile label={t('details.seller', language)} value={t('details.verifiedSeller', language)} />
-                    <InfoTile label={t('details.inventory', language)} value={inventoryLabel} />
-                  </>
+                  <p className="mt-3 text-sm text-slate-600">The provider has not listed extra facilities yet.</p>
                 )}
-              </div>
+              </section>
 
-              {supportsOptions ? (
-                <AvailabilityTable
-                  columns={tableColumns}
-                  rows={filteredRows}
-                  updatedAt={hotel.availabilityTable?.updatedAt || hotel.updatedAt}
-                  search={tableSearch}
-                  setSearch={setTableSearch}
-                  sortColumn={sortColumn}
-                  setSortColumn={setSortColumn}
-                  language={language}
-                  optionFieldSchema={hotel.schemaSnapshot?.optionFieldSchema || hotel.category?.optionFieldSchema || []}
-                />
-              ) : (
-                <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <h2 className="text-xl font-bold text-gray-900">{t('details.price', language)}</h2>
-                  <p className="mt-3 text-3xl font-black text-primary">
-                    {displayBasePrice > 0 ? formatRwf(displayBasePrice) : '—'}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">{t('details.bookingNote', language)}</p>
-                </div>
-              )}
+              <section id="rules" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-2xl font-black text-slate-950">House rules</h2>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <Rule label="Check-in" value={timeRange(listing.checkInFrom || listing.checkInTime, listing.checkInUntil)} />
+                  <Rule label="Check-out" value={timeRange(listing.checkOutFrom, listing.checkOutUntil || listing.checkOutTime)} />
+                  <Rule label="Children" value={policyLabel(listing.allowsChildren)} />
+                  <Rule label="Pets" value={policyLabel(listing.allowsPets)} />
+                  <Rule label="Children stay free" value={listing.childrenStayFree ? 'Yes' : listing.childrenStayFree === false ? 'No' : ''} />
+                </dl>
+              </section>
+
+              <section id="notes" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-2xl font-black text-slate-950">Important guest notes</h2>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <Rule label="Deposit" value={hotel.paymentPolicy?.depositPercentage != null ? `${hotel.paymentPolicy.depositPercentage}%` : '50% to confirm'} />
+                  <Rule label="Remaining payment" value={policyLabel(hotel.paymentPolicy?.remainingPaymentMethod) || 'Paid according to the listing'} />
+                  <Rule label="Cancellation" value={hotel.cancellationPolicy?.type || hotel.bookingRules?.cancellationPolicy?.type} />
+                  <Rule label="Free cancellation until" value={hotel.cancellationPolicy?.freeCancellationUntilHours != null ? `${hotel.cancellationPolicy.freeCancellationUntilHours} hours before` : hotel.cancelWindowHours ? `${hotel.cancelWindowHours} hours before` : ''} />
+                </dl>
+                <p className="mt-4 text-sm leading-6 text-slate-600">Provider identity and the exact meeting point stay hidden until you pay. You choose mobile money or card on the last booking step.</p>
+              </section>
+
+              <ReviewsPanel
+                hotelId={hotel.id}
+                reviews={reviews}
+                ratingAverage={hotel.ratingAverage || hotel.rating}
+                reviewCount={reviewCount}
+                isAuthenticated={isAuthenticated}
+                onUpdated={(payload) => {
+                  if (payload?.reviews) setReviews(payload.reviews);
+                  else loadHotel();
+                }}
+              />
             </div>
 
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-24">
-                <div className="border-t border-gray-200 pt-4 mb-4">
-                  <p className={`text-sm font-semibold ${isNotAvailable ? 'text-red-700' : 'text-primary'}`}>
-                    {isNotAvailable ? inventoryLabel : t('details.available', language)}
-                  </p>
-                </div>
-
+            <aside className="lg:col-span-1">
+              <div className="sticky top-24 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+                {selectedOption ? (
+                  <>
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">Selected</p>
+                    <h2 className="mt-1 text-lg font-black text-slate-950">{selectedOption.name}</h2>
+                    <p className="mt-2 text-2xl font-black text-primary">{selectedOption.price ? formatRwf(selectedOption.price) : 'Quote on request'}</p>
+                    <p className={`mt-2 text-sm font-black ${optionLeft(selectedOption) <= 3 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      {optionLeft(selectedOption) <= 0 ? 'Sold out' : `${optionLeft(selectedOption)} left`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-black text-slate-950">{isNotAvailable ? t('catalog.notAvailable', language) : t('details.available', language)}</p>
+                )}
                 <button
-                  onClick={() => navigate(`/booking/${hotel.id}`)}
-                  disabled={isNotAvailable}
-                  className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:cursor-not-allowed disabled:bg-gray-300"
+                  type="button"
+                  onClick={continueBooking}
+                  disabled={isNotAvailable || (selectedOption && optionLeft(selectedOption) <= 0)}
+                  className="mt-5 w-full rounded-xl bg-primary py-3 font-black text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
-                  {isNotAvailable ? t('catalog.notAvailable', language) : t('requestBooking', language)}
+                  {isNotAvailable ? t('catalog.notAvailable', language) : 'Continue to book'}
                 </button>
-
-                <p className="text-xs text-gray-500 text-center mt-3">
-                  {t('details.bookingNote', language)}
-                </p>
-                <Link to="/services" className="mt-3 block text-center text-sm font-bold text-primary hover:underline">
-                  {t('details.browseMore', language)}
-                </Link>
+                <p className="mt-3 text-center text-xs text-slate-500">Dates, guest details, then payment method. You are not charged on this page.</p>
+                <Link to="/services" className="mt-3 block text-center text-sm font-bold text-primary hover:underline">{t('details.browseMore', language)}</Link>
               </div>
-            </div>
+            </aside>
           </div>
         </div>
       </main>
 
       {lightboxOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
-          <button type="button" onClick={() => setLightboxOpen(false)} className="absolute right-4 top-4 rounded-full bg-white px-4 py-2 font-semibold text-gray-900">
-            {t('close', language)}
-          </button>
-          {images.length > 1 && (
-            <button type="button" onClick={showPreviousImage} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white px-4 py-3 font-semibold text-gray-900">
-              {t('back', language)}
-            </button>
-          )}
+          <button type="button" onClick={() => setLightboxOpen(false)} className="absolute right-4 top-4 rounded-full bg-white px-4 py-2 font-semibold text-gray-900">{t('close', language)}</button>
           <img src={images[selectedImage] || images[0]} alt={imageAlt} className="max-h-[85vh] max-w-full object-contain" />
-          {images.length > 1 && (
-            <button type="button" onClick={showNextImage} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white px-4 py-3 font-semibold text-gray-900">
-              {t('next', language)}
-            </button>
-          )}
         </div>
       )}
-
     </CatalogShell>
   );
 }
 
+function Rule({ label, value }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-xl bg-slate-50 p-3">
+      <dt className="text-xs font-black uppercase tracking-wide text-slate-400">{label}</dt>
+      <dd className="mt-1 font-semibold text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
+function timeRange(start, end) {
+  if (start && end) return `${start} – ${end}`;
+  return start || end || '';
+}
+
 function CatalogShell({ authenticated, children }) {
-  if (authenticated) {
-    return <DashboardLayout>{children}</DashboardLayout>;
-  }
+  if (authenticated) return <DashboardLayout>{children}</DashboardLayout>;
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       {children}
       <Footer />
-    </div>
-  );
-}
-
-function InfoTile({ label, value }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="mt-1 font-bold text-gray-900">{value}</p>
     </div>
   );
 }
@@ -338,123 +363,4 @@ function getVisiblePromotion(promotion) {
   if (!Number.isFinite(percent) || percent <= 0 || percent > 100) return null;
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end || start > now || end < now) return null;
   return { ...promotion, percent, note: promotion.note || promotion.description || '' };
-}
-
-function formatPromotionDate(value, language) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return t('catalog.asScheduled', language);
-  return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function AvailabilityTable({ columns, rows, updatedAt, search, setSearch, sortColumn, setSortColumn, language, optionFieldSchema = [] }) {
-  if (!columns.length && !rows.length) {
-    return (
-      <div className="mb-8 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="text-xl font-bold text-gray-900">{t('details.availability', language)}</h2>
-        <p className="mt-2 text-sm text-gray-600">{t('details.noAvailabilityTable', language)}</p>
-      </div>
-    );
-  }
-
-  const visibleSortColumns = columns.filter((column) => !['details', 'amenities'].includes(column.id));
-
-  return (
-    <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">{t('details.availability', language)}</h2>
-          {updatedAt && <p className="mt-1 text-sm text-gray-500">{t('details.updated', language, { date: new Date(updatedAt).toLocaleString() })}</p>}
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 md:min-w-[380px]">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('details.searchOptions', language)} className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
-          <select value={sortColumn} onChange={(event) => setSortColumn(event.target.value)} className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
-            <option value="">{t('details.originalOrder', language)}</option>
-            {visibleSortColumns.map((column) => <option key={column.id} value={column.id}>{t('details.sortByColumn', language, { label: column.label })}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className="grid gap-3">
-        {rows.map((row, index) => (
-          <AvailabilityOptionCard
-            key={row.id || index}
-            row={row}
-            language={language}
-            optionFieldSchema={optionFieldSchema}
-          />
-        ))}
-      </div>
-      {!rows.length && <p className="mt-3 text-sm text-gray-500">{t('details.noMatchingRows', language)}</p>}
-    </div>
-  );
-}
-
-function hasFilledValue(value) {
-  if (value === undefined || value === null) return false;
-  if (Array.isArray(value)) return value.length > 0;
-  const text = String(value).trim().toLowerCase();
-  return text !== '' && text !== '-' && text !== 'none' && text !== 'not set' && text !== 'false';
-}
-
-function AvailabilityOptionCard({ row, language, optionFieldSchema = [] }) {
-  const cells = row.cells || {};
-  const attributes = row.attributes || cells.attributes || {};
-  const optionName = cells.service || cells.name || cells.option || t('details.serviceOption', language);
-  const price = Number(cells.price || 0);
-  const details = cells.details || '';
-  const publicSchema = (optionFieldSchema || []).filter((field) => (field.visibility || 'public') === 'public');
-
-  // Only admin-configured public option fields with values — never legacy assumed cells.
-  const facts = publicSchema
-    .map((field) => {
-      const value = attributes[field.id] ?? cells[field.id];
-      if (!hasFilledValue(value)) return null;
-      return { id: field.id, label: field.label || field.id, value: Array.isArray(value) ? value.join(', ') : String(value) };
-    })
-    .filter(Boolean);
-
-  return (
-    <article className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4 transition hover:border-blue-200 hover:bg-blue-50/40">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-wide text-primary">{t('details.option', language)} {row.sortOrder ? row.sortOrder : ''}</p>
-          <h3 className="mt-1 break-words text-lg font-black text-gray-950">{optionName}</h3>
-        </div>
-        <div className="rounded-xl bg-white px-4 py-3 text-left shadow-sm sm:min-w-36 sm:text-right">
-          <p className="text-xs font-bold uppercase text-gray-500">{t('details.price', language)}</p>
-          <p className="mt-1 text-lg font-black text-primary">{price ? formatRwf(price) : '-'}</p>
-        </div>
-      </div>
-
-      {facts.length > 0 && (
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {facts.map((fact) => (
-            <div key={fact.id} className="rounded-xl bg-white px-3 py-2">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{fact.label}</p>
-              <p className="mt-1 break-words text-sm font-semibold text-gray-900">{fact.value}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {hasFilledValue(details) && (
-        <div className="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Details</p>
-          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-gray-700">{details}</p>
-        </div>
-      )}
-    </article>
-  );
-}
-
-function getInventoryLabel(status, unavailable, language) {
-  if (unavailable) return t('details.outOfStock', language);
-  const labels = {
-    available: t('details.available', language),
-    limited: t('details.limited', language),
-    'fully-booked': t('details.fullyBooked', language),
-    'out-of-stock': t('details.outOfStock', language),
-    'temporarily-unavailable': t('details.temporarilyUnavailable', language),
-  };
-  return labels[status] || t('details.available', language);
 }

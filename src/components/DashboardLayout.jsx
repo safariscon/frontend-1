@@ -107,9 +107,13 @@ export default function DashboardLayout({ children }) {
                 <p className="truncate text-sm font-black text-slate-950 dark:text-slate-50">{user?.name || t('userFallback', language)}</p>
                 <p className="truncate text-xs font-semibold text-slate-500">{formatDisplayRole(user?.role)}</p>
               </div>
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-sm font-black text-white">
-                {getInitials(user?.name)}
-              </div>
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+              ) : (
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-sm font-black text-white">
+                  {getInitials(user?.name)}
+                </div>
+              )}
             </Link>
           </div>
         </header>

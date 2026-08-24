@@ -225,6 +225,23 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateUser = (nextUser) => {
+    const current = getAuthData() || {};
+    const session = persistAuthSession(
+      {
+        ...current,
+        user: { ...(current.user || {}), ...nextUser },
+        accessToken: current.accessToken || current.token,
+        token: current.token || current.accessToken,
+        refreshToken: current.refreshToken,
+        rememberMe: current.rememberMe,
+      },
+      { rememberMe: current.rememberMe }
+    );
+    setUser(session.user);
+    return session.user;
+  };
+
   const value = {
     user,
     loading,
@@ -236,6 +253,7 @@ export function AuthProvider({ children }) {
     resendEmailVerificationOtp,
     acceptTerms,
     logout,
+    updateUser,
     isAuthenticated: !!user,
     isTourist: user?.role === 'tourist',
     isCustomer: isCustomerRole(user?.role),

@@ -1406,8 +1406,12 @@
   "profilePage": {
     "account": "Account",
     "title": "Profile",
-    "lead": "Update your password and review the details on this account. Account summary also stays in Settings.",
+    "lead": "Update your photo, contact details, and password. Account summary also stays in Settings.",
     "information": "Profile information",
+    "photo": "Profile photo",
+    "photoUpdated": "Profile photo updated.",
+    "profileUpdated": "Profile updated.",
+    "saveProfile": "Save profile",
     "name": "Name",
     "email": "Email",
     "phone": "Phone",

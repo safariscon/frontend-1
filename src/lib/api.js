@@ -445,6 +445,21 @@ export const authApi = {
       method: "POST",
       body: { acceptedTerms: true },
     }),
+  updateProfile: (token, payload) =>
+    apiRequest("/api/auth/profile", {
+      method: "PUT",
+      token,
+      body: payload,
+    }),
+  uploadAvatar: (token, file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return uploadRequest("/api/auth/profile/avatar", {
+      method: "POST",
+      token,
+      formData,
+    });
+  },
   completeProviderRegistration: (payload) => {
     const businessName = String(payload?.businessName || payload?.providerName || '').trim();
     const payoutDetails = payload?.payoutDetails || {};
@@ -868,6 +883,14 @@ export const paymentsApi = {
 
 export const publicApi = {
   getHotels: (query = {}) => apiRequest("/api/hotels" + buildQueryString(query)),
+  getHotel: (hotelId) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}`),
+  getReviews: (hotelId) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}/reviews`),
+  saveReview: (token, hotelId, payload) =>
+    apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}/reviews`, {
+      method: "POST",
+      token,
+      body: payload,
+    }),
   getServiceAvailability: (hotelId, optionId) =>
     apiRequest(
       `/api/hotels/${encodeURIComponent(hotelId)}/availability${optionId ? `?optionId=${encodeURIComponent(optionId)}` : ""}`

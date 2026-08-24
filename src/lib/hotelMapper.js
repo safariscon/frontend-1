@@ -17,7 +17,7 @@ export const normalizeHotel = (hotel) => {
     ? [image, ...uploadedImages.filter((url) => url !== image)].slice(0, 5)
     : uploadedImages;
   const basePrice = Number(hotel.basePrice ?? hotel.price ?? 0);
-  const rating = Number(hotel.rating ?? 4.5);
+  const rating = Number(hotel.ratingAverage ?? hotel.rating ?? 0);
   const reviewCount = Number(hotel.reviewCount ?? 0);
   const categoryId = hotel.categoryId || hotel.category?._id || '';
   const categorySlug = hotel.categorySlug || hotel.category?.slug || hotel.type || '';
@@ -87,7 +87,9 @@ export const normalizeHotel = (hotel) => {
     price: basePrice,
     basePrice,
     rating,
+    ratingAverage: rating,
     reviewCount,
+    options: Array.isArray(hotel.options) ? hotel.options : [],
     amenities: Array.isArray(hotel.amenities) ? hotel.amenities : [],
     rooms: Array.isArray(hotel.rooms) ? hotel.rooms : [],
     isFeatured: Boolean(hotel.isFeatured),

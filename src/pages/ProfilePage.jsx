@@ -8,13 +8,14 @@ import { isSellerRole } from '../lib/dashboard';
 import { t } from '../lib/translations';
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
   const token = getAuthData()?.token;
   const [payout, setPayout] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [payoutForm, setPayoutForm] = useState({ method: 'momo', providerId: '', accountName: '', accountNumber: '' });
+  const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', otp: '' });
   const [otpSent, setOtpSent] = useState(false);
   const [message, setMessage] = useState('');
@@ -23,6 +24,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) navigate('/login');
+    else setProfileForm({ name: user.name || '', phone: user.phone || '' });
   }, [navigate, user]);
 
   useEffect(() => {
@@ -125,13 +127,73 @@ export default function ProfilePage() {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black text-slate-950">{t('profilePage.information', language)}</h2>
-            <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Info label={t('profilePage.name', language)} value={user.name || '-'} />
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
+              ) : (
+                <div className="grid h-20 w-20 place-items-center rounded-full bg-primary text-xl font-black text-white">
+                  {String(user.name || 'U').slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">{t('profilePage.photo', language)}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="mt-1 block text-sm"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (!file || !token) return;
+                    setBusy(true);
+                    setError('');
+                    setMessage('');
+                    try {
+                      const response = await authApi.uploadAvatar(token, file);
+                      updateUser(response.user || { avatarUrl: response.url });
+                      setMessage(response.message || t('profilePage.photoUpdated', language));
+                    } catch (requestError) {
+                      setError(requestError.message);
+                    } finally {
+                      setBusy(false);
+                      event.target.value = '';
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setBusy(true);
+                setError('');
+                setMessage('');
+                try {
+                  const response = await authApi.updateProfile(token, profileForm);
+                  updateUser(response.user);
+                  setMessage(response.message || t('profilePage.profileUpdated', language));
+                } catch (requestError) {
+                  setError(requestError.message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="mt-4 grid gap-3 sm:grid-cols-2"
+            >
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">{t('profilePage.name', language)}</span>
+                <input required value={profileForm.name} onChange={(event) => setProfileForm((prev) => ({ ...prev, name: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3" />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">{t('profilePage.phone', language)}</span>
+                <input value={profileForm.phone} onChange={(event) => setProfileForm((prev) => ({ ...prev, phone: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3" />
+              </label>
               <Info label={t('profilePage.email', language)} value={user.email || '-'} />
-              <Info label={t('profilePage.phone', language)} value={user.phone || t('notSet', language)} />
               <Info label={t('profilePage.role', language)} value={isSellerRole(user.role) ? t('serviceProviderRole', language) : String(user.role || 'user').replace(/[-_]/g, ' ')} />
               {user.sellerId && <Info label={t('profilePage.sellerId', language)} value={user.sellerId} />}
-            </dl>
+              <div className="sm:col-span-2">
+                <button disabled={busy} className="rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? t('savingEllipsis', language) : t('profilePage.saveProfile', language)}</button>
+              </div>
+            </form>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

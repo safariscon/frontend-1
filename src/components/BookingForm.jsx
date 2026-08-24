@@ -34,6 +34,8 @@ import { emptyLocationDetails, formatLocationLine, isCustomerMapLocationComplete
 import { categorySupportsOptions } from '../lib/serviceSchema';
 import { MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 import { resolveCustomerBookingRules } from '../lib/bookingRules';
+import StayOptionCard from './listing/StayOptionCard';
+import { listingOptions } from '../lib/stayDisplay';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
@@ -96,6 +98,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
   const [selectedOffer, setSelectedOffer] = useState('');
+  const [step, setStep] = useState(1);
   const [marketplaceRules, setMarketplaceRules] = useState([]);
   const [marketplaceSettings, setMarketplaceSettings] = useState({ bookingMode: 'manual' });
   const [quoteResult, setQuoteResult] = useState(null);
@@ -111,14 +114,16 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       setLiveSchemaLoaded(false);
       setLiveCategory(null);
       try {
-        const [response, settingsResponse] = await Promise.all([
+        const [detail, response, settingsResponse] = await Promise.all([
+          publicApi.getHotel(hotelId).catch(() => null),
           publicApi.getHotels(),
           publicApi.getMarketplaceSettings().catch(() => ({ settings: {} })),
         ]);
         setMarketplaceRules(settingsResponse.settings?.bookingRules || []);
         setMarketplaceSettings(settingsResponse.settings || { bookingMode: 'manual' });
+        const fromDetail = detail?.hotel || detail?.service || detail?.business ? normalizeHotels([detail.hotel || detail.service || detail.business])[0] : null;
         const businesses = normalizeHotels(response.businesses || response.hotels || []);
-        const found = businesses.find((item) => String(item.id) === String(hotelId));
+        const found = fromDetail || businesses.find((item) => String(item.id) === String(hotelId));
           setBusiness(found || null);
           if (found) {
           const service = getSelectedService(found);
@@ -136,9 +141,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
               service?.supportsOptions
             );
             const firstOffer = supportsOptions
-              ? (found.availabilityTable?.rows?.[0]?.cells?.service || '')
+              ? String(listingOptions(found)[0]?.id || listingOptions(found)[0]?.optionId || found.availabilityTable?.rows?.[0]?.optionId || found.availabilityTable?.rows?.[0]?.id || found.availabilityTable?.rows?.[0]?.cells?.service || '')
               : (service?.title || service?.name || found.name || 'Service');
-            setSelectedOffer(firstOffer);
+            const requestedOption = new URLSearchParams(window.location.search).get('optionId') || '';
+            setSelectedOffer(requestedOption || firstOffer);
           setValues((prev) => ({
             ...prev,
             destinationPlace: service?.title || service?.name || found.name || '',
@@ -207,9 +213,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     service?.category?.supportsOptions
   );
   const basePrice = Number(business?.basePrice ?? service?.basePrice ?? business?.price ?? service?.pricing?.amount ?? 0);
-  const offers = supportsOptions ? (business?.availabilityTable?.rows || []) : [];
+  const offers = supportsOptions ? listingOptions(business) : [];
   const selectedOfferRow = supportsOptions
-    ? offers.find((row) => row.cells?.service === selectedOffer)
+    ? offers.find((row) => [row.id, row.optionId, row.cells?.service].some((value) => String(value || '') === String(selectedOffer)))
     : null;
 
   useEffect(() => {
@@ -463,7 +469,17 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-xl sm:p-7">
+    <form
+      onSubmit={(event) => {
+        if (step !== 3 && !quoteResult) {
+          event.preventDefault();
+          setStep((current) => Math.min(3, current + 1));
+          return;
+        }
+        handleSubmit(event);
+      }}
+      className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-xl sm:p-7"
+    >
       <div className="mb-6 flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
         <div className="min-w-0">
           <h2 className="text-2xl font-black text-slate-950">{service.title || service.name}</h2>
@@ -520,38 +536,30 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         </div>
       )}
 
+      <div className="mb-6 grid grid-cols-3 gap-2">
+        {['Stay', 'Your details', 'Payment'].map((label, index) => (
+          <div key={label} className={`rounded-xl px-3 py-2 text-center text-xs font-black uppercase tracking-wide ${step === index + 1 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}>
+            {index + 1}. {label}
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && (
       <section className="mb-6 space-y-3">
         <h3 className="text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.chooseService', language)}</h3>
         {supportsOptions ? (
-          <>
-            <select
-              disabled={Boolean(quoteResult)}
-              value={selectedOffer}
-              onChange={(event) => setSelectedOffer(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 disabled:bg-slate-100"
-              required
-            >
-              <option value="">{t('booking.selectFromTable', language)}</option>
-              {offers.map((row) => (
-                <option key={row.id} value={row.cells?.service}>{row.cells?.service} — {formatRwf(Number(row.cells?.price || 0))}</option>
-              ))}
-            </select>
-            {selectedOfferRow && (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                <div className="min-w-0">
-                  <p className="font-bold text-slate-900">{selectedOfferRow.cells?.service}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {optionSchedule.availableFrom || optionSchedule.availableTo
-                      ? `${formatDisplayDate(optionSchedule.availableFrom)} – ${optionSchedule.availableTo ? formatDisplayDate(optionSchedule.availableTo) : t('booking.open', language)}`
-                      : t('booking.noDateWindow', language)}
-                  </p>
-                </div>
-                <button type="button" onClick={() => setDetailsOpen(true)} className="shrink-0 rounded-lg bg-white px-3 py-2 text-sm font-bold text-primary shadow-sm">
-                  {t('booking.viewDetails', language)}
-                </button>
-              </div>
-            )}
-          </>
+          <div className="space-y-3">
+            {offers.map((row) => (
+              <StayOptionCard
+                key={row.id || row.optionId}
+                option={row}
+                selected={String(row.id || row.optionId) === String(selectedOffer)}
+                selectable={!quoteResult}
+                onSelect={(next) => setSelectedOffer(String(next.id || next.optionId))}
+                ctaLabel="Book this option"
+              />
+            ))}
+          </div>
         ) : (
           <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
             <p className="text-lg font-black">{service.title || service.name}</p>
@@ -559,58 +567,6 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           </div>
         )}
       </section>
-
-      {activePromotion && (
-        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <p className="font-black">{activePromotion.title}: {t('details.savePercent', language, { percent: activePromotion.percent })}</p>
-          <p className="mt-1">{t('details.valid', language, { start: formatDate(activePromotion.startAt), end: formatDate(activePromotion.endAt) })}</p>
-          {activePromotion.note && <p className="mt-1 text-amber-800">{activePromotion.note}</p>}
-        </div>
-      )}
-
-      <section className="mb-6">
-        <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.yourDetails', language)}</h3>
-        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          <p className="font-bold text-slate-900">Booking submitted: today</p>
-          <p className="mt-1 text-xs text-slate-500">The system records booking time automatically. Below, choose when you will start and finish consuming the service.</p>
-          {publicAvailability && !publicAvailability.isAnytime && (
-            <p className="mt-2 text-xs font-semibold text-emerald-800">
-              Available
-              {publicAvailability.windowStartDate || publicAvailability.windowEndDate
-                ? ` ${publicAvailability.windowStartDate || '…'} → ${publicAvailability.windowEndDate || '…'}`
-                : ''}
-              {(publicAvailability.daysOfWeek || []).length ? ` · days: ${publicAvailability.daysOfWeek.join(', ')}` : ''}
-              {publicAvailability.dayStartTime || publicAvailability.dayEndTime
-                ? ` · ${publicAvailability.dayStartTime || '…'}–${publicAvailability.dayEndTime || '…'}`
-                : ''}
-              {publicAvailability.trackCapacity
-                ? ` · ${publicAvailability.capacityRemaining ?? publicAvailability.capacityTotal} left`
-                : ''}
-            </p>
-          )}
-          {publicAvailability?.isAnytime && (
-            <p className="mt-2 text-xs font-semibold text-emerald-800">This service/option is available anytime.</p>
-          )}
-        </div>
-        <div className="grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2">
-          <FixedInput label={t('booking.fullName', language)} value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
-          <PhoneNumberField label={t('booking.phoneNumber', language)} value={values.phone} onChange={(value) => updateValue('phone', value)} required />
-          <FixedInput label={t('booking.email', language)} type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
-          <FixedInput label={t('booking.quantityUnits', language)} type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
-          <label className="block sm:col-span-2">
-            <span className="mb-1 block text-sm font-medium text-slate-700">{t('booking.paymentMethod', language)}</span>
-            <select value={values.paymentMethod} onChange={(event) => updateValue('paymentMethod', event.target.value)} className="w-full rounded-xl border border-slate-300 px-4 py-3">
-              <option value="mobile-money">{t('booking.mobileMoney', language)}</option>
-              <option value="bank">{t('bank', language)}</option>
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <div className="mb-6">
-        <CustomerLocationPicker value={values.customerLocationDetails} onChange={updateCustomerLocation} />
-      </div>
-
       <div className="mb-6">
         <BookingFields
           category={liveCategory || business}
@@ -622,6 +578,41 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             setBookingAttributeErrors({});
           }}
         />
+        <button type="button" onClick={() => setStep(2)} className="mt-4 w-full rounded-xl bg-primary py-3.5 font-bold text-white">
+          Continue to your details
+        </button>
+      </div>
+      )}
+
+      {activePromotion && step === 1 && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-black">{activePromotion.title}: {t('details.savePercent', language, { percent: activePromotion.percent })}</p>
+          <p className="mt-1">{t('details.valid', language, { start: formatDate(activePromotion.startAt), end: formatDate(activePromotion.endAt) })}</p>
+          {activePromotion.note && <p className="mt-1 text-amber-800">{activePromotion.note}</p>}
+        </div>
+      )}
+
+      {step === 2 && (
+        <>
+      <section className="mb-6">
+        <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.yourDetails', language)}</h3>
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          <p className="font-bold text-slate-900">Guest details</p>
+          <p className="mt-1 text-xs text-slate-500">Dates are on the previous step. Add who is booking, then continue to payment.</p>
+          {publicAvailability?.trackCapacity ? (
+            <p className="mt-2 text-xs font-semibold text-emerald-800">{publicAvailability.capacityRemaining ?? publicAvailability.capacityTotal} left for this option</p>
+          ) : null}
+        </div>
+        <div className="grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2">
+          <FixedInput label={t('booking.fullName', language)} value={values.fullName} onChange={(value) => updateValue('fullName', value)} required />
+          <PhoneNumberField label={t('booking.phoneNumber', language)} value={values.phone} onChange={(value) => updateValue('phone', value)} required />
+          <FixedInput label={t('booking.email', language)} type="email" value={values.email} onChange={(value) => updateValue('email', value)} required />
+          <FixedInput label={t('booking.quantityUnits', language)} type="number" min="1" value={values.quantity} onChange={(value) => updateValue('quantity', value)} required />
+        </div>
+      </section>
+
+      <div className="mb-6">
+        <CustomerLocationPicker value={values.customerLocationDetails} onChange={updateCustomerLocation} />
       </div>
 
       {customFields.length > 0 && (
@@ -636,6 +627,23 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           ))}
         </div>
       )}
+      <div className="mb-6 flex gap-3">
+        <button type="button" onClick={() => setStep(1)} className="rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700">Back</button>
+        <button type="button" onClick={() => setStep(3)} className="flex-1 rounded-xl bg-primary py-3.5 font-bold text-white">Continue to payment</button>
+      </div>
+        </>
+      )}
+
+      {step === 3 && (
+        <>
+      <section className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <h3 className="text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.paymentMethod', language)}</h3>
+        <p className="mt-1 text-sm text-slate-600">Choose how you will pay after this request. You are not charged until you confirm payment.</p>
+        <select value={values.paymentMethod} onChange={(event) => updateValue('paymentMethod', event.target.value)} className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
+          <option value="mobile-money">{t('booking.mobileMoney', language)}</option>
+          <option value="bank">{t('bank', language)}</option>
+        </select>
+      </section>
 
       <label className="mb-5 flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-sm text-slate-700">
         <input type="checkbox" className="mt-0.5" checked={values.agreeToTerms} onChange={(event) => updateValue('agreeToTerms', event.target.checked)} required />
@@ -649,20 +657,25 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       {isUnavailable && <div className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">{t('booking.currentlyUnavailable', language)}</div>}
       {error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>}
 
-      <button
-        type="submit"
-        disabled={loading || isUnavailable || Boolean(quoteResult)}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading ? (
-          <>
-            <LoadingSpinner size="sm" />
-            {t('sending', language)}
-          </>
-        ) : (
-          quoteResult ? t('booking.quoteCreated', language) : t('submitBookingRequest', language)
-        )}
-      </button>
+      <div className="mb-3 flex gap-3">
+        <button type="button" onClick={() => setStep(2)} className="rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700">Back</button>
+        <button
+          type="submit"
+          disabled={loading || isUnavailable || Boolean(quoteResult)}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? (
+            <>
+              <LoadingSpinner size="sm" />
+              {t('sending', language)}
+            </>
+          ) : (
+            quoteResult ? t('booking.quoteCreated', language) : t('submitBookingRequest', language)
+          )}
+        </button>
+      </div>
+        </>
+      )}
 
       {quoteResult && <QuoteCard result={quoteResult} paymentMethod={values.paymentMethod} onPaid={(booking) => onSuccess?.(booking)} />}
       {detailsOpen && selectedOfferRow && <OptionDetailsModal row={selectedOfferRow} listing={{ ...business, ...service }} onClose={() => setDetailsOpen(false)} />}
