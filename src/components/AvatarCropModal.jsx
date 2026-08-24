@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AVATAR_VIEWPORT, clampAvatarOffset, coverScale, cropAvatarToFile } from '../lib/avatarCrop';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
@@ -6,6 +7,7 @@ import { t } from '../lib/translations';
 export default function AvatarCropModal({ src, initialZoom = 1, initialOffset = { x: 0, y: 0 }, onCancel, onConfirm }) {
   const { language } = useLanguage();
   const imageRef = useRef(null);
+  const stageRef = useRef(null);
   const dragRef = useRef(null);
   const [natural, setNatural] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(initialZoom);
@@ -26,6 +28,22 @@ export default function AvatarCropModal({ src, initialZoom = 1, initialOffset = 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [busy, onCancel]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return undefined;
+    const onWheel = (event) => {
+      event.preventDefault();
+      const delta = event.deltaY < 0 ? 0.08 : -0.08;
+      setZoom((current) => {
+        const value = Math.min(3, Math.max(1, current + delta));
+        setOffset((currentOffset) => clampAvatarOffset(currentOffset, natural.width, natural.height, viewport, value));
+        return value;
+      });
+    };
+    stage.addEventListener('wheel', onWheel, { passive: false });
+    return () => stage.removeEventListener('wheel', onWheel);
+  }, [natural.height, natural.width, viewport]);
 
   const displayed = useMemo(() => {
     const scale = coverScale(natural.width, natural.height, viewport) * zoom;
@@ -82,7 +100,7 @@ export default function AvatarCropModal({ src, initialZoom = 1, initialOffset = 
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-4">
       <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">{t('profilePage.photo', language)}</p>
@@ -91,16 +109,13 @@ export default function AvatarCropModal({ src, initialZoom = 1, initialOffset = 
 
         <div className="mt-4 flex flex-col items-center gap-4">
           <div
+            ref={stageRef}
             className="relative touch-none overflow-hidden rounded-[2rem] bg-slate-950"
-            style={{ width: viewport, height: viewport, cursor: dragRef.current ? 'grabbing' : 'grab' }}
+            style={{ width: viewport, height: viewport, cursor: 'grab' }}
             onPointerDown={startDrag}
             onPointerMove={moveDrag}
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
-            onWheel={(event) => {
-              event.preventDefault();
-              changeZoom(zoom + (event.deltaY < 0 ? 0.08 : -0.08));
-            }}
           >
             {src ? (
               <img
@@ -120,6 +135,7 @@ export default function AvatarCropModal({ src, initialZoom = 1, initialOffset = 
                   height: displayed.height || 'auto',
                   left: '50%',
                   top: '50%',
+                  opacity: natural.width ? 1 : 0,
                   transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
                 }}
               />
@@ -153,6 +169,7 @@ export default function AvatarCropModal({ src, initialZoom = 1, initialOffset = 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

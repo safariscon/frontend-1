@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
+import AvatarCropModal from '../components/AvatarCropModal';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { authApi, getAuthData, hotelApi, paymentsApi } from '../lib/api';
 import { isSellerRole } from '../lib/dashboard';
 import { t } from '../lib/translations';
+import { isUploadWithinLimit, MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
@@ -21,6 +23,24 @@ export default function ProfilePage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const fileInputRef = useRef(null);
+  const [cropSrc, setCropSrc] = useState('');
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropState, setCropState] = useState({ zoom: 1, offset: { x: 0, y: 0 } });
+  const [pendingPreview, setPendingPreview] = useState('');
+  const [pendingFile, setPendingFile] = useState(null);
+  const cropSrcRef = useRef('');
+  const pendingPreviewRef = useRef('');
+
+  useEffect(() => {
+    cropSrcRef.current = cropSrc;
+    pendingPreviewRef.current = pendingPreview;
+  }, [cropSrc, pendingPreview]);
+
+  useEffect(() => () => {
+    if (cropSrcRef.current) URL.revokeObjectURL(cropSrcRef.current);
+    if (pendingPreviewRef.current) URL.revokeObjectURL(pendingPreviewRef.current);
+  }, []);
 
   useEffect(() => {
     if (!user) navigate('/login');
@@ -111,6 +131,71 @@ export default function ProfilePage() {
   };
 
   const providers = payoutForm.method === 'bank' ? catalog?.bankProviders || [] : catalog?.mobileMoneyProviders || [];
+  const displayAvatar = pendingPreview || user.avatarUrl;
+
+  const openPhotoPicker = () => fileInputRef.current?.click();
+
+  const onPhotoSelected = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type?.startsWith('image/')) {
+      setError(t('profilePage.photoInvalid', language));
+      return;
+    }
+    if (!isUploadWithinLimit(file)) {
+      setError(t('profilePage.photoTooLarge', language, { size: MAX_UPLOAD_FILE_SIZE_MB }));
+      return;
+    }
+    setError('');
+    setMessage('');
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(URL.createObjectURL(file));
+    setCropState({ zoom: 1, offset: { x: 0, y: 0 } });
+    setCropOpen(true);
+  };
+
+  const closeCropper = () => setCropOpen(false);
+
+  const confirmCrop = ({ file, zoom, offset }) => {
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingFile(file);
+    setPendingPreview(URL.createObjectURL(file));
+    setCropState({ zoom, offset });
+    setCropOpen(false);
+    setMessage(t('profilePage.photoReady', language));
+  };
+
+  const discardPendingPhoto = () => {
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingPreview('');
+    setPendingFile(null);
+  };
+
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      if (pendingFile) {
+        const photoResponse = await authApi.uploadAvatar(token, pendingFile);
+        updateUser(photoResponse.user || { avatarUrl: photoResponse.url });
+      }
+      const response = await authApi.updateProfile(token, profileForm);
+      updateUser(response.user);
+      discardPendingPhoto();
+      if (cropSrc) {
+        URL.revokeObjectURL(cropSrc);
+        setCropSrc('');
+      }
+      setMessage(response.message || t('profilePage.profileUpdated', language));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -128,55 +213,50 @@ export default function ProfilePage() {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-black text-slate-950">{t('profilePage.information', language)}</h2>
             <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
-              ) : (
-                <div className="grid h-20 w-20 place-items-center rounded-full bg-primary text-xl font-black text-white">
-                  {String(user.name || 'U').slice(0, 1).toUpperCase()}
+              <button
+                type="button"
+                onClick={openPhotoPicker}
+                className={`relative h-24 w-24 shrink-0 overflow-hidden rounded-full ring-4 ${pendingFile ? 'ring-primary' : 'ring-slate-100'}`}
+                aria-label={t('profilePage.choosePhoto', language)}
+              >
+                {displayAvatar ? (
+                  <img src={displayAvatar} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="grid h-full w-full place-items-center bg-primary text-2xl font-black text-white">
+                    {String(user.name || 'U').slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+              </button>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-700">{t('profilePage.photo', language)}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{t('profilePage.photoHint', language)}</p>
+                {pendingFile ? <p className="mt-1 text-sm font-semibold text-emerald-700">{t('profilePage.photoReady', language)}</p> : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={openPhotoPicker} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
+                    {displayAvatar ? t('profilePage.changePhoto', language) : t('profilePage.choosePhoto', language)}
+                  </button>
+                  {cropSrc ? (
+                    <button type="button" onClick={() => setCropOpen(true)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700">
+                      {t('profilePage.adjustPhoto', language)}
+                    </button>
+                  ) : null}
+                  {pendingFile ? (
+                    <button type="button" onClick={discardPendingPhoto} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700">
+                      {t('profilePage.discardPhoto', language)}
+                    </button>
+                  ) : null}
                 </div>
-              )}
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">{t('profilePage.photo', language)}</span>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  className="mt-1 block text-sm"
-                  onChange={async (event) => {
-                    const file = event.target.files?.[0];
-                    if (!file || !token) return;
-                    setBusy(true);
-                    setError('');
-                    setMessage('');
-                    try {
-                      const response = await authApi.uploadAvatar(token, file);
-                      updateUser(response.user || { avatarUrl: response.url });
-                      setMessage(response.message || t('profilePage.photoUpdated', language));
-                    } catch (requestError) {
-                      setError(requestError.message);
-                    } finally {
-                      setBusy(false);
-                      event.target.value = '';
-                    }
-                  }}
+                  className="hidden"
+                  onChange={onPhotoSelected}
                 />
-              </label>
+              </div>
             </div>
             <form
-              onSubmit={async (event) => {
-                event.preventDefault();
-                setBusy(true);
-                setError('');
-                setMessage('');
-                try {
-                  const response = await authApi.updateProfile(token, profileForm);
-                  updateUser(response.user);
-                  setMessage(response.message || t('profilePage.profileUpdated', language));
-                } catch (requestError) {
-                  setError(requestError.message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
+              onSubmit={saveProfile}
               className="mt-4 grid gap-3 sm:grid-cols-2"
             >
               <label className="block">
@@ -269,6 +349,15 @@ export default function ProfilePage() {
           )}
         </div>
       </main>
+      {cropOpen && cropSrc ? (
+        <AvatarCropModal
+          src={cropSrc}
+          initialZoom={cropState.zoom}
+          initialOffset={cropState.offset}
+          onCancel={closeCropper}
+          onConfirm={confirmCrop}
+        />
+      ) : null}
     </DashboardLayout>
   );
 }
