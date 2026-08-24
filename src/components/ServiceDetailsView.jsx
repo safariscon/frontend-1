@@ -353,8 +353,8 @@ function UnitCard({ unit, index, optionFieldSchema = [], language }) {
       return { id: field.id, label: field.label || field.id, value: formatAttrValue(value) };
     })
     .filter(Boolean);
-  const occupancy = occupancyRows(attributes.occupancyPrices);
   const beds = Array.isArray(attributes.beds) ? attributes.beds.filter((bed) => bed?.type && Number(bed.count) > 0) : [];
+  const pricingMode = attributes.pricingMode === 'per_guest' ? 'per_guest' : 'unit';
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
@@ -368,6 +368,9 @@ function UnitCard({ unit, index, optionFieldSchema = [], language }) {
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('serviceView.price', language)}</p>
           <p className="mt-1 text-2xl font-black text-primary">{price ? formatRwf(price) : '—'}</p>
           {unit.priceType ? <p className="mt-1 text-xs font-semibold text-slate-500">{unit.priceType}</p> : null}
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            {pricingMode === 'per_guest' ? t('serviceView.pricingModePerGuest', language) : t('serviceView.pricingModeUnit', language)}
+          </p>
         </div>
       </div>
 
@@ -389,29 +392,12 @@ function UnitCard({ unit, index, optionFieldSchema = [], language }) {
         </div>
       ) : null}
 
-      {occupancy.length ? (
-        <div className="mt-4">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.occupancyPrices', language)}</p>
-          <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-100 text-left text-xs font-black uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">{t('serviceView.guests', language)}</th>
-                  <th className="px-3 py-2">{t('serviceView.price', language)}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {occupancy.map((row) => (
-                  <tr key={row.guests} className="border-t border-slate-100">
-                    <td className="px-3 py-2 font-semibold text-slate-800">{row.guests}</td>
-                    <td className="px-3 py-2 font-bold text-slate-950">{formatRwf(row.price)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+        <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.pricingMode', language)}</p>
+        <p className="mt-1 font-semibold">
+          {pricingMode === 'per_guest' ? t('serviceView.pricingModePerGuestHint', language) : t('serviceView.pricingModeUnitHint', language)}
+        </p>
+      </div>
 
       {Array.isArray(attributes.roomAmenities) && attributes.roomAmenities.length ? (
         <div className="mt-3">
@@ -559,20 +545,6 @@ function collectImages(service, language) {
     return [{ url: service.primaryImage, alt: fallbackAlt }, ...fromArray];
   }
   return fromArray;
-}
-
-function occupancyRows(value) {
-  if (Array.isArray(value)) {
-    return value
-      .map((row) => ({ guests: Number(row?.guests), price: Number(row?.price) }))
-      .filter((row) => Number.isFinite(row.guests) && row.guests > 0 && Number.isFinite(row.price));
-  }
-  if (value && typeof value === 'object') {
-    return Object.entries(value)
-      .map(([guests, price]) => ({ guests: Number(guests), price: Number(price) }))
-      .filter((row) => Number.isFinite(row.guests) && row.guests > 0 && Number.isFinite(row.price));
-  }
-  return [];
 }
 
 function amenityLabel(id) {

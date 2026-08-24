@@ -16,7 +16,7 @@ import { formatRwf } from '../lib/currency';
 import SeoHead from '../components/SeoHead';
 import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
 import { getServiceDetailSeo, noindexSeo } from '../lib/seo';
-import { amenityLabel, listingOptions, optionLeft, policyLabel } from '../lib/stayDisplay';
+import { amenityLabel, listingOptions, optionLeft, optionPricingCopy, policyLabel } from '../lib/stayDisplay';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -99,6 +99,7 @@ export default function HotelDetailsPage() {
   const listing = hotel.listingAttributes || {};
   const options = listingOptions(hotel);
   const selectedOption = options.find((option) => String(option.id || option.optionId) === String(selectedOptionId)) || options[0] || null;
+  const selectedPricing = selectedOption ? optionPricingCopy(selectedOption) : null;
   const amenities = Array.isArray(listing.amenities) && listing.amenities.length ? listing.amenities : (hotel.amenities || []);
   const primaryCover = hotel.primaryImage || (Array.isArray(hotel.images) ? hotel.images.find(Boolean) : '') || hotel.image || '';
   const images = (() => {
@@ -221,7 +222,7 @@ export default function HotelDetailsPage() {
               <section id="rooms" className="scroll-mt-28 space-y-4">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">Info & prices</h2>
-                  <p className="mt-1 text-sm text-slate-600">Choose the room or unit you want to book. Remaining count is what the provider currently has available.</p>
+                  <p className="mt-1 text-sm text-slate-600">Each option has one nightly price. Guest count is how many people can stay, not a separate price list.</p>
                 </div>
                 {options.length ? options.map((option) => (
                   <StayOptionCard
@@ -295,6 +296,8 @@ export default function HotelDetailsPage() {
                     <p className="text-xs font-black uppercase tracking-wide text-slate-400">Selected</p>
                     <h2 className="mt-1 text-lg font-black text-slate-950">{selectedOption.name}</h2>
                     <p className="mt-2 text-2xl font-black text-primary">{selectedOption.price ? formatRwf(selectedOption.price) : 'Quote on request'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-600">{selectedPricing?.priceCaption}</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">{selectedPricing?.detail}</p>
                     <p className={`mt-2 text-sm font-black ${optionLeft(selectedOption) <= 3 ? 'text-amber-700' : 'text-emerald-700'}`}>
                       {optionLeft(selectedOption) <= 0 ? 'Sold out' : `${optionLeft(selectedOption)} left`}
                     </p>

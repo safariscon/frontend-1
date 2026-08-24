@@ -97,18 +97,54 @@ export function bedLabel(type) {
   return lookupLabel(BED_TYPES, type);
 }
 
-export function occupancyRows(value) {
-  if (Array.isArray(value)) {
-    return value
-      .map((row) => ({ guests: Number(row?.guests), price: Number(row?.price) }))
-      .filter((row) => Number.isFinite(row.guests) && row.guests > 0 && Number.isFinite(row.price));
+export function optionPricingMode(option) {
+  const mode = option?.attributes?.pricingMode || option?.pricingMode;
+  return mode === 'per_guest' ? 'per_guest' : 'unit';
+}
+
+export function optionUnitPrice(option) {
+  const price = Number(option?.price || 0);
+  return Number.isFinite(price) && price > 0 ? price : 0;
+}
+
+export function optionNightlyForGuests(option, guests) {
+  const base = optionUnitPrice(option);
+  const count = Math.max(1, Number(guests) || 1);
+  return optionPricingMode(option) === 'per_guest' ? base * count : base;
+}
+
+export function optionPricingCopy(option, guests) {
+  const maxGuests = Number(option?.attributes?.maxGuests || 0);
+  const base = optionUnitPrice(option);
+  const perGuest = optionPricingMode(option) === 'per_guest';
+  const count = Math.max(1, Number(guests) || Math.min(2, maxGuests || 2) || 2);
+  if (!base) {
+    return {
+      perGuest,
+      headline: perGuest ? 'Per guest, per night' : 'Whole unit, per night',
+      detail: 'Price is set by the provider for this option.',
+      priceCaption: perGuest ? 'Per guest / night' : 'Per night',
+      exampleNightly: 0,
+    };
   }
-  if (value && typeof value === 'object') {
-    return Object.entries(value)
-      .map(([guests, price]) => ({ guests: Number(guests), price: Number(price) }))
-      .filter((row) => Number.isFinite(row.guests) && row.guests > 0 && Number.isFinite(row.price));
+  if (perGuest) {
+    return {
+      perGuest,
+      headline: 'Per guest, per night',
+      detail: `${formatRwf(base)} × ${count} guest${count === 1 ? '' : 's'} = ${formatRwf(base * count)} per night. Max ${maxGuests || count} guests.`,
+      priceCaption: 'Per guest / night',
+      exampleNightly: base * count,
+    };
   }
-  return [];
+  return {
+    perGuest,
+    headline: 'Whole unit, per night',
+    detail: maxGuests
+      ? `Same price for 1 to ${maxGuests} guests. Guest count is capacity, not a second price.`
+      : 'This price is for the room or unit, not a separate price per guest.',
+    priceCaption: 'Per night',
+    exampleNightly: base,
+  };
 }
 
 export function bedSummary(beds = []) {

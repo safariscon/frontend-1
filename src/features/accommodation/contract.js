@@ -169,9 +169,9 @@ export const WIZARD_STEPS = [
   { id: "location", title: "Location & contact", hint: "Map pin, address, and booking contact.", scope: "global" },
   { id: "rules", title: "House rules", hint: "Check-in windows, children, and pets.", scope: "stay" },
   { id: "amenities", title: "Facilities", hint: "What guests can use at the property.", scope: "stay" },
-  { id: "units", title: "Rooms & units", hint: "Beds, occupancy, bathrooms, and in-room extras.", scope: "stay" },
+  { id: "units", title: "Rooms & units", hint: "Beds, max guests, one nightly price, and bathrooms.", scope: "stay" },
   { id: "photos", title: "Photos", hint: "Show the property clearly before booking.", scope: "global" },
-  { id: "pricing", title: "Rates & policies", hint: "Nightly prices, discounts, and cancellation.", scope: "stay" },
+  { id: "pricing", title: "Rates & policies", hint: "Discounts and cancellation. Nightly prices are set on each unit.", scope: "stay" },
   { id: "availability", title: "Availability", hint: "When the calendar opens for bookings.", scope: "stay" },
   { id: "identity", title: "Host & invoicing", hint: "Legal name, ID, and billing address.", scope: "global" },
   { id: "review", title: "Review & open", hint: "Confirm details, then submit for booking.", scope: "global" },
@@ -215,6 +215,19 @@ export function emptyBeds() {
   return { single: 0, double: 1, king: 0, super_king: 0, sofa_bed: 0, bunk: 0 };
 }
 
+export const PRICING_MODES = [
+  {
+    id: "unit",
+    title: "One price for the whole unit",
+    description: "Guest count is only capacity. 1 guest or max guests pay the same nightly rate.",
+  },
+  {
+    id: "per_guest",
+    title: "Price per guest",
+    description: "2 guests pay 2 × this nightly price. Use this for dorm beds or per-person stays.",
+  },
+];
+
 export function emptyUnit(partial = {}) {
   const maxGuests = Number(partial.maxGuests || 2);
   return {
@@ -230,16 +243,9 @@ export function emptyUnit(partial = {}) {
     bathroomPrivate: partial.bathroomPrivate !== false,
     bathroomAmenities: partial.bathroomAmenities || ["toilet_paper", "shower", "toilet"],
     roomAmenities: partial.roomAmenities || [],
-    occupancyPrices: partial.occupancyPrices || occupancyDefaults(maxGuests, partial.price),
+    pricingMode: partial.pricingMode === "per_guest" ? "per_guest" : "unit",
     price: partial.price || "",
   };
-}
-
-export function occupancyDefaults(maxGuests, price = "") {
-  const count = Math.max(1, Number(maxGuests) || 1);
-  const prices = {};
-  for (let guests = 1; guests <= count; guests += 1) prices[guests] = price;
-  return prices;
 }
 
 export function emptyStayDraft(overrides = {}) {
@@ -368,10 +374,8 @@ export function buildListingAttributes(draft) {
 export function buildUnitPayload(unit) {
   const beds = bedsToList(unit.beds);
   const maxGuests = Math.max(1, Number(unit.maxGuests) || 1);
-  const occupancyPrices = Object.entries(unit.occupancyPrices || {})
-    .map(([guests, price]) => ({ guests: Number(guests), price: Number(price) }))
-    .filter((row) => row.guests >= 1 && Number.isFinite(row.price) && row.price > 0);
-  const fallbackPrice = Number(unit.price) || occupancyPrices.at(-1)?.price || occupancyPrices[0]?.price || 0;
+  const fallbackPrice = Number(unit.price) || 0;
+  const pricingMode = unit.pricingMode === "per_guest" ? "per_guest" : "unit";
   return {
     name: unit.name,
     price: fallbackPrice,
@@ -387,19 +391,23 @@ export function buildUnitPayload(unit) {
       bathroomPrivate: unit.bathroomPrivate !== false,
       bathroomAmenities: unit.bathroomAmenities || [],
       roomAmenities: unit.roomAmenities || [],
-      occupancyPrices: occupancyPrices.length ? occupancyPrices : [{ guests: maxGuests, price: fallbackPrice }],
+      pricingMode,
+      occupancyPrices: [{ guests: maxGuests, price: fallbackPrice }],
     },
   };
+}
+
+function resolveLoadedPrice(option = {}, attrs = {}, maxGuests = 2) {
+  if (Number(option.price) > 0) return String(option.price);
+  const rows = Array.isArray(attrs.occupancyPrices) ? attrs.occupancyPrices : [];
+  const byMax = rows.find((row) => Number(row.guests) === Number(maxGuests) && Number(row.price) > 0);
+  const any = rows.find((row) => Number(row.price) > 0);
+  return String(byMax?.price || any?.price || "");
 }
 
 export function unitFromOption(option) {
   const attrs = option?.attributes || {};
   const maxGuests = Number(attrs.maxGuests || 2);
-  const prices = {};
-  (attrs.occupancyPrices || []).forEach((row) => {
-    if (row?.guests) prices[row.guests] = String(row.price ?? "");
-  });
-  if (!Object.keys(prices).length && option?.price) prices[maxGuests] = String(option.price);
   return emptyUnit({
     optionId: option._id || option.id || null,
     name: option.name || attrs.unitName || "Room",
@@ -412,8 +420,8 @@ export function unitFromOption(option) {
     bathroomPrivate: attrs.bathroomPrivate !== false,
     bathroomAmenities: attrs.bathroomAmenities || [],
     roomAmenities: attrs.roomAmenities || [],
-    occupancyPrices: { ...occupancyDefaults(maxGuests), ...prices },
-    price: String(option.price || ""),
+    pricingMode: attrs.pricingMode === "per_guest" ? "per_guest" : "unit",
+    price: resolveLoadedPrice(option, attrs, maxGuests),
   });
 }
 
@@ -512,8 +520,7 @@ export function validateStayStep(stepId, draft) {
       if (!unit.name) errors[`unitName${index}`] = "Choose a room name.";
       if (!(Number(unit.maxGuests) > 0)) errors[`maxGuests${index}`] = "Max guests is required.";
       if (!bedsToList(unit.beds).length) errors[`beds${index}`] = "Add at least one bed.";
-      const priced = Object.values(unit.occupancyPrices || {}).some((price) => Number(price) > 0) || Number(unit.price) > 0;
-      if (!priced) errors[`price${index}`] = "Set a nightly price for this unit.";
+      if (!(Number(unit.price) > 0)) errors[`price${index}`] = "Set one nightly price for this option.";
     });
   }
   if (stepId === "photos") {

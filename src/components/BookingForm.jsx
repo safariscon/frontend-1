@@ -545,43 +545,46 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       </div>
 
       {step === 1 && (
-      <section className="mb-6 space-y-3">
-        <h3 className="text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.chooseService', language)}</h3>
-        {supportsOptions ? (
-          <div className="space-y-3">
-            {offers.map((row) => (
-              <StayOptionCard
-                key={row.id || row.optionId}
-                option={row}
-                selected={String(row.id || row.optionId) === String(selectedOffer)}
-                selectable={!quoteResult}
-                onSelect={(next) => setSelectedOffer(String(next.id || next.optionId))}
-                ctaLabel="Book this option"
-              />
-            ))}
+        <>
+          <section className="mb-6 space-y-3">
+            <h3 className="text-xs font-black uppercase tracking-wide text-slate-400">{t('booking.chooseService', language)}</h3>
+            {supportsOptions ? (
+              <div className="space-y-3">
+                {offers.map((row) => (
+                  <StayOptionCard
+                    key={row.id || row.optionId}
+                    option={row}
+                    selected={String(row.id || row.optionId) === String(selectedOffer)}
+                    selectable={!quoteResult}
+                    onSelect={(next) => setSelectedOffer(String(next.id || next.optionId))}
+                    ctaLabel="Book this option"
+                    guests={bookingAttributes.guests}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                <p className="text-lg font-black">{service.title || service.name}</p>
+                <p className="mt-1 font-bold text-primary">{basePrice > 0 ? formatRwf(basePrice) : t('booking.manualQuote', language)}</p>
+              </div>
+            )}
+          </section>
+          <div className="mb-6">
+            <BookingFields
+              category={liveCategory || business}
+              listing={business}
+              values={bookingAttributes}
+              errors={bookingAttributeErrors}
+              onChange={(next) => {
+                setBookingAttributes(next);
+                setBookingAttributeErrors({});
+              }}
+            />
+            <button type="button" onClick={() => setStep(2)} className="mt-4 w-full rounded-xl bg-primary py-3.5 font-bold text-white">
+              Continue to your details
+            </button>
           </div>
-        ) : (
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-            <p className="text-lg font-black">{service.title || service.name}</p>
-            <p className="mt-1 font-bold text-primary">{basePrice > 0 ? formatRwf(basePrice) : t('booking.manualQuote', language)}</p>
-          </div>
-        )}
-      </section>
-      <div className="mb-6">
-        <BookingFields
-          category={liveCategory || business}
-          listing={business}
-          values={bookingAttributes}
-          errors={bookingAttributeErrors}
-          onChange={(next) => {
-            setBookingAttributes(next);
-            setBookingAttributeErrors({});
-          }}
-        />
-        <button type="button" onClick={() => setStep(2)} className="mt-4 w-full rounded-xl bg-primary py-3.5 font-bold text-white">
-          Continue to your details
-        </button>
-      </div>
+        </>
       )}
 
       {activePromotion && step === 1 && (

@@ -13,7 +13,7 @@ export default function BookingFields({ category, listing, values = {}, onChange
     if (plans.nonRefundable?.enabled) rateOptions.push('non_refundable');
     if (plans.weekly?.enabled) rateOptions.push('weekly');
     return (
-      <FieldGrid title="Stay details" hint="Select dates and guests. Price is per night, then a 50% deposit is due now.">
+      <FieldGrid title="Stay details" hint="Guest count is how many people stay, up to the unit maximum. The option has one nightly price — for the whole unit, or per guest if the provider chose that. A 50% deposit is due now.">
         <Field label="Check-in" type="date" required value={values.checkIn} error={errors.checkIn} onChange={(value) => set('checkIn', value)} />
         <Field label="Check-out" type="date" required value={values.checkOut} error={errors.checkOut} onChange={(value) => set('checkOut', value)} />
         <Field label="Guests" type="number" required min="1" value={values.guests} error={errors.guests} onChange={(value) => set('guests', value)} />

@@ -4,8 +4,9 @@ import {
   bedSummary,
   hasValue,
   leftLabel,
-  occupancyRows,
   optionLeft,
+  optionPricingCopy,
+  optionUnitPrice,
   unitTypeLabel,
 } from '../../lib/stayDisplay';
 
@@ -16,12 +17,14 @@ export default function StayOptionCard({
   onSelect,
   ctaLabel = 'Select',
   languageNote = '',
+  guests,
 }) {
   const attributes = option?.attributes || {};
   const left = optionLeft(option);
   const soldOut = left <= 0;
   const beds = bedSummary(attributes.beds);
-  const occupancy = occupancyRows(attributes.occupancyPrices);
+  const pricing = optionPricingCopy(option, guests);
+  const unitPrice = optionUnitPrice(option);
   const roomAmenities = Array.isArray(attributes.roomAmenities) ? attributes.roomAmenities : [];
   const bathroomAmenities = Array.isArray(attributes.bathroomAmenities) ? attributes.bathroomAmenities : [];
 
@@ -77,27 +80,17 @@ export default function StayOptionCard({
         </div>
 
         <div className="border-t border-slate-100 bg-slate-50 p-5 lg:border-l lg:border-t-0">
-          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">Your choices</p>
-          {occupancy.length ? (
-            <ul className="mt-3 space-y-1.5 text-sm text-slate-700">
-              {occupancy.map((row) => (
-                <li key={row.guests} className="flex justify-between gap-3">
-                  <span>{row.guests} guest{row.guests === 1 ? '' : 's'}</span>
-                  <span className="font-bold">{formatRwf(row.price)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-3 text-sm text-slate-600">Price shown is for this unit as listed by the provider.</p>
-          )}
+          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">How this price works</p>
+          <p className="mt-3 text-sm font-black text-slate-950">{pricing.headline}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{pricing.detail}</p>
           {languageNote ? <p className="mt-3 text-xs font-semibold text-slate-500">{languageNote}</p> : null}
         </div>
 
         <div className="flex flex-col justify-between border-t border-slate-100 p-5 lg:border-l lg:border-t-0">
           <div>
             <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">Price</p>
-            <p className="mt-1 text-2xl font-black text-slate-950">{option.price ? formatRwf(option.price) : '—'}</p>
-            {option.priceType ? <p className="mt-1 text-xs font-semibold capitalize text-slate-500">{String(option.priceType).replace(/-/g, ' ')}</p> : null}
+            <p className="mt-1 text-2xl font-black text-slate-950">{unitPrice ? formatRwf(unitPrice) : '—'}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">{pricing.priceCaption}</p>
           </div>
           {selectable ? (
             <button

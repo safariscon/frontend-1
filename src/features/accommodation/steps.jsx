@@ -1,3 +1,4 @@
+import { formatRwf } from '../../lib/currency';
 import PhoneNumberField from '../../components/PhoneNumberField';
 import ServiceImagesEditor from '../../components/ServiceImagesEditor';
 import ServiceLocationPicker from '../../components/ServiceLocationPicker';
@@ -6,6 +7,7 @@ import {
   BATHROOM_AMENITIES,
   BED_TYPES,
   ID_TYPES,
+  PRICING_MODES,
   PROPERTY_AMENITIES,
   ROOM_AMENITY_GROUPS,
   STANDARD_UNIT_NAMES,
@@ -16,7 +18,6 @@ import {
   emptyUnit,
   familyForKind,
   kindMeta,
-  occupancyDefaults,
   stayNeedsStarRating,
 } from './contract';
 import { ChipGroup, ChoiceCard, ErrorText, Stepper } from './WizardShell';
@@ -216,6 +217,33 @@ export function AmenitiesStep({ draft, setDraft }) {
   );
 }
 
+function PricePreview({ unit }) {
+  const price = Number(unit.price) || 0;
+  const maxGuests = Math.max(1, Number(unit.maxGuests) || 1);
+  const perGuest = unit.pricingMode === 'per_guest';
+  const twoGuests = Math.min(2, maxGuests);
+  if (!(price > 0)) {
+    return <p className="mt-3 text-sm text-slate-500">Enter a price to see how guests will be charged.</p>;
+  }
+  if (perGuest) {
+    return (
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+        <p className="font-black text-slate-950">How guests will be charged</p>
+        <p className="mt-2">1 guest: {formatRwf(price)} / night</p>
+        <p>{twoGuests} guest{twoGuests === 1 ? '' : 's'}: {formatRwf(price * twoGuests)} / night</p>
+        <p className="mt-2 text-slate-600">Example: {twoGuests} guests for 3 nights = {formatRwf(price * twoGuests * 3)}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+      <p className="font-black text-slate-950">How guests will be charged</p>
+      <p className="mt-2">Up to {maxGuests} guests: {formatRwf(price)} / night for the whole unit</p>
+      <p className="mt-2 text-slate-600">Example: {twoGuests} guests for 3 nights = {formatRwf(price * 3)}</p>
+    </div>
+  );
+}
+
 function UnitCard({ unit, index, errors, onChange, onRemove, canRemove }) {
   const set = (patch) => onChange({ ...unit, ...patch });
   return (
@@ -255,9 +283,10 @@ function UnitCard({ unit, index, errors, onChange, onRemove, canRemove }) {
               value={unit.maxGuests}
               min={1}
               max={16}
-              onChange={(maxGuests) => set({ maxGuests, occupancyPrices: occupancyDefaults(maxGuests, unit.occupancyPrices?.[maxGuests] || unit.price) })}
+              onChange={(maxGuests) => set({ maxGuests })}
             />
           </div>
+          <p className="mt-1 text-xs text-slate-500">How many people can sleep here. This is capacity, not a second price.</p>
           <ErrorText error={errors[`maxGuests${index}`]} />
         </label>
       </div>
@@ -296,23 +325,34 @@ function UnitCard({ unit, index, errors, onChange, onRemove, canRemove }) {
           </div>
         ))}
       </div>
-      <h4 className="mt-5 font-black text-slate-950">Nightly price by occupancy (RWF)</h4>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {Array.from({ length: Number(unit.maxGuests) || 1 }, (_, i) => i + 1).map((guests) => (
-          <label key={guests} className="block">
-            <span className="text-sm font-semibold text-slate-700">{guests} guest{guests > 1 ? 's' : ''}</span>
-            <input
-              type="number"
-              min="1"
-              value={unit.occupancyPrices?.[guests] ?? ''}
-              onChange={(event) => set({ occupancyPrices: { ...unit.occupancyPrices, [guests]: event.target.value }, price: event.target.value })}
-              className={inputClass}
-              placeholder="45000"
-            />
-          </label>
+      <h4 className="mt-5 font-black text-slate-950">Nightly price for this option (RWF)</h4>
+      <p className="mt-1 text-sm text-slate-600">Set one price for this room or unit. Do not create a different price for each guest count.</p>
+      <label className="mt-3 block max-w-xs">
+        <span className="text-sm font-semibold text-slate-700">Option price</span>
+        <input
+          type="number"
+          min="1"
+          value={unit.price ?? ''}
+          onChange={(event) => set({ price: event.target.value })}
+          className={inputClass}
+          placeholder="45000"
+        />
+      </label>
+      <ErrorText error={errors[`price${index}`]} />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {PRICING_MODES.map((mode) => (
+          <button
+            key={mode.id}
+            type="button"
+            onClick={() => set({ pricingMode: mode.id })}
+            className={`rounded-xl border p-4 text-left ${(unit.pricingMode || 'unit') === mode.id ? 'border-primary bg-blue-50' : 'border-slate-200 bg-white'}`}
+          >
+            <p className="text-sm font-black text-slate-950">{mode.title}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-600">{mode.description}</p>
+          </button>
         ))}
       </div>
-      <ErrorText error={errors[`price${index}`]} />
+      <PricePreview unit={unit} />
     </div>
   );
 }
@@ -320,7 +360,7 @@ function UnitCard({ unit, index, errors, onChange, onRemove, canRemove }) {
 export function UnitsStep({ draft, setDraft, errors }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">Standardized names help guests compare rooms. You can keep an internal nickname later.</p>
+      <p className="text-sm text-slate-600">Each option has one nightly price. Max guests is how many people can stay. Choose whether that price is for the whole unit or per guest.</p>
       {draft.units.map((unit, index) => (
         <UnitCard
           key={unit.clientId}
@@ -359,7 +399,7 @@ export function PricingStep({ draft, setDraft }) {
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-        Guests pay a <strong>50% deposit</strong> through SafarisCon (XentriPay). Platform commission is <strong>10%</strong> and is not set by you. The remaining balance is collected on arrival or checkout.
+        The nightly price for each room is set on the Units step. Guests pay a <strong>50% deposit</strong> through SafarisCon (XentriPay). Platform commission is <strong>10%</strong> and is not set by you. The remaining balance is collected on arrival or checkout.
       </div>
       <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
         <input type="checkbox" className="mt-1" checked={draft.childrenStayFree} onChange={(event) => setDraft({ ...draft, childrenStayFree: event.target.checked })} />
