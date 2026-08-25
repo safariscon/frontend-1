@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 import BookingFields from '../features/domain/BookingFields';
@@ -96,6 +96,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     requireConsumptionEndTime: false,
   });
   const [publicAvailability, setPublicAvailability] = useState(null);
+  const [availabilityReady, setAvailabilityReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
   const [error, setError] = useState('');
@@ -109,12 +110,17 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [rebookId, setRebookId] = useState(initialRebookId);
   const [verifiedRebookId, setVerifiedRebookId] = useState('');
   const [verifyingRebook, setVerifyingRebook] = useState(false);
+  const stayAvailabilityKeyRef = useRef('');
   const { language } = useLanguage();
 
   useEffect(() => {
     const loadBusiness = async () => {
       setLiveSchemaLoaded(false);
       setLiveCategory(null);
+      setAvailabilityReady(false);
+      setPublicAvailability(null);
+      stayAvailabilityKeyRef.current = '';
+      setLoadingBusiness(true);
       try {
         const [detail, settingsResponse] = await Promise.all([
           publicApi.getHotel(hotelId, { checkIn: urlStay.checkIn || undefined, checkOut: urlStay.checkOut || undefined }).catch(() => null),
@@ -230,7 +236,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     service?.category?.supportsOptions
   );
   const basePrice = Number(business?.basePrice ?? service?.basePrice ?? business?.price ?? service?.pricing?.amount ?? 0);
-  const offers = supportsOptions ? listingOptions(business) : [];
+  const offers = useMemo(
+    () => (supportsOptions ? listingOptions(business) : []),
+    [business, supportsOptions]
+  );
   const selectedOfferRow = supportsOptions
     ? offers.find((row) => [row.id, row.optionId, row.cells?.service].some((value) => String(value || '') === String(selectedOffer)))
     : null;
@@ -240,6 +249,12 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     const optionId = supportsOptions
       ? (selectedOfferRow?.optionId || selectedOfferRow?.id || null)
       : null;
+    const stayKey = `${hotelId}:${optionId || ''}`;
+    const waitingForStay = stayAvailabilityKeyRef.current !== stayKey;
+    if (waitingForStay) {
+      stayAvailabilityKeyRef.current = stayKey;
+      setAvailabilityReady(false);
+    }
     let cancelled = false;
     publicApi.getServiceAvailability(hotelId, optionId, {
       checkIn: bookingAttributes.checkIn || urlStay.checkIn || undefined,
@@ -253,23 +268,29 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       });
       if (response.consumptionPolicy) setConsumptionPolicy(response.consumptionPolicy);
     }).catch(() => {
-      if (!cancelled) setPublicAvailability(null);
+      if (!cancelled) setPublicAvailability(selectedOfferRow?.availability || {});
+    }).finally(() => {
+      if (!cancelled) setAvailabilityReady(true);
     });
     return () => { cancelled = true; };
-  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id, bookingAttributes.checkIn, bookingAttributes.checkOut, urlStay.checkIn, urlStay.checkOut]);
+  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id, selectedOfferRow?.availability, bookingAttributes.checkIn, bookingAttributes.checkOut, urlStay.checkIn, urlStay.checkOut]);
 
   const optionSchedule = useMemo(
     () => {
       const parsed = parseOptionAvailability(
-        supportsOptions ? selectedOfferRow : {},
-        { ...business, ...service, availableDays: supportsOptions ? undefined : '' }
+        supportsOptions ? (selectedOfferRow || {}) : {},
+        { ...(business || {}), ...(service || {}), availableDays: supportsOptions ? undefined : '' }
       );
+      const dateOnly = (value) => {
+        const text = String(value || '').slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+      };
       if (publicAvailability) {
-        parsed.availableFrom = publicAvailability.windowStartDate || parsed.availableFrom;
-        parsed.availableTo = publicAvailability.windowEndDate || parsed.availableTo;
+        parsed.availableFrom = dateOnly(publicAvailability.windowStartDate) || parsed.availableFrom;
+        parsed.availableTo = dateOnly(publicAvailability.windowEndDate) || parsed.availableTo;
       }
-      if (selectedOfferRow?.availableFrom) parsed.availableFrom = selectedOfferRow.availableFrom;
-      if (selectedOfferRow?.availableTo) parsed.availableTo = selectedOfferRow.availableTo;
+      if (selectedOfferRow?.availableFrom) parsed.availableFrom = dateOnly(selectedOfferRow.availableFrom) || parsed.availableFrom;
+      if (selectedOfferRow?.availableTo) parsed.availableTo = dateOnly(selectedOfferRow.availableTo) || parsed.availableTo;
       return parsed;
     },
     [selectedOfferRow, business, service, supportsOptions, publicAvailability]
@@ -508,7 +529,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     }
   };
 
-  if (loadingBusiness) {
+  if (loadingBusiness || Boolean(business && !availabilityReady)) {
     return (
       <div className="rounded-2xl bg-white p-8 text-center shadow-xl">
         <LoadingSpinner />
@@ -637,7 +658,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
               category={liveCategory || business}
               listing={business}
               option={selectedOfferRow}
-              availability={publicAvailability}
+              availability={publicAvailability || selectedOfferRow?.availability || {}}
               remaining={publicAvailability?.remaining}
               quantity={publicAvailability?.quantity || selectedOfferRow?.quantity}
               values={bookingAttributes}
@@ -849,7 +870,14 @@ function getSelectedService(business) {
   if (!business) return null;
   if (business.primaryService?._id) return business.primaryService;
   if (Array.isArray(business.serviceItems) && business.serviceItems.length) return business.serviceItems[0];
-  return null;
+  const id = business._id || business.id;
+  if (!id) return null;
+  return {
+    ...business,
+    _id: id,
+    title: business.title || business.name || 'Service',
+    name: business.name || business.title || 'Service',
+  };
 }
 
 function getBookingConfig({ business, service, language }) {

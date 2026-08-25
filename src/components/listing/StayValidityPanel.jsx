@@ -79,7 +79,7 @@ export default function StayValidityPanel({
       </dl>
       {nights > 0 ? (
         <p className={`mt-3 text-sm font-bold ${nights > facts.maxStayNights ? 'text-red-700' : 'text-slate-800 dark:text-slate-100'}`}>
-          {t('booking.stayRules.nightsSelected', language, { nights, max: facts.maxStayNights })}
+          {t('booking.stayRules.nightsSelected', language, { nights, maxNights: facts.maxStayNights })}
         </p>
       ) : null}
     </div>

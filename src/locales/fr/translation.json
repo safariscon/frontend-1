@@ -597,7 +597,7 @@
       "noneLeft": "Plus rien pour ces dates",
       "children": "Enfants",
       "pets": "Animaux",
-      "nightsSelected": "{nights} nuit(s) choisie(s) · maximum {max}",
+      "nightsSelected": "{nights} nuit(s) choisie(s) · maximum {maxNights}",
       "checkInHelp": "Première nuit possible : {date}",
       "checkOutHelp": "Dernier matin de départ : {date}"
     },

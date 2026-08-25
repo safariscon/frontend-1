@@ -15,11 +15,11 @@ import { noindexSeo } from '../lib/seo';
 class BookingErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, message: '' };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, message: error?.message || '' };
   }
 
   componentDidCatch(error) {
@@ -32,6 +32,7 @@ class BookingErrorBoundary extends Component {
         <div className="rounded-2xl bg-white p-6 text-center shadow-xl">
           <h2 className="text-xl font-black text-slate-950">This booking page could not load</h2>
           <p className="mt-2 text-sm text-slate-600">Go back to the listing and try Continue to book again.</p>
+          {this.state.message ? <p className="mt-2 break-words text-xs text-slate-500">{this.state.message}</p> : null}
           <button
             type="button"
             onClick={() => this.props.onBack?.()}
@@ -123,7 +124,7 @@ export default function BookingPage() {
             <h1 className="mb-2 text-3xl font-bold text-gray-900">{t('completeBooking', language)}</h1>
             <p className="text-gray-600">{t('selectServiceAndDate', language)}</p>
           </div>
-          <BookingErrorBoundary onBack={goBack}>
+          <BookingErrorBoundary key={hotelId} onBack={goBack}>
             <BookingForm
               hotelId={hotelId}
               onClose={goBack}

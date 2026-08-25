@@ -1,5 +1,28 @@
 const inputClass = 'mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-primary';
 
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  const text = String(value);
+  const match = text.match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : '';
+};
+
+const toInputValue = (type, value) => {
+  if (type === 'date') return toDateInputValue(value);
+  if (type === 'time') return String(value || '').slice(0, 5);
+  if (type === 'datetime-local') {
+    if (!value) return '';
+    const text = String(value);
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return text.slice(0, 16);
+    const date = toDateInputValue(value);
+    return date ? `${date}T00:00` : '';
+  }
+  if (value == null) return '';
+  if (typeof value === 'object') return '';
+  return value;
+};
+
 export function Field({
   label,
   required,
@@ -20,8 +43,8 @@ export function Field({
       {required ? <span className="text-red-500"> *</span> : null}
     </span>
   );
-  const helpNode = help ? <p className="mt-1 text-xs text-slate-500">{help}</p> : null;
-  const errorNode = error ? <p className="mt-1 text-xs font-semibold text-red-600">{error}</p> : null;
+  const helpNode = help != null && help !== '' && typeof help !== 'object' ? <p className="mt-1 text-xs text-slate-500">{String(help)}</p> : null;
+  const errorNode = error != null && error !== '' && typeof error !== 'object' ? <p className="mt-1 text-xs font-semibold text-red-600">{String(error)}</p> : null;
 
   if (type === 'boolean') {
     return (
@@ -44,7 +67,7 @@ export function Field({
         <textarea
           required={required}
           rows={3}
-          value={value || ''}
+          value={toInputValue('text', value)}
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
           className={inputClass}
@@ -59,7 +82,7 @@ export function Field({
     return (
       <label className={`block ${wide ? 'md:col-span-2' : ''}`}>
         {labelNode}
-        <select required={required} value={value || ''} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+        <select required={required} value={toInputValue('text', value)} onChange={(event) => onChange(event.target.value)} className={inputClass}>
           <option value="">{placeholder || 'Select'}</option>
           {(Array.isArray(options) ? options : []).map((option) => {
             const value = option && typeof option === 'object' ? (option.value ?? option.id ?? '') : option;
@@ -80,11 +103,11 @@ export function Field({
       <input
         required={required}
         type={type}
-        min={min}
-        max={max}
-        value={value ?? ''}
+        min={type === 'date' ? toDateInputValue(min) || undefined : min}
+        max={type === 'date' ? toDateInputValue(max) || undefined : max}
+        value={toInputValue(type, value)}
         placeholder={placeholder}
-        onChange={(event) => onChange(type === 'number' ? event.target.value : event.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         className={inputClass}
       />
       {helpNode}
@@ -96,8 +119,8 @@ export function Field({
 export function FieldGrid({ title, hint, children }) {
   return (
     <div className="rounded-xl border border-slate-200 p-4">
-      {title ? <h3 className="font-black text-slate-950">{title}</h3> : null}
-      {hint ? <p className="mt-1 text-sm text-slate-500">{hint}</p> : null}
+      {title && typeof title !== 'object' ? <h3 className="font-black text-slate-950">{String(title)}</h3> : null}
+      {hint && typeof hint !== 'object' ? <p className="mt-1 text-sm text-slate-500">{String(hint)}</p> : null}
       <div className="mt-4 grid gap-4 md:grid-cols-2">{children}</div>
     </div>
   );

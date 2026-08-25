@@ -276,7 +276,7 @@ export default function HotelDetailsPage() {
                   <StayValidityPanel
                     listing={hotel}
                     option={selectedOption}
-                    availability={selectedOption?.availability}
+                    availability={selectedOption?.availability || {}}
                     dateMin={stayDateMin}
                     dateMax={stayDateMax}
                     remaining={selectedOption?.remaining}

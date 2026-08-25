@@ -55,8 +55,8 @@ export default function StayOptionCard({
             <p className="mt-3 text-sm font-semibold text-slate-800">{beds.join(' · ')}</p>
           ) : null}
 
-          {hasValue(option.details) && (
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{option.details}</p>
+          {hasValue(option.details) && typeof option.details !== 'object' && (
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{String(option.details)}</p>
           )}
 
           {roomAmenities.length ? (

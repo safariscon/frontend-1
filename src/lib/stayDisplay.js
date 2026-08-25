@@ -200,19 +200,22 @@ export function stayBookingFacts({
   remaining,
   quantity,
 } = {}) {
-  const attrs = listing.listingAttributes || listing || {};
-  const optionAttrs = option.attributes || {};
-  const maxGuests = Number(optionAttrs.maxGuests || option.maxGuests || 0) || 0;
+  const listingData = listing && typeof listing === 'object' ? listing : {};
+  const optionData = option && typeof option === 'object' ? option : {};
+  const availabilityData = availability && typeof availability === 'object' ? availability : {};
+  const attrs = listingData.listingAttributes || listingData || {};
+  const optionAttrs = optionData.attributes || {};
+  const maxGuests = Number(optionAttrs.maxGuests || optionData.maxGuests || 0) || 0;
   const maxStayNights = Number(attrs.maxStayNights) || (attrs.allowLongStays ? 90 : 30);
   const firstCheckInDate = attrs.firstCheckInMode === 'date' && attrs.firstCheckInDate
     ? attrs.firstCheckInDate
     : todayIsoDate();
   const horizonDays = Number(attrs.availabilityHorizonDays) || 0;
   const horizonEnd = horizonDays > 0 ? addDaysIso(firstCheckInDate, horizonDays) : '';
-  const checkInFrom = dateMin || availability.windowStartDate || option.availableFrom || firstCheckInDate || '';
-  const lastCheckOut = dateMax || availability.windowEndDate || option.availableTo || horizonEnd || '';
-  const units = Number(quantity ?? option.quantity ?? option.capacity ?? 0);
-  const leftover = option.remaining == null ? units : option.remaining;
+  const checkInFrom = dateMin || availabilityData.windowStartDate || optionData.availableFrom || firstCheckInDate || '';
+  const lastCheckOut = dateMax || availabilityData.windowEndDate || optionData.availableTo || horizonEnd || '';
+  const units = Number(quantity ?? optionData.quantity ?? optionData.capacity ?? 0);
+  const leftover = optionData.remaining == null ? units : optionData.remaining;
   const left = remaining == null ? Number(leftover) : Number(remaining);
   return {
     checkInFrom,
@@ -221,7 +224,7 @@ export function stayBookingFacts({
       ? attrs.firstCheckInDate
       : '',
     horizonDays,
-    anytime: Boolean(availability.isAnytime) && !checkInFrom && !lastCheckOut,
+    anytime: Boolean(availabilityData.isAnytime) && !checkInFrom && !lastCheckOut,
     maxGuests,
     maxStayNights,
     longStays: Boolean(attrs.allowLongStays) || maxStayNights > 30,

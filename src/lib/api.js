@@ -892,8 +892,8 @@ export const hotelApi = {
 };
 
 export const categoriesApi = {
-  list: () => apiRequest("/api/service-categories"),
-  get: (idOrSlug) => apiRequest(`/api/service-categories/${encodeURIComponent(idOrSlug)}`),
+  list: () => apiRequest("/api/service-categories", { anonymous: true }),
+  get: (idOrSlug) => apiRequest(`/api/service-categories/${encodeURIComponent(idOrSlug)}`, { anonymous: true }),
 };
 
 export const bookingApi = {
@@ -976,9 +976,9 @@ export const paymentsApi = {
 };
 
 export const publicApi = {
-  getHotels: (query = {}) => apiRequest("/api/hotels" + buildQueryString(query)),
-  getHotel: (hotelId, query = {}) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}` + buildQueryString(query)),
-  getReviews: (hotelId) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}/reviews`),
+  getHotels: (query = {}) => apiRequest("/api/hotels" + buildQueryString(query), { anonymous: true }),
+  getHotel: (hotelId, query = {}) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}` + buildQueryString(query), { anonymous: true }),
+  getReviews: (hotelId) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}/reviews`, { anonymous: true }),
   saveReview: (token, hotelId, payload) =>
     apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}/reviews`, {
       method: "POST",
@@ -988,10 +988,11 @@ export const publicApi = {
   getServiceAvailability: (hotelId, optionId, query = {}) =>
     apiRequest(
       `/api/hotels/${encodeURIComponent(hotelId)}/availability` +
-        buildQueryString({ optionId: optionId || undefined, ...query })
+        buildQueryString({ optionId: optionId || undefined, ...query }),
+      { anonymous: true }
     ),
-  getAnnouncement: () => apiRequest("/api/announcement"),
-  getMarketplaceSettings: () => apiRequest("/api/marketplace-settings"),
+  getAnnouncement: () => apiRequest("/api/announcement", { anonymous: true }),
+  getMarketplaceSettings: () => apiRequest("/api/marketplace-settings", { anonymous: true }),
   verifyBooking: (token) => apiRequest(`/api/verify/${token}`),
 };
 

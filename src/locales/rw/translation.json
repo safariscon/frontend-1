@@ -597,7 +597,7 @@
       "noneLeft": "Nta gisigaye muri aya matariki",
       "children": "Abana",
       "pets": "Amatungo",
-      "nightsSelected": "Amajoro {nights} wahisemo · ntarengwa {max}",
+      "nightsSelected": "Amajoro {nights} wahisemo · ntarengwa {maxNights}",
       "checkInHelp": "Ijoro rya mbere ushobora guhitamo: {date}",
       "checkOutHelp": "Igihe cya nyuma cyo gusohoka: {date}"
     },

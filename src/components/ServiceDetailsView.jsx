@@ -540,7 +540,7 @@ function OptionCard({ row, index, optionFieldSchema = [] }) {
 }
 
 function AvailabilityFacts({ availability, option, language }) {
-  const source = availability || {};
+  const source = availability && typeof availability === 'object' ? availability : {};
   const from = source.windowStartDate || option?.availableFrom;
   const to = source.windowEndDate || option?.availableTo;
   const days = source.daysOfWeek?.length ? source.daysOfWeek : option?.availableDays;

@@ -597,7 +597,7 @@
       "noneLeft": "Hakuna kilichosalia kwa tarehe hizi",
       "children": "Watoto",
       "pets": "Wanyama",
-      "nightsSelected": "Usiku {nights} umechaguliwa · kiwango {max}",
+      "nightsSelected": "Usiku {nights} umechaguliwa · kiwango {maxNights}",
       "checkInHelp": "Usiku wa kwanza unaoweza kuchagua: {date}",
       "checkOutHelp": "Asubuhi ya mwisho ya kuondoka: {date}"
     },
