@@ -53,27 +53,55 @@ const readJsonSession = (raw) => {
   }
 };
 
+const safeStorageGet = (storage, key) => {
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeStorageSet = (storage, key, value) => {
+  try {
+    storage.setItem(key, value);
+  } catch {
+    /* ignore quota / private-mode failures */
+  }
+};
+
+const safeStorageRemove = (storage, key) => {
+  try {
+    storage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+};
+
 const readStoredSession = () => {
-  const localSession = readJsonSession(localStorage.getItem(AUTH_STORAGE_KEY));
-  if (localSession?.token || localSession?.refreshToken || localSession?.user) {
-    return localSession;
-  }
-  localStorage.removeItem(AUTH_STORAGE_KEY);
-
-  const tabSession = readJsonSession(sessionStorage.getItem(AUTH_TAB_STORAGE_KEY));
-  if (tabSession?.token || tabSession?.user) {
-    return tabSession;
-  }
-  sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
-
-  const legacyUserRaw = localStorage.getItem(LEGACY_USER_KEY);
-  if (legacyUserRaw) {
-    try {
-      const user = JSON.parse(legacyUserRaw);
-      return normalizeSession({ user, token: null });
-    } catch {
-      localStorage.removeItem(LEGACY_USER_KEY);
+  try {
+    const localSession = readJsonSession(safeStorageGet(localStorage, AUTH_STORAGE_KEY));
+    if (localSession?.token || localSession?.refreshToken || localSession?.user) {
+      return localSession;
     }
+    safeStorageRemove(localStorage, AUTH_STORAGE_KEY);
+
+    const tabSession = readJsonSession(safeStorageGet(sessionStorage, AUTH_TAB_STORAGE_KEY));
+    if (tabSession?.token || tabSession?.user) {
+      return tabSession;
+    }
+    safeStorageRemove(sessionStorage, AUTH_TAB_STORAGE_KEY);
+
+    const legacyUserRaw = safeStorageGet(localStorage, LEGACY_USER_KEY);
+    if (legacyUserRaw) {
+      try {
+        const user = JSON.parse(legacyUserRaw);
+        return normalizeSession({ user, token: null });
+      } catch {
+        safeStorageRemove(localStorage, LEGACY_USER_KEY);
+      }
+    }
+  } catch {
+    return null;
   }
 
   return null;
@@ -123,20 +151,20 @@ export const persistAuthSession = (result = {}, { rememberMe } = {}) => {
   });
 
   memorySession = session;
-  localStorage.removeItem(LEGACY_USER_KEY);
+  safeStorageRemove(localStorage, LEGACY_USER_KEY);
 
-  if (!session.token && !session.user) {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
+  if (!session || (!session.token && !session.user)) {
+    safeStorageRemove(localStorage, AUTH_STORAGE_KEY);
+    safeStorageRemove(sessionStorage, AUTH_TAB_STORAGE_KEY);
     return session;
   }
 
   if (persistToLocal) {
-    localStorage.setItem(AUTH_STORAGE_KEY, sessionPayload(session));
-    sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
+    safeStorageSet(localStorage, AUTH_STORAGE_KEY, sessionPayload(session));
+    safeStorageRemove(sessionStorage, AUTH_TAB_STORAGE_KEY);
   } else {
-    sessionStorage.setItem(AUTH_TAB_STORAGE_KEY, sessionPayload(session));
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    safeStorageSet(sessionStorage, AUTH_TAB_STORAGE_KEY, sessionPayload(session));
+    safeStorageRemove(localStorage, AUTH_STORAGE_KEY);
   }
 
   return session;
@@ -146,9 +174,9 @@ export const saveAuthData = (authData) => persistAuthSession(authData);
 
 export const clearAuthData = () => {
   memorySession = null;
-  localStorage.removeItem(AUTH_STORAGE_KEY);
-  sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
-  localStorage.removeItem(LEGACY_USER_KEY);
+  safeStorageRemove(localStorage, AUTH_STORAGE_KEY);
+  safeStorageRemove(sessionStorage, AUTH_TAB_STORAGE_KEY);
+  safeStorageRemove(localStorage, LEGACY_USER_KEY);
 };
 
 export const expireAuthSession = () => {
