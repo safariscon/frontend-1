@@ -5,6 +5,7 @@ import {
   ROOM_AMENITY_GROUPS,
   UNIT_TYPES,
 } from '../features/accommodation/contract';
+import { addDaysIso, todayIsoDate } from './staySearch';
 import { formatRwf } from './currency';
 
 const ROOM_AMENITIES = ROOM_AMENITY_GROUPS.flatMap((group) => group.items);
@@ -18,7 +19,7 @@ const POLICY = {
 
 export function listingOptions(hotel) {
   if (Array.isArray(hotel?.options) && hotel.options.length) {
-    return hotel.options.map(optionToBookingRow);
+    return hotel.options.map(optionToBookingRow).filter(Boolean);
   }
   const rows = hotel?.availabilityTable?.rows || [];
   return rows.map((row) => ({
@@ -72,7 +73,9 @@ export function optionLeft(option) {
 
 export function leftLabel(option) {
   const left = optionLeft(option);
-  if (left <= 0) return 'Sold out';
+  if (option?.availableForDates === false || left <= 0) {
+    return option?.availableForDates === false ? 'Not free for these dates' : 'Sold out';
+  }
   return left === 1 ? '1 left' : `${left} left`;
 }
 
@@ -172,6 +175,61 @@ export function humanize(value) {
 export function hasValue(value) {
   if (value === undefined || value === null || value === false) return false;
   if (Array.isArray(value)) return value.length > 0;
-  const text = String(value).trim().toLowerCase();
+  const text = String(value || '')
+    .trim()
+    .toLowerCase();
   return text !== '' && text !== '-' && text !== 'none' && text !== 'not set';
+}
+
+const timeRange = (start, end) => {
+  if (start && end && start !== end) return `${start} – ${end}`;
+  return start || end || '';
+};
+
+export function stayNights(checkIn, checkOut) {
+  if (!checkIn || !checkOut || checkOut <= checkIn) return 0;
+  return Math.round((new Date(`${checkOut}T12:00:00Z`) - new Date(`${checkIn}T12:00:00Z`)) / 86400000);
+}
+
+export function stayBookingFacts({
+  listing = {},
+  option = {},
+  availability = {},
+  dateMin = '',
+  dateMax = '',
+  remaining,
+  quantity,
+} = {}) {
+  const attrs = listing.listingAttributes || listing || {};
+  const optionAttrs = option.attributes || {};
+  const maxGuests = Number(optionAttrs.maxGuests || option.maxGuests || 0) || 0;
+  const maxStayNights = Number(attrs.maxStayNights) || (attrs.allowLongStays ? 90 : 30);
+  const firstCheckInDate = attrs.firstCheckInMode === 'date' && attrs.firstCheckInDate
+    ? attrs.firstCheckInDate
+    : todayIsoDate();
+  const horizonDays = Number(attrs.availabilityHorizonDays) || 0;
+  const horizonEnd = horizonDays > 0 ? addDaysIso(firstCheckInDate, horizonDays) : '';
+  const checkInFrom = dateMin || availability.windowStartDate || option.availableFrom || firstCheckInDate || '';
+  const lastCheckOut = dateMax || availability.windowEndDate || option.availableTo || horizonEnd || '';
+  const units = Number(quantity ?? option.quantity ?? option.capacity ?? 0);
+  const leftover = option.remaining == null ? units : option.remaining;
+  const left = remaining == null ? Number(leftover) : Number(remaining);
+  return {
+    checkInFrom,
+    lastCheckOut,
+    firstCheckIn: attrs.firstCheckInMode === 'date' && attrs.firstCheckInDate
+      ? attrs.firstCheckInDate
+      : '',
+    horizonDays,
+    anytime: Boolean(availability.isAnytime) && !checkInFrom && !lastCheckOut,
+    maxGuests,
+    maxStayNights,
+    longStays: Boolean(attrs.allowLongStays) || maxStayNights > 30,
+    checkInHours: timeRange(attrs.checkInFrom || attrs.checkInTime, attrs.checkInUntil),
+    checkOutHours: timeRange(attrs.checkOutFrom, attrs.checkOutUntil || attrs.checkOutTime),
+    allowsChildren: policyLabel(attrs.allowsChildren),
+    allowsPets: policyLabel(attrs.allowsPets),
+    units,
+    remaining: Number.isFinite(left) ? Math.max(0, left) : null,
+  };
 }

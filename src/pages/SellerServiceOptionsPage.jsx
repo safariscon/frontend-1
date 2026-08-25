@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
+import OptionAvailabilityPanel from '../components/OptionAvailabilityPanel';
 import AvailabilityEditor from '../components/AvailabilityEditor';
 import InventoryFields from '../features/domain/InventoryFields';
 import { emptyInventoryValues, isStayCategory, resolveDomain, validateInventoryClient } from '../features/domain/registry';
@@ -44,13 +45,15 @@ export default function SellerServiceOptionsPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [availabilityOptionId, setAvailabilityOptionId] = useState(null);
 
   const supportsOptions = categorySupportsOptions(
     service?.supportsOptions,
     service?.category?.supportsOptions,
     service?.schemaSnapshot?.supportsOptions
   );
-  const editorHref = isStayCategory(service)
+  const stayListing = isStayCategory(service);
+  const editorHref = stayListing
     ? `/dashboard/seller/stays/${serviceId}`
     : `/dashboard/seller/services/${serviceId}/edit`;
   const requireOptionAvailability = Boolean(availabilityPolicy?.optionRequiresAvailability);
@@ -157,7 +160,7 @@ export default function SellerServiceOptionsPage() {
         ? await hotelApi.createServiceOption(token, serviceId, payload)
         : await hotelApi.updateServiceOption(token, serviceId, editingId, payload);
       const optionId = response.option?._id || response.option?.id || (editingId !== 'new' ? editingId : null);
-      if (optionId) {
+      if (optionId && editingId === 'new') {
         await hotelApi.saveOptionAvailability(token, serviceId, optionId, availabilityForm);
       }
       toast.success(response.message || 'Option saved.');
@@ -218,6 +221,12 @@ export default function SellerServiceOptionsPage() {
                 </div>
               )}
 
+              {options.length > 0 && (
+                <p className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+                  Update each room type or option here. You do not need to open the full listing editor or walk through every tab.
+                </p>
+              )}
+
               {options.map((option) => (
                 <article key={option._id || option.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -240,10 +249,29 @@ export default function SellerServiceOptionsPage() {
                       )}
                     </div>
                     <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAvailabilityOptionId((current) => (
+                          String(current) === String(option._id || option.id) ? null : (option._id || option.id)
+                        ))}
+                        className="rounded-lg border border-primary bg-blue-50 px-3 py-2 text-sm font-bold text-primary"
+                      >
+                        {String(availabilityOptionId) === String(option._id || option.id) ? 'Hide availability' : 'Update availability'}
+                      </button>
                       <button type="button" onClick={() => startEdit(option)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold">Edit</button>
                       <button type="button" onClick={() => remove(option._id || option.id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">Delete</button>
                     </div>
                   </div>
+                  {String(availabilityOptionId) === String(option._id || option.id) ? (
+                    <OptionAvailabilityPanel
+                      token={token}
+                      serviceId={serviceId}
+                      optionId={option._id || option.id}
+                      stayMode={stayListing}
+                      quantity={Number(option.attributes?.quantity || option.capacity || 1)}
+                      availabilityPolicy={availabilityPolicy}
+                    />
+                  ) : null}
                 </article>
               ))}
 
@@ -271,21 +299,40 @@ export default function SellerServiceOptionsPage() {
                       onChange={(attributes) => setForm((prev) => ({ ...prev, attributes }))}
                     />
                   </div>
-                  <div className="mt-4">
-                    <AvailabilityEditor
-                      title={requireOptionAvailability ? 'Option availability (required by admin)' : 'Option availability'}
-                      value={availabilityForm}
-                      onChange={setAvailabilityForm}
-                      modes={availabilityPolicy?.modes}
-                      trackCapacity={availabilityPolicy?.trackCapacity !== false}
-                    />
-                  </div>
+                  {editingId === 'new' ? (
+                    <div className="mt-4">
+                      <AvailabilityEditor
+                        title={requireOptionAvailability ? 'Option availability (required by admin)' : 'Option availability'}
+                        value={availabilityForm}
+                        onChange={setAvailabilityForm}
+                        stayMode={stayListing}
+                        modes={stayListing ? { dateWindow: true, daysOfWeek: false, timeOfDay: false } : availabilityPolicy?.modes}
+                        trackCapacity={!stayListing && availabilityPolicy?.trackCapacity !== false}
+                      />
+                    </div>
+                  ) : null}
                   <div className="mt-5 flex justify-end gap-2">
                     <button type="button" onClick={() => setEditingId(null)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold">Cancel</button>
                     <button type="submit" disabled={saving} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save option'}</button>
                   </div>
                 </form>
               )}
+              {editingId && editingId !== 'new' ? (
+                <article className="rounded-2xl border border-primary/20 bg-white p-5 shadow-sm">
+                  <h2 className="text-lg font-black text-slate-950">Availability for this {stayListing ? 'room type' : 'option'}</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Open dates, capacity, and closed nights are saved here. Name and price stay on Save option above.
+                  </p>
+                  <OptionAvailabilityPanel
+                    token={token}
+                    serviceId={serviceId}
+                    optionId={editingId}
+                    stayMode={stayListing}
+                    quantity={Number(form.attributes?.quantity || 1)}
+                    availabilityPolicy={availabilityPolicy}
+                  />
+                </article>
+              ) : null}
             </div>
           )}
         </div>

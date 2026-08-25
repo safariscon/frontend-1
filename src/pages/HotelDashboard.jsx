@@ -701,7 +701,37 @@ export default function HotelDashboard() {
             <div>
               <button type="button" onClick={() => setViewingService(null)} className="mb-4 text-sm font-semibold text-primary">{t('sellerDash.backToServices', language)}</button>
               <h2 className="mb-4 text-2xl font-black text-slate-950">{viewingService.title || viewingService.name || t('admin.serviceDetails', language)}</h2>
-              <ServiceDetailsView service={viewingService} />
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => startEdit(viewingService)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800"
+                >
+                  {t('edit', language)}
+                </button>
+                {categorySupportsOptions(viewingService.supportsOptions, viewingService.category?.supportsOptions, viewingService.schemaSnapshot?.supportsOptions) && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/dashboard/seller/services/${viewingService._id || viewingService.id}/options`)}
+                    className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white"
+                  >
+                    {t('sellerDash.manageRoomsOptions', language)}
+                  </button>
+                )}
+              </div>
+              <ServiceDetailsView
+                service={viewingService}
+                manageAvailability
+                onAvailabilitySaved={async () => {
+                  if (!token || !viewingService) return;
+                  try {
+                    const response = await hotelApi.getService(token, viewingService._id || viewingService.id);
+                    setViewingService(response.service || response);
+                  } catch {
+                    /* keep the current details view */
+                  }
+                }}
+              />
             </div>
           ) : (
           <section className="seller-dashboard-content bg-white rounded-2xl shadow-sm p-4">
@@ -960,7 +990,10 @@ function ServiceCard({ service, language, onView, onEdit, onOptions, onDelete, o
             <MenuItem label={t('sellerDash.viewDetails', language)} onClick={() => run(() => onView(service))} />
             <MenuItem label={t('edit', language)} onClick={() => run(() => onEdit(service))} />
             {categorySupportsOptions(service.supportsOptions, service.category?.supportsOptions, service.schemaSnapshot?.supportsOptions) && (
-              <MenuItem label="Manage options" onClick={() => run(() => onOptions?.(service))} />
+              <>
+                <MenuItem label={t('sellerDash.manageOptions', language)} onClick={() => run(() => onOptions?.(service))} />
+                <MenuItem label={t('sellerDash.updateAvailability', language)} onClick={() => run(() => onView(service))} />
+              </>
             )}
             <MenuItem
               label={service.status === 'available' ? t('sellerDash.notAvailable', language) : t('sellerDash.available', language)}

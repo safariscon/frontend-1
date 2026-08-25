@@ -29,6 +29,7 @@ import {
   parseOptionAvailability,
   validateOptionSchedule,
 } from '../lib/availability';
+import { addDaysIso, staySearchFromParams } from '../lib/staySearch';
 import CustomerLocationPicker from './CustomerLocationPicker';
 import { emptyLocationDetails, formatLocationLine, isCustomerMapLocationComplete, normalizeLocationDetails } from '../lib/places';
 import { categorySupportsOptions } from '../lib/serviceSchema';
@@ -80,6 +81,7 @@ const BASE_VALUES = {
 export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const [searchParams] = useSearchParams();
   const initialRebookId = searchParams.get('rebookId') || '';
+  const urlStay = staySearchFromParams(searchParams);
   const [business, setBusiness] = useState(null);
   const [values, setValues] = useState(BASE_VALUES);
   const [customValues, setCustomValues] = useState({});
@@ -114,16 +116,20 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       setLiveSchemaLoaded(false);
       setLiveCategory(null);
       try {
-        const [detail, response, settingsResponse] = await Promise.all([
-          publicApi.getHotel(hotelId).catch(() => null),
-          publicApi.getHotels(),
+        const [detail, settingsResponse] = await Promise.all([
+          publicApi.getHotel(hotelId, { checkIn: urlStay.checkIn || undefined, checkOut: urlStay.checkOut || undefined }).catch(() => null),
           publicApi.getMarketplaceSettings().catch(() => ({ settings: {} })),
         ]);
         setMarketplaceRules(settingsResponse.settings?.bookingRules || []);
         setMarketplaceSettings(settingsResponse.settings || { bookingMode: 'manual' });
-        const fromDetail = detail?.hotel || detail?.service || detail?.business ? normalizeHotels([detail.hotel || detail.service || detail.business])[0] : null;
-        const businesses = normalizeHotels(response.businesses || response.hotels || []);
-        const found = fromDetail || businesses.find((item) => String(item.id) === String(hotelId));
+        let found = detail?.hotel || detail?.service || detail?.business
+          ? normalizeHotels([detail.hotel || detail.service || detail.business])[0]
+          : null;
+        if (!found) {
+          const response = await publicApi.getHotels().catch(() => ({ hotels: [] }));
+          const businesses = normalizeHotels(response.businesses || response.hotels || []);
+          found = businesses.find((item) => String(item.id) === String(hotelId)) || null;
+        }
           setBusiness(found || null);
           if (found) {
           const service = getSelectedService(found);
@@ -133,7 +139,11 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             customDefaults[fieldItem.id] = fieldItem.type === 'checkbox' ? [] : fieldItem.defaultValue || '';
           });
             setCustomValues(customDefaults);
-            setBookingAttributes(emptyBookingValues(resolveDomain(found)));
+            setBookingAttributes({
+              ...emptyBookingValues(resolveDomain(found)),
+              checkIn: urlStay.checkIn || '',
+              checkOut: urlStay.checkOut || '',
+            });
             const supportsOptions = categorySupportsOptions(
               found.supportsOptions,
               found.schemaSnapshot?.supportsOptions,
@@ -148,7 +158,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           setValues((prev) => ({
             ...prev,
             destinationPlace: service?.title || service?.name || found.name || '',
-            destinationLocation: service?.location || found.location || '',
+            destinationLocation: typeof found.location === 'string' ? found.location : (found.locationDetails?.district || ''),
             vehicleType: service?.title || service?.name || found.name || '',
             email: getAuthData()?.user?.email || '',
             fullName: getAuthData()?.user?.name || '',
@@ -156,14 +166,16 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             bookingDate: prev.bookingDate || TODAY,
             endBookingDate: prev.endBookingDate || prev.bookingDate || TODAY,
           }));
-          // Always load the live category booking schema so the form matches backend
-          // validation (category config is the source of truth, not a stale snapshot).
           const categoryKey = found.categoryId || found.category?._id || found.categorySlug || found.type;
           if (categoryKey) {
             setLiveSchemaLoaded(false);
             categoriesApi.get(categoryKey).then((resp) => {
               setLiveCategory(resp.category || null);
-              setBookingAttributes(emptyBookingValues(resolveDomain(resp.category || found)));
+              setBookingAttributes({
+                ...emptyBookingValues(resolveDomain(resp.category || found)),
+                checkIn: urlStay.checkIn || '',
+                checkOut: urlStay.checkOut || '',
+              });
             }).catch(() => {
               setLiveCategory(null);
             }).finally(() => {
@@ -177,6 +189,11 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
           setLiveCategory(null);
           setLiveSchemaLoaded(true);
         }
+      } catch (loadError) {
+        setBusiness(null);
+        setLiveCategory(null);
+        setLiveSchemaLoaded(true);
+        setError(loadError.message || t('booking.noBookableService', language));
       } finally {
         setLoadingBusiness(false);
       }
@@ -224,27 +241,60 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       ? (selectedOfferRow?.optionId || selectedOfferRow?.id || null)
       : null;
     let cancelled = false;
-    publicApi.getServiceAvailability(hotelId, optionId).then((response) => {
+    publicApi.getServiceAvailability(hotelId, optionId, {
+      checkIn: bookingAttributes.checkIn || urlStay.checkIn || undefined,
+      checkOut: bookingAttributes.checkOut || urlStay.checkOut || undefined,
+    }).then((response) => {
       if (cancelled) return;
-      setPublicAvailability(response.availability || null);
+      setPublicAvailability({
+        ...(response.availability || {}),
+        remaining: response.remaining,
+        quantity: response.quantity,
+      });
       if (response.consumptionPolicy) setConsumptionPolicy(response.consumptionPolicy);
     }).catch(() => {
       if (!cancelled) setPublicAvailability(null);
     });
     return () => { cancelled = true; };
-  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id]);
+  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id, bookingAttributes.checkIn, bookingAttributes.checkOut, urlStay.checkIn, urlStay.checkOut]);
 
   const optionSchedule = useMemo(
-    () => parseOptionAvailability(
-      supportsOptions ? selectedOfferRow : {},
-      { ...business, ...service, availableDays: supportsOptions ? undefined : '' }
-    ),
-    [selectedOfferRow, business, service, supportsOptions]
+    () => {
+      const parsed = parseOptionAvailability(
+        supportsOptions ? selectedOfferRow : {},
+        { ...business, ...service, availableDays: supportsOptions ? undefined : '' }
+      );
+      if (publicAvailability) {
+        parsed.availableFrom = publicAvailability.windowStartDate || parsed.availableFrom;
+        parsed.availableTo = publicAvailability.windowEndDate || parsed.availableTo;
+      }
+      if (selectedOfferRow?.availableFrom) parsed.availableFrom = selectedOfferRow.availableFrom;
+      if (selectedOfferRow?.availableTo) parsed.availableTo = selectedOfferRow.availableTo;
+      return parsed;
+    },
+    [selectedOfferRow, business, service, supportsOptions, publicAvailability]
   );
   const dateMin = optionMinDate(optionSchedule, TODAY);
   const dateMax = optionMaxDate(optionSchedule);
   const overnightHours = Boolean(optionSchedule.openTime && optionSchedule.closeTime && optionSchedule.openTime > optionSchedule.closeTime);
   const preferredBookingDate = clampBookingDate(dateMin, dateMax);
+
+  useEffect(() => {
+    if (domain !== 'accommodation' || !dateMin) return undefined;
+    setBookingAttributes((prev) => {
+      let checkIn = prev.checkIn || urlStay.checkIn || dateMin;
+      if (checkIn < dateMin) checkIn = dateMin;
+      if (dateMax && checkIn > dateMax) checkIn = dateMax;
+      let checkOut = prev.checkOut || urlStay.checkOut || addDaysIso(checkIn, 1);
+      if (checkOut <= checkIn) checkOut = addDaysIso(checkIn, 1);
+      if (dateMax && checkOut > dateMax) {
+        const minCheckout = addDaysIso(checkIn, 1);
+        checkOut = minCheckout > dateMax ? minCheckout : dateMax;
+      }
+      if (checkIn === prev.checkIn && checkOut === prev.checkOut) return prev;
+      return { ...prev, checkIn, checkOut };
+    });
+  }, [domain, dateMin, dateMax, urlStay.checkIn, urlStay.checkOut]);
   const bookingDateValue = (
     values.bookingDate
     && values.bookingDate >= dateMin
@@ -458,12 +508,25 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     }
   };
 
-  if (loadingBusiness) return <LoadingSpinner />;
+  if (loadingBusiness) {
+    return (
+      <div className="rounded-2xl bg-white p-8 text-center shadow-xl">
+        <LoadingSpinner />
+        <p className="mt-3 text-sm font-semibold text-slate-600">Loading this stay…</p>
+      </div>
+    );
+  }
 
   if (!business || !service) {
     return (
-      <div className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl mx-auto">
-        <p className="text-gray-600">{t('booking.noBookableService', language)}</p>
+      <div className="rounded-2xl bg-white p-6 shadow-xl">
+        <p className="font-bold text-slate-900">{t('booking.noBookableService', language)}</p>
+        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+        {onClose ? (
+          <button type="button" onClick={onClose} className="mt-4 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
+            Back to listing
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -484,7 +547,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         <div className="min-w-0">
           <h2 className="text-2xl font-black text-slate-950">{service.title || service.name}</h2>
           <p className="mt-1 text-sm text-slate-600">
-            {business.location} · {bookingConfig.label}
+            {typeof business.location === 'string' ? business.location : (business.locationDetails?.district || business.catalogLocation?.city || '')} · {bookingConfig.label}
           </p>
         </div>
         {onClose && (
@@ -525,14 +588,14 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       {Array.isArray(service.rules) && service.rules.length > 0 && (
         <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-bold">{t('booking.providerRules', language)}</p>
-          <ul className="mt-2 list-disc pl-5">{service.rules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
+          <ul className="mt-2 list-disc pl-5">{service.rules.map((rule) => <li key={String(rule)}>{typeof rule === 'string' ? rule : null}</li>)}</ul>
         </div>
       )}
 
       {displayedRules.length > 0 && (
         <div className="mb-5 rounded-xl bg-blue-50 p-4 text-sm text-blue-950">
           <p className="font-bold">{t('booking.marketplaceRules', language)}</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">{displayedRules.map((rule) => <li key={rule}>{rule}</li>)}</ul>
+          <ul className="mt-2 list-disc space-y-1 pl-5">{displayedRules.map((rule) => <li key={String(rule)}>{String(rule)}</li>)}</ul>
         </div>
       )}
 
@@ -573,8 +636,14 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             <BookingFields
               category={liveCategory || business}
               listing={business}
+              option={selectedOfferRow}
+              availability={publicAvailability}
+              remaining={publicAvailability?.remaining}
+              quantity={publicAvailability?.quantity || selectedOfferRow?.quantity}
               values={bookingAttributes}
               errors={bookingAttributeErrors}
+              dateMin={dateMin}
+              dateMax={dateMax || undefined}
               onChange={(next) => {
                 setBookingAttributes(next);
                 setBookingAttributeErrors({});
@@ -602,7 +671,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           <p className="font-bold text-slate-900">Guest details</p>
           <p className="mt-1 text-xs text-slate-500">Dates are on the previous step. Add who is booking, then continue to payment.</p>
-          {publicAvailability?.trackCapacity ? (
+          {publicAvailability?.remaining != null ? (
+            <p className="mt-2 text-xs font-semibold text-emerald-800">
+              {Number(publicAvailability.remaining) <= 0
+                ? 'This option is not available for the selected dates.'
+                : `${publicAvailability.remaining} of ${publicAvailability.quantity || publicAvailability.remaining} left for these dates`}
+            </p>
+          ) : publicAvailability?.trackCapacity ? (
             <p className="mt-2 text-xs font-semibold text-emerald-800">{publicAvailability.capacityRemaining ?? publicAvailability.capacityTotal} left for this option</p>
           ) : null}
         </div>
@@ -831,11 +906,17 @@ function DynamicField({ field: item, value, onChange }) {
           className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary"
         >
           <option value="">{t('booking.selectField', language, { label: item.label })}</option>
-          {item.options.map((option) => (
-            <option key={option} value={option.toLowerCase() === 'yes' ? 'yes' : option.toLowerCase() === 'no' ? 'no' : option}>
-              {option}
+          {(item.options || []).map((option) => {
+            const value = option && typeof option === 'object' ? (option.value ?? option.id ?? '') : option;
+            const label = option && typeof option === 'object' ? (option.label ?? option.value ?? option.id ?? '') : option;
+            if (value === undefined || value === null || value === '') return null;
+            const text = String(value);
+            return (
+            <option key={text} value={text.toLowerCase() === 'yes' ? 'yes' : text.toLowerCase() === 'no' ? 'no' : text}>
+              {String(label)}
             </option>
-          ))}
+            );
+          })}
         </select>
       </label>
     );

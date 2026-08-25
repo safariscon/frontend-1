@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import DashboardLayout from '../components/DashboardLayout';
@@ -16,7 +16,10 @@ import { formatRwf } from '../lib/currency';
 import SeoHead from '../components/SeoHead';
 import SeoBreadcrumbs from '../components/SeoBreadcrumbs';
 import { getServiceDetailSeo, noindexSeo } from '../lib/seo';
+import StayValidityPanel from '../components/listing/StayValidityPanel';
 import { amenityLabel, listingOptions, optionLeft, optionPricingCopy, policyLabel } from '../lib/stayDisplay';
+import { optionMaxDate, optionMinDate } from '../lib/availability';
+import { staySearchFromParams, todayIsoDate, withStaySearch } from '../lib/staySearch';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -30,6 +33,8 @@ const TABS = [
 export default function HotelDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const stay = staySearchFromParams(searchParams);
   const { isAuthenticated } = useAuth();
   const [hotel, setHotel] = useState(null);
   const [reviews, setReviews] = useState([]);
@@ -43,7 +48,10 @@ export default function HotelDetailsPage() {
 
   const loadHotel = async () => {
     try {
-      const detail = await publicApi.getHotel(id).catch(() => null);
+      const detail = await publicApi.getHotel(id, {
+        checkIn: stay.checkIn || undefined,
+        checkOut: stay.checkOut || undefined,
+      }).catch(() => null);
       let found = detail?.hotel || detail?.service || detail ? normalizeHotel(detail.hotel || detail.service || detail) : null;
       if (!found) {
         const response = await publicApi.getHotels();
@@ -68,7 +76,7 @@ export default function HotelDetailsPage() {
   useEffect(() => {
     Promise.resolve().then(() => loadHotel());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, stay.checkIn, stay.checkOut]);
 
   if (loading) {
     return (
@@ -100,6 +108,12 @@ export default function HotelDetailsPage() {
   const options = listingOptions(hotel);
   const selectedOption = options.find((option) => String(option.id || option.optionId) === String(selectedOptionId)) || options[0] || null;
   const selectedPricing = selectedOption ? optionPricingCopy(selectedOption) : null;
+  const optionWindow = {
+    availableFrom: selectedOption?.availableFrom || selectedOption?.availability?.windowStartDate || '',
+    availableTo: selectedOption?.availableTo || selectedOption?.availability?.windowEndDate || '',
+  };
+  const stayDateMin = optionMinDate(optionWindow, todayIsoDate());
+  const stayDateMax = optionMaxDate(optionWindow);
   const amenities = Array.isArray(listing.amenities) && listing.amenities.length ? listing.amenities : (hotel.amenities || []);
   const primaryCover = hotel.primaryImage || (Array.isArray(hotel.images) ? hotel.images.find(Boolean) : '') || hotel.image || '';
   const images = (() => {
@@ -120,8 +134,10 @@ export default function HotelDetailsPage() {
   };
 
   const continueBooking = () => {
-    const optionQuery = selectedOption ? `?optionId=${encodeURIComponent(selectedOption.id || selectedOption.optionId)}` : '';
-    navigate(`/booking/${hotel.id}${optionQuery}`);
+    navigate(withStaySearch(`/booking/${hotel.id}`, {
+      ...stay,
+      optionId: selectedOption ? selectedOption.id || selectedOption.optionId : '',
+    }));
   };
 
   return (
@@ -256,13 +272,24 @@ export default function HotelDetailsPage() {
 
               <section id="rules" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h2 className="text-2xl font-black text-slate-950">House rules</h2>
-                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <Rule label="Check-in" value={timeRange(listing.checkInFrom || listing.checkInTime, listing.checkInUntil)} />
-                  <Rule label="Check-out" value={timeRange(listing.checkOutFrom, listing.checkOutUntil || listing.checkOutTime)} />
-                  <Rule label="Children" value={policyLabel(listing.allowsChildren)} />
-                  <Rule label="Pets" value={policyLabel(listing.allowsPets)} />
-                  <Rule label="Children stay free" value={listing.childrenStayFree ? 'Yes' : listing.childrenStayFree === false ? 'No' : ''} />
-                </dl>
+                <div className="mt-4">
+                  <StayValidityPanel
+                    listing={hotel}
+                    option={selectedOption}
+                    availability={selectedOption?.availability}
+                    dateMin={stayDateMin}
+                    dateMax={stayDateMax}
+                    remaining={selectedOption?.remaining}
+                    quantity={selectedOption?.quantity}
+                    checkIn={stay.checkIn}
+                    checkOut={stay.checkOut}
+                  />
+                </div>
+                {listing.childrenStayFree != null && listing.childrenStayFree !== '' ? (
+                  <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <Rule label="Children stay free" value={listing.childrenStayFree ? 'Yes' : 'No'} />
+                  </dl>
+                ) : null}
               </section>
 
               <section id="notes" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -299,7 +326,9 @@ export default function HotelDetailsPage() {
                     <p className="mt-1 text-sm font-semibold text-slate-600">{selectedPricing?.priceCaption}</p>
                     <p className="mt-2 text-xs leading-5 text-slate-500">{selectedPricing?.detail}</p>
                     <p className={`mt-2 text-sm font-black ${optionLeft(selectedOption) <= 3 ? 'text-amber-700' : 'text-emerald-700'}`}>
-                      {optionLeft(selectedOption) <= 0 ? 'Sold out' : `${optionLeft(selectedOption)} left`}
+                      {optionLeft(selectedOption) <= 0
+                        ? (stay.checkIn ? 'Not free for these dates' : 'Sold out')
+                        : `${optionLeft(selectedOption)} left${stay.checkIn ? ' for these dates' : ''}`}
                     </p>
                   </>
                 ) : (
@@ -339,11 +368,6 @@ function Rule({ label, value }) {
       <dd className="mt-1 font-semibold text-slate-900">{value}</dd>
     </div>
   );
-}
-
-function timeRange(start, end) {
-  if (start && end) return `${start} – ${end}`;
-  return start || end || '';
 }
 
 function CatalogShell({ authenticated, children }) {

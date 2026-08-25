@@ -2,18 +2,19 @@ const DEFAULT_API_BASE_URL = "http://localhost:5000";
 const trimTrailingSlash = (value) => String(value || "").replace(/\/+$/, "");
 const API_BASE_URL = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL);
 const AUTH_STORAGE_KEY = "tourconnect_auth";
+const AUTH_TAB_STORAGE_KEY = "tourconnect_auth_tab";
 const LEGACY_USER_KEY = "toorconnect_user";
 const AUTH_EXPIRED_EVENT = "auth:expired";
-const AUTH_REFRESH_SKIP_PREFIXES = [
+const AUTH_ANONYMOUS_PREFIXES = [
   "/api/auth/login",
   "/api/auth/refresh",
-  "/api/auth/logout",
   "/api/auth/register",
   "/api/auth/email/",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
   "/api/auth/provider/",
 ];
+const AUTH_REFRESH_SKIP_PREFIXES = AUTH_ANONYMOUS_PREFIXES;
 
 let memorySession = null;
 let refreshPromise = null;
@@ -43,15 +44,27 @@ const normalizeSession = (raw) => {
   };
 };
 
-const readStoredSession = () => {
-  const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-  if (raw) {
-    try {
-      return normalizeSession(JSON.parse(raw));
-    } catch {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
+const readJsonSession = (raw) => {
+  if (!raw) return null;
+  try {
+    return normalizeSession(JSON.parse(raw));
+  } catch {
+    return null;
   }
+};
+
+const readStoredSession = () => {
+  const localSession = readJsonSession(localStorage.getItem(AUTH_STORAGE_KEY));
+  if (localSession?.token || localSession?.refreshToken || localSession?.user) {
+    return localSession;
+  }
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+
+  const tabSession = readJsonSession(sessionStorage.getItem(AUTH_TAB_STORAGE_KEY));
+  if (tabSession?.token || tabSession?.user) {
+    return tabSession;
+  }
+  sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
 
   const legacyUserRaw = localStorage.getItem(LEGACY_USER_KEY);
   if (legacyUserRaw) {
@@ -66,6 +79,16 @@ const readStoredSession = () => {
   return null;
 };
 
+const sessionPayload = (session) => JSON.stringify({
+  user: session.user,
+  token: session.token,
+  accessToken: session.accessToken,
+  refreshToken: session.refreshToken,
+  rememberMe: session.rememberMe,
+  accessTokenExpiresIn: session.accessTokenExpiresIn,
+  refreshTokenExpiresIn: session.refreshTokenExpiresIn,
+});
+
 export const getAuthData = () => {
   if (memorySession) return memorySession;
   memorySession = readStoredSession();
@@ -79,44 +102,43 @@ export const persistAuthSession = (result = {}, { rememberMe } = {}) => {
 
   const accessToken = isAuthTokenResponse
     ? result.accessToken || result.token || null
-    : result.accessToken || result.token || previous.accessToken || null;
+    : result.accessToken || result.token || previous.accessToken || previous.token || null;
   const refreshToken = isAuthTokenResponse
     ? result.refreshToken || null
     : previous.refreshToken || null;
 
   const explicitRememberMe = rememberMe ?? result.rememberMe;
-  const persistToStorage =
+  const persistToLocal =
     explicitRememberMe === true ||
-    (explicitRememberMe !== false && Boolean(accessToken || result.user || refreshToken));
+    Boolean(refreshToken && explicitRememberMe !== false);
 
   const session = normalizeSession({
     user: result.user || previous.user || null,
     accessToken,
     token: accessToken,
     refreshToken,
-    rememberMe: Boolean(explicitRememberMe === true || (persistToStorage && refreshToken)),
+    rememberMe: Boolean(persistToLocal),
     accessTokenExpiresIn: result.accessTokenExpiresIn ?? previous.accessTokenExpiresIn,
     refreshTokenExpiresIn: result.refreshTokenExpiresIn ?? previous.refreshTokenExpiresIn,
   });
 
   memorySession = session;
+  localStorage.removeItem(LEGACY_USER_KEY);
 
-  if (persistToStorage) {
-    localStorage.setItem(
-      AUTH_STORAGE_KEY,
-      JSON.stringify({
-        user: session.user,
-        token: session.token,
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        rememberMe: session.rememberMe,
-      })
-    );
+  if (!session.token && !session.user) {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
+    return session;
+  }
+
+  if (persistToLocal) {
+    localStorage.setItem(AUTH_STORAGE_KEY, sessionPayload(session));
+    sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
   } else {
+    sessionStorage.setItem(AUTH_TAB_STORAGE_KEY, sessionPayload(session));
     localStorage.removeItem(AUTH_STORAGE_KEY);
   }
 
-  localStorage.removeItem(LEGACY_USER_KEY);
   return session;
 };
 
@@ -125,6 +147,7 @@ export const saveAuthData = (authData) => persistAuthSession(authData);
 export const clearAuthData = () => {
   memorySession = null;
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  sessionStorage.removeItem(AUTH_TAB_STORAGE_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
 };
 
@@ -140,12 +163,14 @@ const shouldSkipAuthRefresh = (path) =>
 
 const AUTH_SESSION_ERROR_CODES = new Set([
   "UNAUTHENTICATED",
+  "TOKEN_MISSING",
   "TOKEN_EXPIRED",
   "INVALID_TOKEN",
   "JWT_EXPIRED",
   "ACCESS_TOKEN_EXPIRED",
   "SESSION_EXPIRED",
   "AUTH_REQUIRED",
+  "AUTH_UNAUTHORIZED",
 ]);
 
 const isPaymentOrGatewayPath = (path) =>
@@ -157,15 +182,30 @@ const isJwtAuthError = (error) => {
   const code = String(error?.code || error?.payload?.code || "").toUpperCase();
   if (AUTH_SESSION_ERROR_CODES.has(code)) return true;
   const message = String(error?.message || error?.payload?.message || "").toLowerCase();
-  return /jwt|jsonwebtoken|access token|refresh token|token expired|invalid token|malformed token|not authenticated|authentication required|please (log|sign) in|session expired/.test(
+  return /jwt|jsonwebtoken|access token|refresh token|token expired|token missing|invalid token|malformed token|not authenticated|authentication required|please (log|sign) in|session expired/.test(
     message
   );
+};
+
+const shouldAttachSessionToken = (path, anonymous) => {
+  if (anonymous) return false;
+  return !AUTH_ANONYMOUS_PREFIXES.some((prefix) => path.startsWith(prefix));
+};
+
+const sessionAccessToken = () => {
+  const session = getAuthData();
+  return session?.token || session?.accessToken || null;
+};
+
+const resolveAccessToken = (path, { token, anonymous } = {}) => {
+  if (!shouldAttachSessionToken(path, anonymous)) return null;
+  return token || sessionAccessToken() || null;
 };
 
 const shouldEndSessionOn401 = (path, options, error) => {
   if (options?.skipAuthRefresh || shouldSkipAuthRefresh(path) || !getAuthData()) return false;
   if (isPaymentOrGatewayPath(path) && !isJwtAuthError(error)) return false;
-  return true;
+  return isJwtAuthError(error);
 };
 
 const readPreferredLanguage = () => {
@@ -226,7 +266,7 @@ export const refreshSession = async () => {
         ...result,
         user: result.user || current.user,
       },
-      { rememberMe: true }
+      { rememberMe: current.rememberMe !== false }
     );
   })();
 
@@ -238,20 +278,34 @@ export const refreshSession = async () => {
 };
 
 const retryAfterRefresh = async (path, options, error) => {
-  const canRefresh =
+  const canRetryAuth =
     error.status === 401 &&
     !options.skipAuthRefresh &&
     !shouldSkipAuthRefresh(path) &&
-    Boolean(getAuthData()?.refreshToken) &&
     (!isPaymentOrGatewayPath(path) || isJwtAuthError(error));
 
-  if (!canRefresh) return null;
+  if (!canRetryAuth) return null;
+
+  const sessionToken = sessionAccessToken();
+  if (error.code === "TOKEN_MISSING" && sessionToken && !options.token) {
+    try {
+      return await apiRequest(path, {
+        ...options,
+        token: sessionToken,
+        skipAuthRefresh: true,
+      });
+    } catch {
+      // Fall through to refresh when Remember me issued a refresh token.
+    }
+  }
+
+  if (!getAuthData()?.refreshToken) return null;
 
   try {
     await refreshSession();
     return apiRequest(path, {
       ...options,
-      token: getAuthData()?.token,
+      token: sessionAccessToken(),
       skipAuthRefresh: true,
     });
   } catch {
@@ -260,8 +314,8 @@ const retryAfterRefresh = async (path, options, error) => {
   }
 };
 
-export const apiRequest = async (path, { method = "GET", body, token, headers, skipAuthRefresh = false } = {}) => {
-  const accessToken = token === undefined ? getAuthData()?.token ?? null : token;
+export const apiRequest = async (path, { method = "GET", body, token, headers, skipAuthRefresh = false, anonymous = false } = {}) => {
+  const accessToken = resolveAccessToken(path, { token, anonymous });
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -284,7 +338,7 @@ export const apiRequest = async (path, { method = "GET", body, token, headers, s
     });
     const retried = await retryAfterRefresh(
       path,
-      { method, body, headers, skipAuthRefresh },
+      { method, body, headers, skipAuthRefresh, anonymous, token },
       error
     );
     if (retried) return retried;
@@ -301,8 +355,8 @@ export const apiRequest = async (path, { method = "GET", body, token, headers, s
   return payload;
 };
 
-export const uploadRequest = async (path, { method = "POST", formData, token, skipAuthRefresh = false } = {}) => {
-  const accessToken = token === undefined ? getAuthData()?.token ?? null : token;
+export const uploadRequest = async (path, { method = "POST", formData, token, skipAuthRefresh = false, anonymous = false } = {}) => {
+  const accessToken = resolveAccessToken(path, { token, anonymous });
   const headers = {};
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
@@ -338,7 +392,7 @@ export const uploadRequest = async (path, { method = "POST", formData, token, sk
         return uploadRequest(path, {
           method,
           formData,
-          token: getAuthData()?.token,
+          token: sessionAccessToken(),
           skipAuthRefresh: true,
         });
       } catch {
@@ -433,12 +487,10 @@ export const authApi = {
       body: { email, otp, newPassword },
       skipAuthRefresh: true,
     }),
-  changePassword: (token, payload) =>
+  changePassword: (payload) =>
     apiRequest("/api/auth/change-password", {
       method: "POST",
-      token,
       body: payload,
-      skipAuthRefresh: true,
     }),
   acceptTerms: () =>
     apiRequest("/api/auth/accept-terms", {
@@ -485,18 +537,19 @@ export const authApi = {
         },
       },
       skipAuthRefresh: true,
+      anonymous: true,
     });
   },
   getProviderOnboarding: (sellerId) => {
     const id = encodeURIComponent(String(sellerId || "").trim());
     return apiRequest(`/api/auth/provider/onboarding?sellerId=${id}`, {
       skipAuthRefresh: true,
-      token: null,
+      anonymous: true,
     }).catch((error) => {
       if (error?.status !== 404 && error?.status !== 400) throw error;
       return apiRequest(`/api/auth/provider/onboarding/${id}`, {
         skipAuthRefresh: true,
-        token: null,
+        anonymous: true,
       });
     });
   },
@@ -705,7 +758,7 @@ export const hotelApi = {
   getMyServices: (token, query = {}) =>
     apiRequest("/api/hotel/services" + buildQueryString(query), { token }),
   getService: (token, serviceId) => apiRequest(`/api/hotel/services/${serviceId}`, { token }),
-  getServiceCategories: (token) => apiRequest("/api/hotel/service-categories", { token }),
+  getServiceCategories: () => apiRequest("/api/service-categories"),
   uploadServiceImages: (token, files = []) => {
     const formData = new FormData();
     files.slice(0, 5).forEach((file) => formData.append("images", file));
@@ -779,6 +832,19 @@ export const hotelApi = {
       method: "PUT",
       token,
       body: payload,
+    }),
+  listOptionBlocks: (token, serviceId, optionId) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options/${optionId}/blocks`, { token }),
+  createOptionBlock: (token, serviceId, optionId, payload) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options/${optionId}/blocks`, {
+      method: "POST",
+      token,
+      body: payload,
+    }),
+  deleteOptionBlock: (token, serviceId, optionId, blockId) =>
+    apiRequest(`/api/hotel/services/${serviceId}/options/${optionId}/blocks/${blockId}`, {
+      method: "DELETE",
+      token,
     }),
   deleteRoom: (token, roomId) =>
     apiRequest(`/api/hotel/rooms/${roomId}`, {
@@ -883,7 +949,7 @@ export const paymentsApi = {
 
 export const publicApi = {
   getHotels: (query = {}) => apiRequest("/api/hotels" + buildQueryString(query)),
-  getHotel: (hotelId) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}`),
+  getHotel: (hotelId, query = {}) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}` + buildQueryString(query)),
   getReviews: (hotelId) => apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}/reviews`),
   saveReview: (token, hotelId, payload) =>
     apiRequest(`/api/hotels/${encodeURIComponent(hotelId)}/reviews`, {
@@ -891,9 +957,10 @@ export const publicApi = {
       token,
       body: payload,
     }),
-  getServiceAvailability: (hotelId, optionId) =>
+  getServiceAvailability: (hotelId, optionId, query = {}) =>
     apiRequest(
-      `/api/hotels/${encodeURIComponent(hotelId)}/availability${optionId ? `?optionId=${encodeURIComponent(optionId)}` : ""}`
+      `/api/hotels/${encodeURIComponent(hotelId)}/availability` +
+        buildQueryString({ optionId: optionId || undefined, ...query })
     ),
   getAnnouncement: () => apiRequest("/api/announcement"),
   getMarketplaceSettings: () => apiRequest("/api/marketplace-settings"),
@@ -902,16 +969,16 @@ export const publicApi = {
 
 export const geoApi = {
   searchPlaces: (query, { country } = {}) =>
-    apiRequest("/api/geo/search" + buildQueryString({ q: query, country: country || undefined }), { skipAuthRefresh: true, token: null }),
+    apiRequest("/api/geo/search" + buildQueryString({ q: query, country: country || undefined }), { skipAuthRefresh: true, anonymous: true }),
   reverseGeocode: (latitude, longitude) =>
-    apiRequest("/api/geo/reverse" + buildQueryString({ lat: latitude, lng: longitude }), { skipAuthRefresh: true, token: null }),
+    apiRequest("/api/geo/reverse" + buildQueryString({ lat: latitude, lng: longitude }), { skipAuthRefresh: true, anonymous: true }),
   getRoute: (from, to) =>
     apiRequest("/api/geo/route" + buildQueryString({
       fromLat: from.latitude,
       fromLng: from.longitude,
       toLat: to.latitude,
       toLng: to.longitude,
-    }), { skipAuthRefresh: true, token: null }),
+    }), { skipAuthRefresh: true, anonymous: true }),
 };
 
 export { API_BASE_URL };

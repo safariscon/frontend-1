@@ -99,7 +99,7 @@ export default function ProfilePage() {
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '', otp: '' });
         setOtpSent(false);
       } else {
-        await authApi.changePassword(token, {
+        await authApi.changePassword({
           currentPassword: passwordForm.currentPassword,
           newPassword: passwordForm.newPassword,
           confirmPassword: passwordForm.confirmPassword,

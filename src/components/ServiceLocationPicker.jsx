@@ -175,7 +175,9 @@ export default function ServiceLocationPicker({ value, onChange }) {
     const timer = window.setTimeout(async () => {
       try {
         const results = await searchPlaces(text, {
-          country: location.countryCode || undefined,
+          country: location.countryCode || 'rw',
+          countryCode: location.countryCode || 'rw',
+          countryName: location.country || 'Rwanda',
           latitude: location.latitude || undefined,
           longitude: location.longitude || undefined,
         });
@@ -224,7 +226,7 @@ export default function ServiceLocationPicker({ value, onChange }) {
       <div className="mb-4">
         <h3 className="font-bold text-blue-950">Service location</h3>
         <p className="mt-1 text-sm text-blue-800">
-          Search or drop a pin. If the map misspells a place or finds nothing, type the names yourself below.
+          Search the place on OpenStreetMap or drop a pin on the real building. Guests find this listing by nearby latitude and longitude, so a district name alone is not enough if the pin is missing or far from the service.
         </p>
       </div>
 

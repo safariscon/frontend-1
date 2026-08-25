@@ -1,74 +1,228 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
+import { addDaysIso, todayIsoDate } from '../lib/staySearch';
+import PlaceSearchField from './PlaceSearchField';
 
-export default function SearchBar({ variant = 'compact', locationOptions = [], children = null, extraColumns }) {
-  const [location, setLocation] = useState('');
-  const [serviceName, setServiceName] = useState('');
+const CATALOG_DEBOUNCE_MS = 450;
+
+const catalogQueryEquals = (params, next) => {
+  const keys = ['location', 'lat', 'lng', 'checkIn', 'checkOut', 'category', 'type'];
+  return keys.every((key) => String(params.get(key) || '') === String(next.get(key) || ''));
+};
+
+export default function SearchBar({ variant = 'compact', children = null }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get('location') || '');
+  const [lat, setLat] = useState(searchParams.get('lat') || '');
+  const [lng, setLng] = useState(searchParams.get('lng') || '');
+  const [checkIn, setCheckIn] = useState(searchParams.get('checkIn') || '');
+  const [checkOut, setCheckOut] = useState(searchParams.get('checkOut') || '');
+  const [formError, setFormError] = useState('');
   const navigate = useNavigate();
   const { language } = useLanguage();
-  const compactCols = extraColumns || (children ? 4 : 2);
+  const today = todayIsoDate();
+  const checkoutMin = checkIn ? addDaysIso(checkIn, 1) : addDaysIso(today, 1);
+  const hasSelection = Boolean(lat && lng);
+  const isHero = variant === 'hero';
+  const skipDebounceRef = useRef(false);
+
+  useEffect(() => {
+    setQuery(searchParams.get('location') || '');
+    setLat(searchParams.get('lat') || '');
+    setLng(searchParams.get('lng') || '');
+    setCheckIn(searchParams.get('checkIn') || '');
+    setCheckOut(searchParams.get('checkOut') || '');
+  }, [searchParams]);
+
+  const buildParams = ({ location, lat: nextLat, lng: nextLng, checkIn: nextIn, checkOut: nextOut }) => {
+    const params = new URLSearchParams();
+    const placeName = String(location || '').trim();
+    if (placeName) params.set('location', placeName);
+    if (nextLat && nextLng) {
+      params.set('lat', nextLat);
+      params.set('lng', nextLng);
+    }
+    if (nextIn && nextOut && nextOut > nextIn) {
+      params.set('checkIn', nextIn);
+      params.set('checkOut', nextOut);
+    }
+    const category = searchParams.get('category') || searchParams.get('type');
+    if (category) params.set('category', category);
+    return params;
+  };
+
+  const applyCatalogFilters = (next) => {
+    const params = buildParams(next);
+    if (catalogQueryEquals(searchParams, params)) return;
+    setSearchParams(params, { replace: true });
+  };
+
+  const goToServices = (next) => {
+    navigate(`/services?${buildParams(next).toString()}`);
+  };
+
+  const applyPlace = (place) => {
+    const latitude = Number(place.latitude);
+    const longitude = Number(place.longitude);
+    const label = place.formattedAddress || place.label || place.placeName || '';
+    const nextLat = Number.isFinite(latitude) ? String(latitude) : '';
+    const nextLng = Number.isFinite(longitude) ? String(longitude) : '';
+    skipDebounceRef.current = true;
+    setQuery(label);
+    setLat(nextLat);
+    setLng(nextLng);
+    setFormError('');
+    const payload = { location: label, lat: nextLat, lng: nextLng, checkIn, checkOut };
+    if (isHero) return;
+    applyCatalogFilters(payload);
+  };
+
+  const clearPlace = () => {
+    skipDebounceRef.current = true;
+    setQuery('');
+    setLat('');
+    setLng('');
+    setFormError('');
+    if (!isHero) applyCatalogFilters({ location: '', lat: '', lng: '', checkIn, checkOut });
+  };
+
+  useEffect(() => {
+    if (isHero) return undefined;
+    if (skipDebounceRef.current) {
+      skipDebounceRef.current = false;
+      return undefined;
+    }
+    if (lat && lng) return undefined;
+    const text = query.trim();
+    const timer = window.setTimeout(() => {
+      if (text.length >= 3 || text.length === 0) {
+        applyCatalogFilters({ location: text, lat: '', lng: '', checkIn, checkOut });
+      }
+    }, CATALOG_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+    // Place text is debounced; dates apply immediately in their handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, isHero]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    const params = new URLSearchParams(window.location.search);
-    if (location.trim()) params.set('location', location.trim());
-    else params.delete('location');
-    if (serviceName.trim()) params.set('search', serviceName.trim());
-    else {
-      params.delete('search');
-      params.delete('q');
-      params.delete('service');
+    if ((checkIn && !checkOut) || (!checkIn && checkOut)) {
+      setFormError(t('searchBar.needDates', language));
+      return;
     }
-    navigate(`/services?${params.toString()}`);
+    if (checkIn && checkOut && checkOut <= checkIn) {
+      setFormError(t('searchBar.checkoutAfter', language));
+      return;
+    }
+    setFormError('');
+    goToServices({ location: query, lat, lng, checkIn, checkOut });
   };
+
+  const onCheckInChange = (value) => {
+    const nextOut = value && (!checkOut || checkOut <= value) ? addDaysIso(value, 1) : checkOut;
+    setCheckIn(value);
+    setCheckOut(nextOut);
+    setFormError('');
+    if (isHero) return;
+    if (!value) {
+      applyCatalogFilters({ location: query, lat, lng, checkIn: '', checkOut: '' });
+      return;
+    }
+    applyCatalogFilters({ location: query, lat, lng, checkIn: value, checkOut: nextOut });
+  };
+
+  const onCheckOutChange = (value) => {
+    setCheckOut(value);
+    setFormError('');
+    if (isHero) return;
+    if (checkIn && value && value <= checkIn) {
+      setFormError(t('searchBar.checkoutAfter', language));
+      return;
+    }
+    applyCatalogFilters({ location: query, lat, lng, checkIn, checkOut: value });
+  };
+
+  const fieldClass = 'search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100';
 
   return (
     <form
       onSubmit={handleSubmit}
       className={
-        variant === 'hero'
-          ? 'search-shell search-panel grid gap-4'
-          : `search-shell search-shell-compact grid gap-3 ${children ? `md:grid-cols-[repeat(${compactCols},minmax(0,1fr))_auto]` : 'md:grid-cols-[1fr_1fr_auto]'}`
+        isHero
+          ? 'hero-stay-form grid gap-4'
+          : 'search-shell search-catalog-form grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6'
       }
     >
-      <div className="search-field">
-        <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="service-input">
-          {variant === 'hero' ? t('searchBar.serviceLabel', language) : t('serviceName', language)}
-        </label>
-        <input
-          id="service-input"
-          value={serviceName}
-          onChange={(event) => setServiceName(event.target.value)}
-          placeholder={t('searchBar.placeholder', language)}
-          className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
+      <div className={isHero ? undefined : 'sm:col-span-2 xl:col-span-2'}>
+        <PlaceSearchField
+          id="location-input"
+          query={query}
+          selectedLabel={query}
+          hasSelection={hasSelection}
+          showLabel
+          label={isHero ? t('searchBar.where', language) : t('searchBar.placeName', language)}
+          onQueryChange={(value) => {
+            setQuery(value);
+            setLat('');
+            setLng('');
+          }}
+          onPlaceSelect={applyPlace}
+          onClear={clearPlace}
+          inputClassName={`${fieldClass} ${hasSelection || query ? 'pr-16' : ''}`}
         />
       </div>
 
-      <div className="search-field">
-        <label className={variant === 'hero' ? 'search-label' : 'sr-only'} htmlFor="location-input">
-          {variant === 'hero' ? t('searchBar.where', language) : t('searchBar.location', language)}
-        </label>
-        <select
-          id="location-input"
-          value={location}
-          onChange={(event) => setLocation(event.target.value)}
-          className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition dark:bg-slate-950 dark:text-slate-100"
-        >
-          <option value="">{t('searchBar.cityArea', language)}</option>
-          {locationOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-        </select>
+      <div className={isHero ? 'grid gap-4 sm:grid-cols-2' : 'contents'}>
+        <div className="search-field">
+          <label className="search-label" htmlFor="checkin-input">
+            {t('searchBar.checkIn', language)}
+          </label>
+          <input
+            id="checkin-input"
+            type="date"
+            min={today}
+            value={checkIn}
+            onChange={(event) => onCheckInChange(event.target.value)}
+            className={fieldClass}
+          />
+        </div>
+
+        <div className="search-field">
+          <label className="search-label" htmlFor="checkout-input">
+            {t('searchBar.checkOut', language)}
+          </label>
+          <input
+            id="checkout-input"
+            type="date"
+            min={checkoutMin}
+            value={checkOut}
+            onChange={(event) => onCheckOutChange(event.target.value)}
+            className={fieldClass}
+          />
+        </div>
       </div>
 
       {children}
 
-      <button
-        type="submit"
-        className="search-button w-full rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-primary-dark"
-      >
-        {t('searchBar.searchServices', language)}
-      </button>
+      {isHero ? (
+        <>
+          <button
+            type="submit"
+            className="search-button w-full rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-primary-dark"
+          >
+            {t('searchBar.searchServices', language)}
+          </button>
+          {formError ? (
+            <p className="text-sm font-semibold text-red-600">{formError}</p>
+          ) : (
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{t('searchBar.datesOptional', language)}</p>
+          )}
+        </>
+      ) : formError ? (
+        <p className="sm:col-span-full text-sm font-semibold text-red-600">{formError}</p>
+      ) : null}
     </form>
   );
 }

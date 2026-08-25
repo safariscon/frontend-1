@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
+import { categoriesApi } from '../lib/api';
 
 /**
  * Load active service categories from the API (public or seller).
@@ -17,10 +17,7 @@ export default function useServiceCategories({ seller = false } = {}) {
       setLoading(true);
       setError('');
       try {
-        const token = getAuthData()?.token;
-        const response = seller && token
-          ? await hotelApi.getServiceCategories(token).catch(() => categoriesApi.list())
-          : await categoriesApi.list();
+        const response = await categoriesApi.list();
         if (!active) return;
         setCategories(response.categories || []);
         setGroups(response.groups || groupCategories(response.categories || []));

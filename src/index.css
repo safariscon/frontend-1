@@ -272,6 +272,30 @@ p {
   font-size: 0.875rem !important;
 }
 
+.hero-stay-form .search-control,
+.hero-stay-form .search-button {
+  min-height: 3.15rem !important;
+}
+
+.hero-stay-form input[type="date"].search-control,
+.search-catalog-form input[type="date"].search-control {
+  min-width: 0;
+  color-scheme: light;
+}
+
+.search-catalog-form {
+  align-items: end;
+}
+
+.search-catalog-form .search-field,
+.search-catalog-form .place-search {
+  min-width: 0;
+}
+
+.place-search-menu {
+  z-index: 70;
+}
+
 .dark .search-shell {
   border-color: #334155;
   background: rgba(15, 23, 42, 0.94);

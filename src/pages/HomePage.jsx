@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -9,11 +9,12 @@ import { publicApi } from '../lib/api';
 import { normalizeHotels } from '../lib/hotelMapper';
 import { REALTIME_EVENTS, subscribeToRealtime } from '../lib/realtime';
 import { useLanguage } from '../context/LanguageContext';
-import { t, translateCategory } from '../lib/translations';
+import { t } from '../lib/translations';
 import MarketplaceGuide from '../components/MarketplaceGuide';
 import PaymentMethods from '../components/PaymentMethods';
 import SeoHead from '../components/SeoHead';
 import { getHomeSeo } from '../lib/seo';
+import { staySearchFromParams, withStaySearch } from '../lib/staySearch';
 
 const SERVICE_AREAS = [
   ['home.hotelsAndStays', 'home.hotelsAndStaysDesc', '/services?service=hotel'],
@@ -30,40 +31,32 @@ const FAQS = [
 ];
 
 export default function HomePage() {
+  const [searchParams] = useSearchParams();
   const [hotels, setHotels] = useState([]);
   const [loadingHotels, setLoadingHotels] = useState(true);
   const [servicesError, setServicesError] = useState('');
   const { language } = useLanguage();
+  const stay = staySearchFromParams(searchParams);
+  const hasSearch = Boolean(stay.location || stay.lat || stay.checkIn);
 
-  const locationOptions = useMemo(
-    () => [...new Set(hotels.map((hotel) => hotel.destinationLocation).filter(Boolean))].sort(),
-    [hotels]
+  const displayedHotels = useMemo(
+    () => (hasSearch ? hotels.slice(0, 12) : hotels.slice(0, 6)),
+    [hasSearch, hotels]
   );
-
-  const serviceOptions = useMemo(
-    () =>
-      [
-        ...new Map(
-          hotels.map((hotel) => [
-            hotel.serviceCategory || hotel.type,
-            {
-              value: hotel.serviceCategory || hotel.type,
-              label: translateCategory(hotel.serviceCategory || hotel.type, language),
-            },
-          ])
-        ).values(),
-      ].filter((option) => option.value),
-    [hotels, language]
-  );
-
-  const featuredHotels = useMemo(() => hotels.slice(0, 6), [hotels]);
 
   const loadHotels = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoadingHotels(true);
     setServicesError('');
 
     try {
-      const response = await publicApi.getHotels();
+      const response = await publicApi.getHotels({
+        location: stay.location || undefined,
+        lat: stay.lat || undefined,
+        lng: stay.lng || undefined,
+        radiusKm: stay.radiusKm || undefined,
+        checkIn: stay.checkIn || undefined,
+        checkOut: stay.checkOut || undefined,
+      });
       setHotels(normalizeHotels(response.businesses || response.hotels || []));
     } catch (error) {
       setHotels([]);
@@ -71,7 +64,7 @@ export default function HomePage() {
     } finally {
       if (!silent) setLoadingHotels(false);
     }
-  }, [language]);
+  }, [language, stay.checkIn, stay.checkOut, stay.lat, stay.lng, stay.location, stay.radiusKm]);
 
   useEffect(() => {
     Promise.resolve().then(() => loadHotels());
@@ -104,7 +97,7 @@ export default function HomePage() {
         />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-950/62 to-slate-950/18" />
         <div className="absolute inset-y-0 left-0 w-[58%] bg-slate-950/20" />
-        <div className="relative z-10 mx-auto grid min-h-[620px] max-w-7xl items-center gap-8 px-4 py-12 lg:grid-cols-[minmax(0,0.92fr)_minmax(22rem,0.58fr)]">
+        <div className="relative z-10 mx-auto grid min-h-[620px] max-w-7xl items-center gap-8 px-4 py-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(24rem,0.62fr)]">
           <div className="max-w-3xl">
             <p className="inline-flex rounded-full border border-white/30 bg-white/15 px-4 py-1.5 text-xs font-black uppercase tracking-wide text-blue-50 shadow-sm backdrop-blur">
               {t('home.badge', language)}
@@ -119,7 +112,7 @@ export default function HomePage() {
               {t('home.heroLead', language)}
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link to="/services" className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-primary-dark">
+              <Link to={withStaySearch('/services', stay)} className="rounded-xl bg-primary px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-primary-dark">
                 {t('home.browseAvailable', language)}
               </Link>
               <Link to="/register" className="rounded-xl border border-slate-900 bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-blue-500 dark:hover:text-blue-300">
@@ -133,11 +126,64 @@ export default function HomePage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 md:p-8">
             <p className="mb-4 text-sm font-black tracking-tight text-slate-900 dark:text-white">{t('home.searchProviders', language)}</p>
-            <SearchBar variant="hero" serviceOptions={serviceOptions} locationOptions={locationOptions} />
+            <p className="mb-3 text-xs font-semibold text-slate-500 dark:text-slate-400">{t('searchBar.searchHint', language)}</p>
+            <SearchBar variant="hero" />
             <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
               <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">{t('home.acceptedPayments', language)}</p>
               <PaymentMethods compact />
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="home-services" className="section-block bg-slate-50 dark:bg-slate-900/60">
+        <div className="mx-auto max-w-7xl px-4">
+          <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-primary">{t('home.availableServices', language)}</p>
+              <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">
+                {hasSearch ? t('home.searchResultsTitle', language) : t('allRegisteredServices', language)}
+              </h2>
+              {hasSearch ? (
+                <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-400">
+                  {stay.location
+                    ? t('searchBar.resultsFor', language, { location: stay.location })
+                    : t('searchBar.anyLocation', language)}
+                  {stay.checkIn && stay.checkOut ? ` · ${stay.checkIn} → ${stay.checkOut}` : ''}
+                </p>
+              ) : (
+                <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-400">
+                  {t('home.servicesLead', language)}
+                </p>
+              )}
+            </div>
+            <Link to={withStaySearch('/services', stay)} className="font-black text-primary hover:text-primary-dark">
+              {t('viewAllServices', language)} -&gt;
+            </Link>
+          </div>
+
+          <div className="home-service-grid grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {loadingHotels && <LoadingSpinner />}
+
+            {!loadingHotels && servicesError && (
+              <div className="col-span-full rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
+                {servicesError}
+              </div>
+            )}
+
+            {!loadingHotels && !servicesError && displayedHotels.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} />)}
+
+            {!loadingHotels && !servicesError && displayedHotels.length === 0 && (
+              <p className="col-span-full text-slate-500 dark:text-slate-400">
+                {stay.checkIn && stay.checkOut
+                  ? t('searchBar.noStaysForDates', language, {
+                      location: stay.location || t('searchBar.anyLocation', language),
+                      checkIn: stay.checkIn,
+                      checkOut: stay.checkOut,
+                    })
+                  : t('searchBar.noServicesNearby', language)}
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -163,38 +209,6 @@ export default function HomePage() {
                 </Link>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section-block bg-slate-50 dark:bg-slate-900/60">
-        <div className="mx-auto max-w-7xl px-4">
-          <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-primary">{t('home.availableServices', language)}</p>
-              <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">
-                {t('allRegisteredServices', language)}
-              </h2>
-            </div>
-            <Link to="/services" className="font-black text-primary hover:text-primary-dark">
-              {t('viewAllServices', language)} -&gt;
-            </Link>
-          </div>
-
-          <div className="home-service-grid grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {loadingHotels && <LoadingSpinner />}
-
-            {!loadingHotels && servicesError && (
-              <div className="col-span-full rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
-                {servicesError}
-              </div>
-            )}
-
-            {!loadingHotels && !servicesError && featuredHotels.map((hotel) => <HotelCard key={hotel.id} hotel={hotel} />)}
-
-            {!loadingHotels && !servicesError && featuredHotels.length === 0 && (
-              <p className="text-slate-500 dark:text-slate-400">{t('noServicesAvailable', language)}</p>
-            )}
           </div>
         </div>
       </section>

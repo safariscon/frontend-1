@@ -35,8 +35,9 @@ const parseDays = (value) => {
 
 export const parseOptionAvailability = (rowOrCells = {}, listing = {}) => {
   const cells = rowOrCells?.cells || rowOrCells || {};
-  const durationUnit = String(cells.durationUnit || '').toLowerCase();
-  const priceType = String(cells.priceType || '').toLowerCase();
+  const durationUnit = String(cells.durationUnit || rowOrCells?.durationUnit || '').toLowerCase();
+  const priceType = String(cells.priceType || rowOrCells?.priceType || '').toLowerCase();
+  const stayLike = durationUnit === 'nights' || priceType === 'per-night' || listing.domain === 'accommodation';
   const availableFrom = toDateOnly(cells.availableFrom || listing.availableFrom);
   const availableTo = toDateOnly(cells.availableTo || listing.availableTo);
   const openTime = cells.availableStartTime || cells.openTime || listing.openTime || '';
@@ -44,14 +45,18 @@ export const parseOptionAvailability = (rowOrCells = {}, listing = {}) => {
   const availableDays = parseDays(cells.availableDays || listing.availableDays);
   const explicitTime = String(cells.requiresTime || '').toLowerCase();
   const inferredTime =
-    TIME_UNITS.has(durationUnit) ||
-    HOURLY_PRICE.has(priceType) ||
-    Boolean(openTime && closeTime);
-  const requiresTime =
-    explicitTime === 'no' || explicitTime === 'false'
-      ? false
-      : explicitTime === 'yes' || explicitTime === 'true' || inferredTime;
+    !stayLike && (
+      TIME_UNITS.has(durationUnit) ||
+      HOURLY_PRICE.has(priceType) ||
+      Boolean(openTime && closeTime)
+    );
+  const requiresTime = stayLike
+    ? false
+    : explicitTime === 'no' || explicitTime === 'false'
+    ? false
+    : explicitTime === 'yes' || explicitTime === 'true' || inferredTime;
   const requiresEndDate =
+    stayLike ||
     MULTI_DAY_UNITS.has(durationUnit) ||
     ['per-night', 'per-day'].includes(priceType);
   const sameDayOnly = durationUnit === 'same-day' || durationUnit === 'none';
@@ -186,9 +191,13 @@ export const TIME_REQUIREMENT_OPTIONS = [
 
 export const formatDisplayDate = (isoDate) => {
   if (!isoDate) return 'any future date';
-  const date = new Date(`${isoDate}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return isoDate;
-  return date.toLocaleDateString([], { dateStyle: 'medium' });
+  const date = new Date(`${String(isoDate).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return String(isoDate);
+  try {
+    return date.toLocaleDateString(undefined, { dateStyle: 'medium' });
+  } catch {
+    return String(isoDate).slice(0, 10);
+  }
 };
 
 export const formatTime = (value) => {

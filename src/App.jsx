@@ -56,6 +56,28 @@ const OPEN_PATHS = [
   '/payments',
 ];
 
+function AuthExpiryRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const onExpired = () => {
+      const path = location.pathname;
+      const stayPublic =
+        OPEN_PATHS.includes(path) ||
+        path.startsWith('/hotel/') ||
+        path.startsWith('/business/') ||
+        path.startsWith('/verify/');
+      if (stayPublic) return;
+      navigate('/login', { replace: true, state: { from: `${path}${location.search}` } });
+    };
+    window.addEventListener('auth:expired', onExpired);
+    return () => window.removeEventListener('auth:expired', onExpired);
+  }, [location.pathname, location.search, navigate]);
+
+  return null;
+}
+
 function TermsGate({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -124,6 +146,7 @@ function AppContent() {
     <AuthProvider>
       <InstallProvider>
         <Router>
+          <AuthExpiryRedirect />
           <TermsGate>
           <Routes>
             <Route path="/" element={<HomePage />} />

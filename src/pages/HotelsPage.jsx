@@ -50,6 +50,10 @@ function ServicesCatalog({ embedded = false }) {
   const { language } = useLanguage();
 
   const locationParam = searchParams.get('location') || '';
+  const latParam = searchParams.get('lat') || '';
+  const lngParam = searchParams.get('lng') || '';
+  const checkInParam = searchParams.get('checkIn') || '';
+  const checkOutParam = searchParams.get('checkOut') || '';
   const searchParam = searchParams.get('search') || searchParams.get('q') || searchParams.get('service') || '';
 
   const loadHotels = useCallback(async ({ silent = false } = {}) => {
@@ -60,7 +64,11 @@ function ServicesCatalog({ embedded = false }) {
         category: categoryFilter || undefined,
         type: categoryFilter || undefined,
         location: locationParam || undefined,
+        lat: latParam || undefined,
+        lng: lngParam || undefined,
         search: searchParam || undefined,
+        checkIn: checkInParam || undefined,
+        checkOut: checkOutParam || undefined,
       });
       let listings = withoutDrafts(normalizeHotels(catalogResponse.services || catalogResponse.businesses || catalogResponse.hotels || []));
       if (isAdmin) {
@@ -84,7 +92,7 @@ function ServicesCatalog({ embedded = false }) {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [categoryFilter, isAdmin, language, locationParam, providerId, searchParam]);
+  }, [categoryFilter, checkInParam, checkOutParam, isAdmin, language, latParam, lngParam, locationParam, providerId, searchParam]);
 
   useEffect(() => {
     Promise.resolve().then(() => loadHotels());
@@ -118,6 +126,9 @@ function ServicesCatalog({ embedded = false }) {
         break;
       default:
         result.sort((a, b) => {
+          const da = Number.isFinite(Number(a.distanceKm)) ? Number(a.distanceKm) : null;
+          const db = Number.isFinite(Number(b.distanceKm)) ? Number(b.distanceKm) : null;
+          if (da != null || db != null) return (da ?? 9999) - (db ?? 9999);
           if (a.isFeatured && !b.isFeatured) return -1;
           if (!a.isFeatured && b.isFeatured) return 1;
           return b.rating - a.rating;
@@ -129,11 +140,6 @@ function ServicesCatalog({ embedded = false }) {
 
   const categoryOptions = useMemo(
     () => [...new Set(allHotels.map((hotel) => hotel.serviceCategory).filter(Boolean))].sort(),
-    [allHotels]
-  );
-
-  const locationOptions = useMemo(
-    () => [...new Set(allHotels.flatMap((hotel) => [hotel.destinationLocation, hotel.district, hotel.location]).filter(Boolean))].sort(),
     [allHotels]
   );
 
@@ -152,7 +158,7 @@ function ServicesCatalog({ embedded = false }) {
   const breadcrumbItems = [
     { label: t('navigation.home', language), to: '/' },
     { label: t('navigation.services', language), to: '/services' },
-    ...(locationParam || searchParam ? [{ label: seo.h1 }] : []),
+    ...(locationParam || searchParam || checkInParam ? [{ label: seo.h1 }] : []),
   ];
 
   return (
@@ -178,14 +184,17 @@ function ServicesCatalog({ embedded = false }) {
         </div>
       </div>
 
-      <div className="sticky top-16 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+      <div className="sticky top-16 z-40 overflow-visible border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
         <div className="mx-auto max-w-7xl px-4 py-4">
-          <SearchBar variant="compact" locationOptions={locationOptions} extraColumns={isAdmin ? 5 : 4}>
-            <div className="hidden md:contents">
+          <SearchBar variant="compact">
+            <div className="search-field">
+              <label className="search-label" htmlFor="catalog-category">
+                {t('catalog.allCategories', language)}
+              </label>
               <select
+                id="catalog-category"
                 value={categoryFilter}
                 onChange={(event) => setCategoryFilter(event.target.value)}
-                aria-label={t('catalog.allCategories', language)}
                 className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none dark:bg-slate-950 dark:text-slate-100"
               >
                 <option value="">{t('catalog.allCategories', language)}</option>
@@ -193,11 +202,16 @@ function ServicesCatalog({ embedded = false }) {
                   <option key={category} value={category}>{translateCategory(category, language)}</option>
                 ))}
               </select>
-              {isAdmin && (
+            </div>
+            {isAdmin && (
+              <div className="search-field">
+                <label className="search-label" htmlFor="catalog-provider">
+                  {t('catalog.serviceProvider', language)}
+                </label>
                 <select
+                  id="catalog-provider"
                   value={providerId}
                   onChange={(event) => setProviderId(event.target.value)}
-                  aria-label={t('catalog.serviceProvider', language)}
                   className="search-control w-full bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none dark:bg-slate-950 dark:text-slate-100"
                 >
                   <option value="">{t('catalog.allProviders', language)}</option>
@@ -207,9 +221,12 @@ function ServicesCatalog({ embedded = false }) {
                     return <option key={id} value={id}>{label || id}</option>;
                   })}
                 </select>
-              )}
-              <label className="inline-flex min-h-12 items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-200">
-                <span>{t('catalog.availableNow', language)}</span>
+              </div>
+            )}
+            <div className="search-field">
+              <span className="search-label">{t('catalog.availableNow', language)}</span>
+              <label className="search-control inline-flex min-h-12 w-full cursor-pointer items-center justify-between gap-3 bg-white px-4 py-2 text-sm font-bold text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                <span>{availableOnly ? t('yes', language) : t('no', language)}</span>
                 <input type="checkbox" checked={availableOnly} onChange={(event) => setAvailableOnly(event.target.checked)} />
               </label>
             </div>
@@ -218,10 +235,33 @@ function ServicesCatalog({ embedded = false }) {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8">
-        {(locationParam || searchParam) && (
+        {(locationParam || searchParam || checkInParam || latParam) && (
           <div className="mb-6 flex flex-wrap items-center gap-2">
             {searchParam && <FilterChip label={searchParam} onRemove={() => removeParam(searchParams, navigate, 'search')} />}
-            {locationParam && <FilterChip label={locationParam} onRemove={() => removeParam(searchParams, navigate, 'location')} />}
+            {locationParam && (
+              <FilterChip
+                label={locationParam}
+                onRemove={() => {
+                  const params = new URLSearchParams(searchParams);
+                  params.delete('location');
+                  params.delete('lat');
+                  params.delete('lng');
+                  params.delete('radiusKm');
+                  navigate(`/services?${params.toString()}`);
+                }}
+              />
+            )}
+            {checkInParam && checkOutParam && (
+              <FilterChip
+                label={`${checkInParam} → ${checkOutParam}`}
+                onRemove={() => {
+                  const params = new URLSearchParams(searchParams);
+                  params.delete('checkIn');
+                  params.delete('checkOut');
+                  navigate(`/services?${params.toString()}`);
+                }}
+              />
+            )}
             <button type="button" onClick={() => navigate('/services')} className="text-sm font-bold text-slate-600 underline hover:text-primary dark:text-slate-400">
               {t('clearAll', language)}
             </button>
@@ -236,6 +276,12 @@ function ServicesCatalog({ embedded = false }) {
             {locationParam && (
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 {t('inLocation', language)} <span className="font-bold">{locationParam}</span>
+                {checkInParam && checkOutParam ? ` · ${checkInParam} → ${checkOutParam}` : ''}
+              </p>
+            )}
+            {!locationParam && checkInParam && checkOutParam && (
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                {t('searchBar.forDates', language, { checkIn: checkInParam, checkOut: checkOutParam })}
               </p>
             )}
           </div>
@@ -292,7 +338,15 @@ function ServicesCatalog({ embedded = false }) {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-14 text-center dark:border-slate-700 dark:bg-slate-900">
             <NoResultsIcon />
             <h3 className="mt-4 text-xl font-black text-slate-800 dark:text-white">{t('noServicesFound', language)}</h3>
-            <p className="mt-2 text-slate-500 dark:text-slate-400">{t('tryAdjustingFilters', language)}</p>
+            <p className="mt-2 text-slate-500 dark:text-slate-400">
+              {checkInParam && checkOutParam
+                ? t('searchBar.noStaysForDates', language, {
+                    location: locationParam || t('searchBar.anyLocation', language),
+                    checkIn: checkInParam,
+                    checkOut: checkOutParam,
+                  })
+                : t('tryAdjustingFilters', language)}
+            </p>
           </div>
         )}
       </div>

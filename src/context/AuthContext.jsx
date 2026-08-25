@@ -39,7 +39,10 @@ export function AuthProvider({ children }) {
       }
 
       if (!stored?.refreshToken) {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setUser(stored?.user?.emailVerified === false ? null : stored?.user || null);
+          setLoading(false);
+        }
         return;
       }
 

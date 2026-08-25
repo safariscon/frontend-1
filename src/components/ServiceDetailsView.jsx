@@ -5,6 +5,9 @@ import loadLeaflet, { leafletMarkerIcon } from '../lib/leafletMap';
 import { useLanguage } from '../context/LanguageContext';
 import { t, translateCategory } from '../lib/translations';
 import { categorySupportsOptions } from '../lib/serviceSchema';
+import { isStayCategory } from '../features/domain/registry';
+import OptionAvailabilityPanel from './OptionAvailabilityPanel';
+import { getAuthData } from '../lib/api';
 import {
   BATHROOM_AMENITIES,
   BED_TYPES,
@@ -28,7 +31,13 @@ const POLICY_LABELS = {
   PAY_AT_CHECKOUT: 'Pay remaining at checkout',
 };
 
-export default function ServiceDetailsView({ service, showProvider = true, showPrivateFields = false }) {
+export default function ServiceDetailsView({
+  service,
+  showProvider = true,
+  showPrivateFields = false,
+  manageAvailability = false,
+  onAvailabilitySaved,
+}) {
   const { language } = useLanguage();
   if (!service) return null;
 
@@ -160,9 +169,25 @@ export default function ServiceDetailsView({ service, showProvider = true, showP
               ? t('serviceView.optionsCount', language, { n: units.length })
               : t('serviceView.optionsCountPlural', language, { n: units.length })}
           </p>
+          {manageAvailability ? (
+            <p className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-950">
+              {t('serviceView.availabilityActionHint', language)}
+            </p>
+          ) : null}
           <div className="mt-4 grid gap-4">
             {units.map((unit, index) => (
-              <UnitCard key={unit.id || unit._id || index} unit={unit} index={index} optionFieldSchema={service.schemaSnapshot?.optionFieldSchema || service.category?.optionFieldSchema || []} language={language} />
+              <UnitCard
+                key={unit.id || unit._id || index}
+                unit={unit}
+                index={index}
+                optionFieldSchema={service.schemaSnapshot?.optionFieldSchema || service.category?.optionFieldSchema || []}
+                language={language}
+                manageAvailability={manageAvailability}
+                serviceId={service._id || service.id}
+                stayMode={isStayCategory(service)}
+                availabilityPolicy={service.schemaSnapshot?.availabilityPolicy || service.category?.availabilityPolicy}
+                onAvailabilitySaved={onAvailabilitySaved}
+              />
             ))}
           </div>
         </section>
@@ -341,7 +366,17 @@ function PoliciesSection({ service, language }) {
   );
 }
 
-function UnitCard({ unit, index, optionFieldSchema = [], language }) {
+function UnitCard({
+  unit,
+  index,
+  optionFieldSchema = [],
+  language,
+  manageAvailability = false,
+  serviceId,
+  stayMode = false,
+  availabilityPolicy = null,
+  onAvailabilitySaved,
+}) {
   const attributes = unit.attributes || {};
   const name = unit.name || attributes.unitName || t('serviceView.optionN', language, { n: index + 1 });
   const price = Number(unit.price || 0);
@@ -420,7 +455,46 @@ function UnitCard({ unit, index, optionFieldSchema = [], language }) {
       )}
 
       <AvailabilityFacts availability={unit.availability} option={unit} language={language} />
+
+      {manageAvailability && (unit._id || unit.id) ? (
+        <ManageOptionAvailability
+          serviceId={serviceId}
+          optionId={unit._id || unit.id}
+          stayMode={stayMode}
+          quantity={Number(attributes.quantity || unit.capacity || 1)}
+          language={language}
+          availabilityPolicy={availabilityPolicy}
+          onSaved={onAvailabilitySaved}
+        />
+      ) : null}
     </article>
+  );
+}
+
+function ManageOptionAvailability({ serviceId, optionId, stayMode, quantity, language, availabilityPolicy, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const token = getAuthData()?.token;
+  return (
+    <div className="mt-4 border-t border-slate-200 pt-4">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="rounded-xl border border-primary bg-blue-50 px-4 py-2.5 text-sm font-bold text-primary"
+      >
+        {open ? t('serviceView.hideAvailability', language) : t('serviceView.updateAvailability', language)}
+      </button>
+      {open && token ? (
+        <OptionAvailabilityPanel
+          token={token}
+          serviceId={serviceId}
+          optionId={optionId}
+          stayMode={stayMode}
+          quantity={quantity}
+          availabilityPolicy={availabilityPolicy}
+          onSaved={onSaved}
+        />
+      ) : null}
+    </div>
   );
 }
 

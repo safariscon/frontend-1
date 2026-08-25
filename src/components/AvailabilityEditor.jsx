@@ -17,9 +17,12 @@ export default function AvailabilityEditor({
   modes = { dateWindow: true, daysOfWeek: true, timeOfDay: true },
   trackCapacity = true,
   title = 'Availability',
+  stayMode = false,
 }) {
   const form = { ...EMPTY, ...value };
   const set = (patch) => onChange({ ...form, ...patch });
+  const showTimes = !stayMode && modes.timeOfDay !== false;
+  const showDays = !stayMode && modes.daysOfWeek !== false;
 
   const toggleDay = (key) => {
     const current = Array.isArray(form.daysOfWeek) ? form.daysOfWeek : [];
@@ -33,7 +36,9 @@ export default function AvailabilityEditor({
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <h3 className="font-black text-slate-950">{title}</h3>
       <p className="mt-1 text-sm text-slate-500">
-        When customers can consume this service/option. Empty date/day/time means unrestricted for that part.
+        {stayMode
+          ? 'The calendar window guests may book. House-rule check-in/out clocks are not used here. Occupied nights are blocked separately below.'
+          : 'When customers can consume this service/option. Empty date/day/time means unrestricted for that part.'}
       </p>
 
       <label className="mt-4 flex items-start gap-2 text-sm font-semibold text-slate-800">
@@ -51,7 +56,7 @@ export default function AvailabilityEditor({
           {modes.dateWindow !== false && (
             <>
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">Available from</span>
+                <span className="text-sm font-semibold text-slate-700">{stayMode ? 'Guests can check in from' : 'Available from'}</span>
                 <input
                   type="date"
                   value={form.windowStartDate || ''}
@@ -60,7 +65,7 @@ export default function AvailabilityEditor({
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">Available until</span>
+                <span className="text-sm font-semibold text-slate-700">{stayMode ? 'Last check-out date' : 'Available until'}</span>
                 <input
                   type="date"
                   value={form.windowEndDate || ''}
@@ -71,7 +76,7 @@ export default function AvailabilityEditor({
             </>
           )}
 
-          {modes.timeOfDay !== false && (
+          {showTimes && (
             <>
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">Open time</span>
@@ -94,7 +99,7 @@ export default function AvailabilityEditor({
             </>
           )}
 
-          {modes.daysOfWeek !== false && (
+          {showDays && (
             <div className="md:col-span-2">
               <span className="text-sm font-semibold text-slate-700">Available days</span>
               <div className="mt-2 flex flex-wrap gap-2">

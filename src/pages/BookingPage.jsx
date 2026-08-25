@@ -1,3 +1,4 @@
+import { Component, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -6,11 +7,55 @@ import BookingForm from '../components/BookingForm';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { t } from '../lib/translations';
-import { useEffect } from 'react';
 import { ANALYTICS_EVENTS, trackAnalytics } from '../lib/analytics';
 import { getDashboardRoute, isSellerRole } from '../lib/dashboard';
 import SeoHead from '../components/SeoHead';
 import { noindexSeo } from '../lib/seo';
+
+class BookingErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error('Booking form failed to render:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-2xl bg-white p-6 text-center shadow-xl">
+          <h2 className="text-xl font-black text-slate-950">This booking page could not load</h2>
+          <p className="mt-2 text-sm text-slate-600">Go back to the listing and try Continue to book again.</p>
+          <button
+            type="button"
+            onClick={() => this.props.onBack?.()}
+            className="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white"
+          >
+            Back to listing
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function CatalogShell({ authenticated, children }) {
+  if (authenticated) return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <Navbar />
+      {children}
+      <Footer />
+    </div>
+  );
+}
 
 export default function BookingPage() {
   const { hotelId } = useParams();
@@ -29,9 +74,14 @@ export default function BookingPage() {
     else navigate('/dashboard');
   };
 
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate(`/business/${hotelId}`);
+  };
+
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <CatalogShell authenticated={false}>
         <SeoHead
           {...noindexSeo({
             title: t('booking.loginTitle', language),
@@ -39,47 +89,49 @@ export default function BookingPage() {
             path: `/booking/${hotelId}`,
           })}
         />
-        <Navbar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center p-8">
-            <h2 className="text-2xl font-bold mb-4">{t('pleaseLoginToBook', language)}</h2>
+        <main className="flex flex-1 items-center justify-center px-4 py-16">
+          <div className="text-center">
+            <h2 className="mb-4 text-2xl font-bold">{t('pleaseLoginToBook', language)}</h2>
             <button
-              onClick={() => navigate('/login')}
-              className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark"
+              type="button"
+              onClick={() => navigate('/login', { state: { afterRedirect: `/booking/${hotelId}${window.location.search}` } })}
+              className="rounded-lg bg-primary px-6 py-3 text-white hover:bg-primary-dark"
             >
               {t('goLogin', language)}
             </button>
           </div>
         </main>
-        <Footer />
-      </div>
+      </CatalogShell>
     );
   }
 
   return (
-    <DashboardLayout>
+    <CatalogShell authenticated>
       <SeoHead
         {...noindexSeo({
-            title: t('booking.completeTitle', language),
-            description: t('booking.completeDescription', language),
+          title: t('booking.completeTitle', language),
+          description: t('booking.completeDescription', language),
           path: `/booking/${hotelId}`,
         })}
       />
-      <main className="py-8">
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('completeBooking', language)}</h1>
-            <p className="text-gray-600">
-              {t('selectServiceAndDate', language)}
-            </p>
+      <main className="min-h-[70vh] bg-gray-50 py-8">
+        <div className="mx-auto max-w-3xl px-4">
+          <button type="button" onClick={goBack} className="mb-4 text-sm font-semibold text-primary">
+            ← Back to listing
+          </button>
+          <div className="mb-8 text-center">
+            <h1 className="mb-2 text-3xl font-bold text-gray-900">{t('completeBooking', language)}</h1>
+            <p className="text-gray-600">{t('selectServiceAndDate', language)}</p>
           </div>
-          <BookingForm
-            hotelId={hotelId}
-            onClose={() => navigate(-1)}
-            onSuccess={handleBookingSuccess}
-          />
+          <BookingErrorBoundary onBack={goBack}>
+            <BookingForm
+              hotelId={hotelId}
+              onClose={goBack}
+              onSuccess={handleBookingSuccess}
+            />
+          </BookingErrorBoundary>
         </div>
       </main>
-    </DashboardLayout>
+    </CatalogShell>
   );
 }

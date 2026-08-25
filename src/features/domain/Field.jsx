@@ -61,9 +61,12 @@ export function Field({
         {labelNode}
         <select required={required} value={value || ''} onChange={(event) => onChange(event.target.value)} className={inputClass}>
           <option value="">{placeholder || 'Select'}</option>
-          {options.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
+          {(Array.isArray(options) ? options : []).map((option) => {
+            const value = option && typeof option === 'object' ? (option.value ?? option.id ?? '') : option;
+            const label = option && typeof option === 'object' ? (option.label ?? option.value ?? option.id ?? '') : option;
+            if (value === undefined || value === null || value === '') return null;
+            return <option key={String(value)} value={String(value)}>{String(label)}</option>;
+          })}
         </select>
         {helpNode}
         {errorNode}

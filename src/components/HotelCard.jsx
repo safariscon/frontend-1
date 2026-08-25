@@ -1,11 +1,14 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { t, translateCategory } from '../lib/translations';
 import { guestCancelCopy } from '../lib/payments';
+import { withStaySearch, staySearchFromParams } from '../lib/staySearch';
 
 export default function HotelCard({ hotel, compact = false, showProvider = false }) {
   const { language } = useLanguage();
+  const [searchParams] = useSearchParams();
   const hotelId = hotel.id || hotel._id;
+  const stay = staySearchFromParams(searchParams);
   const isNotAvailable = hotel.status === 'unavailable';
   const availabilityText = isNotAvailable
     ? t('catalog.notAvailable', language)
@@ -14,7 +17,7 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
 
   return (
     <Link
-      to={`/business/${hotelId}`}
+      to={withStaySearch(`/business/${hotelId}`, stay)}
       className="service-card group block overflow-hidden bg-white transition-all duration-300 dark:bg-slate-900"
     >
       <div className="relative h-48 overflow-hidden bg-slate-100 dark:bg-slate-800 md:h-52">
@@ -61,7 +64,9 @@ export default function HotelCard({ hotel, compact = false, showProvider = false
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          {hotel.location}
+          {Number.isFinite(Number(hotel.distanceKm))
+            ? `${t('searchBar.nearbyKm', language, { km: Number(hotel.distanceKm).toFixed(1) })} · ${hotel.location}`
+            : hotel.location}
         </div>
         {showProvider && hotel.provider?.name && (
           <p className="mb-2 text-xs font-bold text-primary">{hotel.provider.name}{hotel.provider.sellerId ? ` · ${hotel.provider.sellerId}` : ''}</p>

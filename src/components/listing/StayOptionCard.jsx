@@ -37,7 +37,7 @@ export default function StayOptionCard({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.16em] text-primary">Stay option</p>
-              <h3 className="mt-1 text-xl font-black text-slate-950">{option.name}</h3>
+              <h3 className="mt-1 text-xl font-black text-slate-950">{option?.name || 'Stay option'}</h3>
             </div>
             <span className={`rounded-full px-3 py-1 text-xs font-black ${soldOut ? 'bg-red-50 text-red-700' : left <= 3 ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
               {leftLabel(option)}
