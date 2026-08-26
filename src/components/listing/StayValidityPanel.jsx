@@ -1,5 +1,6 @@
 import { formatDisplayDate } from '../../lib/availability';
 import { stayBookingFacts, stayNights } from '../../lib/stayDisplay';
+import { domainCopy } from '../../features/domain/registry';
 import { useLanguage } from '../../context/LanguageContext';
 import { t } from '../../lib/translations';
 
@@ -24,62 +25,93 @@ export default function StayValidityPanel({
   quantity,
   checkIn,
   checkOut,
+  copy: copyProp,
 }) {
   const { language } = useLanguage();
+  const copy = copyProp || domainCopy(listing);
   const facts = stayBookingFacts({ listing, option, availability, dateMin, dateMax, remaining, quantity });
   const nights = stayNights(checkIn, checkOut);
+  const rental = copy.kind === 'rental';
+  const selectedDays = rental ? nights : nights;
+  const maxDays = rental
+    ? (facts.maxRentalDays || facts.maxStayNights)
+    : facts.maxStayNights;
+  const remainingLabel = rental
+    ? (facts.remaining <= 0
+      ? 'None left'
+      : facts.units
+        ? `${facts.remaining} of ${facts.units} ${facts.units === 1 ? copy.unitNoun : copy.unitNounPlural}`
+        : String(facts.remaining))
+    : (facts.remaining <= 0
+      ? t('booking.stayRules.noneLeft', language)
+      : facts.units
+        ? t('booking.stayRules.leftOf', language, { left: facts.remaining, total: facts.units })
+        : String(facts.remaining));
 
   return (
     <div className="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40">
-      <p className="text-xs font-black uppercase tracking-wide text-primary">{t('booking.stayRules.title', language)}</p>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{t('booking.stayRules.lead', language)}</p>
+      <p className="text-xs font-black uppercase tracking-wide text-primary">
+        {rental ? 'Rental rules' : t('booking.stayRules.title', language)}
+      </p>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+        {rental
+          ? 'Choose a pickup date and a return date. Hours below are when you can collect and drop the vehicle.'
+          : t('booking.stayRules.lead', language)}
+      </p>
       <dl className="mt-3 grid gap-2 sm:grid-cols-2">
         <Fact
-          label={t('booking.stayRules.openFrom', language)}
-          value={facts.anytime ? t('booking.stayRules.openAnytime', language) : formatDisplayDate(facts.checkInFrom)}
+          label={rental ? copy.startFromLabel : t('booking.stayRules.openFrom', language)}
+          value={facts.anytime ? (rental ? 'Open calendar' : t('booking.stayRules.openAnytime', language)) : formatDisplayDate(facts.checkInFrom)}
         />
         <Fact
-          label={t('booking.stayRules.lastCheckout', language)}
-          value={facts.lastCheckOut ? formatDisplayDate(facts.lastCheckOut) : t('booking.stayRules.noEndDate', language, { n: facts.maxStayNights })}
+          label={rental ? copy.lastEndLabel : t('booking.stayRules.lastCheckout', language)}
+          value={facts.lastCheckOut ? formatDisplayDate(facts.lastCheckOut) : (rental ? `Up to ${facts.maxRentalDays || facts.maxStayNights} days` : t('booking.stayRules.noEndDate', language, { n: facts.maxStayNights }))}
         />
-        <Fact
-          label={t('booking.stayRules.maxStay', language)}
-          value={t('booking.stayRules.nightsMax', language, { n: facts.maxStayNights })}
-        />
-        <Fact
-          label={t('booking.stayRules.guests', language)}
-          value={facts.maxGuests ? t('booking.stayRules.guestsRange', language, { n: facts.maxGuests }) : t('booking.stayRules.guestsAsk', language)}
-        />
-        <Fact
-          label={t('booking.stayRules.firstCheckIn', language)}
-          value={facts.firstCheckIn ? formatDisplayDate(facts.firstCheckIn) : t('booking.stayRules.openAnytime', language)}
-        />
-        {facts.horizonDays ? (
-          <Fact
-            label={t('booking.stayRules.horizon', language)}
-            value={t('booking.stayRules.horizonDays', language, { n: facts.horizonDays })}
-          />
-        ) : null}
-        {facts.checkInHours ? <Fact label={t('booking.stayRules.checkInHours', language)} value={facts.checkInHours} /> : null}
-        {facts.checkOutHours ? <Fact label={t('booking.stayRules.checkOutHours', language)} value={facts.checkOutHours} /> : null}
+        {rental ? (
+          <>
+            <Fact label="Minimum rental" value={`${facts.minRentalDays} day${facts.minRentalDays === 1 ? '' : 's'}`} />
+            <Fact label="Maximum rental" value={facts.maxRentalDays ? `${facts.maxRentalDays} days` : `${facts.maxStayNights} days`} />
+            {facts.pickupHours ? <Fact label={copy.hoursStartLabel} value={facts.pickupHours} /> : null}
+            {facts.returnHours ? <Fact label={copy.hoursEndLabel} value={facts.returnHours} /> : null}
+          </>
+        ) : (
+          <>
+            <Fact
+              label={t('booking.stayRules.maxStay', language)}
+              value={t('booking.stayRules.nightsMax', language, { n: facts.maxStayNights })}
+            />
+            <Fact
+              label={t('booking.stayRules.guests', language)}
+              value={facts.maxGuests ? t('booking.stayRules.guestsRange', language, { n: facts.maxGuests }) : t('booking.stayRules.guestsAsk', language)}
+            />
+            <Fact
+              label={t('booking.stayRules.firstCheckIn', language)}
+              value={facts.firstCheckIn ? formatDisplayDate(facts.firstCheckIn) : t('booking.stayRules.openAnytime', language)}
+            />
+            {facts.horizonDays ? (
+              <Fact
+                label={t('booking.stayRules.horizon', language)}
+                value={t('booking.stayRules.horizonDays', language, { n: facts.horizonDays })}
+              />
+            ) : null}
+            {facts.checkInHours ? <Fact label={t('booking.stayRules.checkInHours', language)} value={facts.checkInHours} /> : null}
+            {facts.checkOutHours ? <Fact label={t('booking.stayRules.checkOutHours', language)} value={facts.checkOutHours} /> : null}
+            {facts.allowsChildren ? <Fact label={t('booking.stayRules.children', language)} value={facts.allowsChildren} /> : null}
+            {facts.allowsPets ? <Fact label={t('booking.stayRules.pets', language)} value={facts.allowsPets} /> : null}
+          </>
+        )}
         {facts.remaining != null ? (
           <Fact
-            label={t('booking.stayRules.left', language)}
-            value={
-              facts.remaining <= 0
-                ? t('booking.stayRules.noneLeft', language)
-                : facts.units
-                  ? t('booking.stayRules.leftOf', language, { left: facts.remaining, total: facts.units })
-                  : String(facts.remaining)
-            }
+            label={rental ? copy.capacityLabel : t('booking.stayRules.left', language)}
+            value={remainingLabel}
           />
         ) : null}
-        {facts.allowsChildren ? <Fact label={t('booking.stayRules.children', language)} value={facts.allowsChildren} /> : null}
-        {facts.allowsPets ? <Fact label={t('booking.stayRules.pets', language)} value={facts.allowsPets} /> : null}
       </dl>
-      {nights > 0 ? (
-        <p className={`mt-3 text-sm font-bold ${nights > facts.maxStayNights ? 'text-red-700' : 'text-slate-800 dark:text-slate-100'}`}>
-          {t('booking.stayRules.nightsSelected', language, { nights, maxNights: facts.maxStayNights })}
+      {selectedDays > 0 ? (
+        <p className={`mt-3 text-sm font-bold ${selectedDays > maxDays ? 'text-red-700' : 'text-slate-800 dark:text-slate-100'}`}>
+          {rental
+            ? `${selectedDays} day${selectedDays === 1 ? '' : 's'} selected · max ${maxDays} days`
+            : t('booking.stayRules.nightsSelected', language, { nights: selectedDays, maxNights: facts.maxStayNights })}
         </p>
       ) : null}
     </div>

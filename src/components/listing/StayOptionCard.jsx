@@ -18,15 +18,18 @@ export default function StayOptionCard({
   ctaLabel = 'Select',
   languageNote = '',
   guests,
+  copy = null,
 }) {
   const attributes = option?.attributes || {};
   const left = optionLeft(option);
   const soldOut = left <= 0;
   const beds = bedSummary(attributes.beds);
-  const pricing = optionPricingCopy(option, guests);
+  const rental = copy?.kind === 'rental';
+  const pricing = optionPricingCopy(option, guests, copy?.kind);
   const unitPrice = optionUnitPrice(option);
   const roomAmenities = Array.isArray(attributes.roomAmenities) ? attributes.roomAmenities : [];
   const bathroomAmenities = Array.isArray(attributes.bathroomAmenities) ? attributes.bathroomAmenities : [];
+  const carsOfType = Number(attributes.quantity || option?.quantity || 0);
 
   return (
     <article
@@ -36,20 +39,32 @@ export default function StayOptionCard({
         <div className="p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-primary">Stay option</p>
-              <h3 className="mt-1 text-xl font-black text-slate-950">{option?.name || 'Stay option'}</h3>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-primary">
+                {rental ? (copy.optionNoun || 'Vehicle type') : 'Stay option'}
+              </p>
+              <h3 className="mt-1 text-xl font-black text-slate-950">{option?.name || (rental ? 'Vehicle' : 'Stay option')}</h3>
             </div>
             <span className={`rounded-full px-3 py-1 text-xs font-black ${soldOut ? 'bg-red-50 text-red-700' : left <= 3 ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
-              {leftLabel(option)}
+              {leftLabel(option, copy)}
             </span>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
-            {hasValue(attributes.maxGuests) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">Sleeps {attributes.maxGuests}</span>}
-            {hasValue(unitTypeLabel(attributes.unitType)) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{unitTypeLabel(attributes.unitType)}</span>}
-            {hasValue(attributes.bedrooms) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{attributes.bedrooms} bedroom{Number(attributes.bedrooms) === 1 ? '' : 's'}</span>}
-            {attributes.bathroomPrivate !== false && <span className="rounded-lg bg-slate-50 px-2.5 py-1">Private bathroom</span>}
-          </div>
+          {rental ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
+              {hasValue(attributes.make) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{attributes.make}{attributes.model ? ` ${attributes.model}` : ''}</span>}
+              {hasValue(attributes.seats) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{attributes.seats} seats</span>}
+              {attributes.ac != null && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{attributes.ac ? 'Air conditioning' : 'No A/C'}</span>}
+              {hasValue(attributes.luggage) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">Luggage: {attributes.luggage}</span>}
+              {carsOfType > 0 && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{carsOfType} {carsOfType === 1 ? copy.unitNoun : copy.unitNounPlural} of this type</span>}
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
+              {hasValue(attributes.maxGuests) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">Sleeps {attributes.maxGuests}</span>}
+              {hasValue(unitTypeLabel(attributes.unitType)) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{unitTypeLabel(attributes.unitType)}</span>}
+              {hasValue(attributes.bedrooms) && <span className="rounded-lg bg-slate-50 px-2.5 py-1">{attributes.bedrooms} bedroom{Number(attributes.bedrooms) === 1 ? '' : 's'}</span>}
+              {attributes.bathroomPrivate !== false && <span className="rounded-lg bg-slate-50 px-2.5 py-1">Private bathroom</span>}
+            </div>
+          )}
 
           {beds.length ? (
             <p className="mt-3 text-sm font-semibold text-slate-800">{beds.join(' · ')}</p>

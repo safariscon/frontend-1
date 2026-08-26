@@ -3,9 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 import BookingFields from '../features/domain/BookingFields';
 import {
+  domainCopy,
   emptyBookingValues,
+  joinDateTimeValue,
   mapBookingToSchedule,
   resolveDomain,
+  splitDateTimeValue,
   validateBookingClient,
 } from '../features/domain/registry';
 import { bookingApi, categoriesApi, getAuthData, publicApi, rebookApi } from '../lib/api';
@@ -42,19 +45,45 @@ const clampBookingDate = (minDate, maxDate) => {
   return minDate || TODAY;
 };
 
-const clampStayAttributes = (values, { domain, dateMin, dateMax, urlCheckIn, urlCheckOut }) => {
-  if (domain !== 'accommodation' || !dateMin) return values;
-  let checkIn = values.checkIn || urlCheckIn || dateMin;
-  if (checkIn < dateMin) checkIn = dateMin;
-  if (dateMax && checkIn > dateMax) checkIn = dateMax;
-  let checkOut = values.checkOut || urlCheckOut || addDaysIso(checkIn, 1);
-  if (checkOut <= checkIn) checkOut = addDaysIso(checkIn, 1);
-  if (dateMax && checkOut > dateMax) {
-    const minCheckout = addDaysIso(checkIn, 1);
-    checkOut = minCheckout > dateMax ? minCheckout : dateMax;
+const clampStayAttributes = (values, {
+  domain,
+  dateMin,
+  dateMax,
+  urlCheckIn,
+  urlCheckOut,
+  pickupTime,
+  returnTime,
+}) => {
+  if (domain === 'accommodation' && dateMin) {
+    let checkIn = values.checkIn || urlCheckIn || dateMin;
+    if (checkIn < dateMin) checkIn = dateMin;
+    if (dateMax && checkIn > dateMax) checkIn = dateMax;
+    let checkOut = values.checkOut || urlCheckOut || addDaysIso(checkIn, 1);
+    if (checkOut <= checkIn) checkOut = addDaysIso(checkIn, 1);
+    if (dateMax && checkOut > dateMax) {
+      const minCheckout = addDaysIso(checkIn, 1);
+      checkOut = minCheckout > dateMax ? minCheckout : dateMax;
+    }
+    if (checkIn === values.checkIn && checkOut === values.checkOut) return values;
+    return { ...values, checkIn, checkOut };
   }
-  if (checkIn === values.checkIn && checkOut === values.checkOut) return values;
-  return { ...values, checkIn, checkOut };
+  if (domain === 'transport') {
+    const pickup = splitDateTimeValue(values.pickupDateTime);
+    const ret = splitDateTimeValue(values.returnDateTime);
+    let pickupDate = pickup.date || urlCheckIn || '';
+    let returnDate = ret.date || urlCheckOut || '';
+    if (dateMin && pickupDate && pickupDate < dateMin) pickupDate = dateMin;
+    if (dateMax && pickupDate && pickupDate > dateMax) pickupDate = dateMax;
+    if (pickupDate && (!returnDate || returnDate <= pickupDate)) {
+      returnDate = addDaysIso(pickupDate, 1);
+    }
+    if (dateMax && returnDate && returnDate > dateMax) returnDate = dateMax;
+    const nextPickup = pickupDate ? joinDateTimeValue(pickupDate, pickup.time || pickupTime || '08:00') : values.pickupDateTime;
+    const nextReturn = returnDate ? joinDateTimeValue(returnDate, ret.time || returnTime || '18:00') : values.returnDateTime;
+    if (nextPickup === values.pickupDateTime && nextReturn === values.returnDateTime) return values;
+    return { ...values, pickupDateTime: nextPickup, returnDateTime: nextReturn };
+  }
+  return values;
 };
 
 const currentBookingRules = (listing, language) => {
@@ -221,6 +250,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const service = useMemo(() => getSelectedService(business), [business]);
   const bookingConfig = useMemo(() => getBookingConfig({ business, service, language }), [business, service, language]);
   const domain = resolveDomain(liveCategory || business);
+  const copy = domainCopy(liveCategory || business);
+  const listingAttrs = business?.listingAttributes || {};
   const bookingFieldSchema = useMemo(() => {
     if (liveSchemaLoaded) return liveCategory?.bookingFieldSchema || [];
     return business?.schemaSnapshot?.bookingFieldSchema || service?.schemaSnapshot?.bookingFieldSchema || [];
@@ -292,7 +323,11 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     dateMax,
     urlCheckIn: urlStay.checkIn,
     urlCheckOut: urlStay.checkOut,
+    pickupTime: listingAttrs.pickupTime,
+    returnTime: listingAttrs.returnTime,
   });
+  const pickupDate = splitDateTimeValue(stayAttributes.pickupDateTime).date;
+  const returnDate = splitDateTimeValue(stayAttributes.returnDateTime).date;
   const preferredBookingDate = clampBookingDate(dateMin, dateMax);
 
   useEffect(() => {
@@ -307,8 +342,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     }
     let cancelled = false;
     publicApi.getServiceAvailability(hotelId, optionId, {
-      checkIn: stayAttributes.checkIn || urlStay.checkIn || undefined,
-      checkOut: stayAttributes.checkOut || urlStay.checkOut || undefined,
+      checkIn: stayAttributes.checkIn || pickupDate || urlStay.checkIn || undefined,
+      checkOut: stayAttributes.checkOut || returnDate || urlStay.checkOut || undefined,
     }).then((response) => {
       if (cancelled) return;
       setPublicAvailability({
@@ -323,7 +358,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       setAvailabilityReady(true);
     });
     return () => { cancelled = true; };
-  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id, selectedOfferRow?.availability, stayAttributes.checkIn, stayAttributes.checkOut, urlStay.checkIn, urlStay.checkOut]);
+  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id, selectedOfferRow?.availability, stayAttributes.checkIn, stayAttributes.checkOut, pickupDate, returnDate, urlStay.checkIn, urlStay.checkOut]);
   const bookingDateValue = (
     values.bookingDate
     && values.bookingDate >= dateMin
@@ -594,7 +629,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     return (
       <div className="rounded-2xl bg-white p-8 text-center shadow-xl">
         <LoadingSpinner />
-        <p className="mt-3 text-sm font-semibold text-slate-600">Loading this stay…</p>
+        <p className="mt-3 text-sm font-semibold text-slate-600">
+          {copy.kind === 'rental' ? 'Loading this rental…' : copy.kind === 'stay' ? 'Loading this stay…' : 'Loading this service…'}
+        </p>
       </div>
     );
   }
@@ -704,7 +741,8 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
                     selected={String(row.id || row.optionId) === String(selectedOffer)}
                     selectable={!quoteResult}
                     onSelect={(next) => setSelectedOffer(String(next.id || next.optionId))}
-                    ctaLabel="Book this option"
+                    copy={copy}
+                    ctaLabel={copy.kind === 'rental' ? 'Book this vehicle' : 'Book this option'}
                     guests={stayAttributes.guests}
                   />
                 ))}

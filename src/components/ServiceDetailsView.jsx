@@ -5,7 +5,7 @@ import loadLeaflet, { leafletMarkerIcon } from '../lib/leafletMap';
 import { useLanguage } from '../context/LanguageContext';
 import { t, translateCategory } from '../lib/translations';
 import { categorySupportsOptions } from '../lib/serviceSchema';
-import { isStayCategory } from '../features/domain/registry';
+import { domainCopy, remainingPaymentLabel } from '../features/domain/registry';
 import OptionAvailabilityPanel from './OptionAvailabilityPanel';
 import { getAuthData } from '../lib/api';
 import {
@@ -29,6 +29,7 @@ const POLICY_LABELS = {
   date: 'On a specific date',
   PAY_AT_ARRIVAL: 'Pay remaining at arrival',
   PAY_AT_CHECKOUT: 'Pay remaining at checkout',
+  PAY_AT_BOOKING: 'Pay full amount at booking',
 };
 
 export default function ServiceDetailsView({
@@ -67,9 +68,12 @@ export default function ServiceDetailsView({
   const units = collectUnits(service);
   const rooms = Array.isArray(service.rooms) ? service.rooms : [];
   const nestedServices = Array.isArray(service.nestedServices) ? service.nestedServices : [];
-  const inventoryTitle = service.inventoryLabel === 'rooms' || listing.propertyKind
+  const copy = domainCopy(service);
+  const inventoryTitle = copy.kind === 'stay'
     ? t('serviceView.roomsUnits', language)
-    : t('serviceView.optionsPrices', language);
+    : copy.kind === 'rental'
+      ? copy.optionNounPlural.replace(/^\w/, (letter) => letter.toUpperCase())
+      : t('serviceView.optionsPrices', language);
 
   return (
     <div className="space-y-5">
@@ -171,7 +175,7 @@ export default function ServiceDetailsView({
           </p>
           {manageAvailability ? (
             <p className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-950">
-              {t('serviceView.availabilityActionHint', language)}
+              {t('serviceView.availabilityActionHint', language, { option: copy.optionNoun })}
             </p>
           ) : null}
           <div className="mt-4 grid gap-4">
@@ -184,7 +188,8 @@ export default function ServiceDetailsView({
                 language={language}
                 manageAvailability={manageAvailability}
                 serviceId={service._id || service.id}
-                stayMode={isStayCategory(service)}
+                stayMode={copy.rangeMode}
+                copy={copy}
                 availabilityPolicy={service.schemaSnapshot?.availabilityPolicy || service.category?.availabilityPolicy}
                 onAvailabilitySaved={onAvailabilitySaved}
               />
@@ -216,7 +221,7 @@ export default function ServiceDetailsView({
         </section>
       )}
 
-      {rooms.length > 0 && (
+      {copy.kind === 'stay' && rooms.length > 0 && (
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="text-lg font-black text-slate-950">{t('serviceView.legacyRooms', language)}</h2>
           <div className="mt-4 grid gap-4">
@@ -288,10 +293,35 @@ export default function ServiceDetailsView({
 
 function ListingAttributesSection({ listing, service, showPrivateFields, language }) {
   if (!listing || !Object.keys(listing).length) return null;
+  const copy = domainCopy(service);
   const identity = listing.hostIdentity || {};
   const plans = listing.ratePlans || {};
   const amenities = Array.isArray(listing.amenities) ? listing.amenities : Array.isArray(service.amenities) ? service.amenities : [];
   const hasIdentity = Boolean(identity.legalName || identity.companyName || identity.idNumber);
+
+  if (copy.kind === 'rental') {
+    return (
+      <section className="rounded-2xl bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-black text-slate-950">Rental rules</h2>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Info label="Vehicle class" value={listing.vehicleClass} />
+          <Info label="Transmission" value={listing.transmission} />
+          <Info label="Fuel type" value={listing.fuelType} />
+          <Info label="Fuel policy" value={listing.fuelPolicy} />
+          <Info label="Minimum driver age" value={listing.minimumDriverAge} />
+          <Info label={copy.hoursStartLabel} value={listing.pickupTime} />
+          <Info label={copy.hoursEndLabel} value={listing.returnTime} />
+          <Info label="Minimum rental" value={listing.minRentalDays ? `${listing.minRentalDays} day${Number(listing.minRentalDays) === 1 ? '' : 's'}` : ''} />
+          <Info label="Maximum rental" value={listing.maxRentalDays ? `${listing.maxRentalDays} days` : ''} />
+          <Info label="With driver" value={yesNo(listing.withDriver, language)} />
+          <Info label="Insurance included" value={yesNo(listing.insuranceIncluded, language)} />
+        </dl>
+        {listing.depositNote ? <p className="mt-3 text-sm text-slate-700">{listing.depositNote}</p> : null}
+      </section>
+    );
+  }
+
+  if (copy.kind !== 'stay') return null;
 
   return (
     <>
@@ -357,7 +387,7 @@ function PoliciesSection({ service, language }) {
       <h2 className="text-lg font-black text-slate-950">{t('serviceView.policies', language)}</h2>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
         <Info label={t('serviceView.deposit', language)} value={payment.depositPercentage != null ? `${payment.depositPercentage}%` : ''} />
-        <Info label={t('serviceView.remainingPayment', language)} value={policyLabel(payment.remainingPaymentMethod)} />
+        <Info label={t('serviceView.remainingPayment', language)} value={remainingPaymentLabel(payment.remainingPaymentMethod, service)} />
         <Info label={t('serviceView.cancellationType', language)} value={cancel.type} />
         <Info label={t('serviceView.freeCancelUntil', language)} value={cancel.freeCancellationUntilHours != null ? t('details.hours', language, { n: cancel.freeCancellationUntilHours }) : ''} />
         <Info label={t('serviceView.depositRefundable', language)} value={yesNo(cancel.depositRefundable, language)} />
@@ -374,6 +404,7 @@ function UnitCard({
   manageAvailability = false,
   serviceId,
   stayMode = false,
+  copy = null,
   availabilityPolicy = null,
   onAvailabilitySaved,
 }) {
@@ -403,36 +434,44 @@ function UnitCard({
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{t('serviceView.price', language)}</p>
           <p className="mt-1 text-2xl font-black text-primary">{price ? formatRwf(price) : '—'}</p>
           {unit.priceType ? <p className="mt-1 text-xs font-semibold text-slate-500">{unit.priceType}</p> : null}
-          <p className="mt-1 text-xs font-semibold text-slate-500">
-            {pricingMode === 'per_guest' ? t('serviceView.pricingModePerGuest', language) : t('serviceView.pricingModeUnit', language)}
-          </p>
+          {copy?.kind === 'stay' ? (
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              {pricingMode === 'per_guest' ? t('serviceView.pricingModePerGuest', language) : t('serviceView.pricingModeUnit', language)}
+            </p>
+          ) : null}
         </div>
       </div>
 
-      <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <Info label={t('serviceView.unitType', language)} value={lookupLabel(UNIT_TYPES, attributes.unitType)} />
-        <Info label={t('serviceView.maxGuests', language)} value={attributes.maxGuests} />
-        <Info label={t('serviceView.bedrooms', language)} value={attributes.bedrooms} />
-        <Info label={t('serviceView.quantity', language)} value={attributes.quantity || unit.capacity} />
-        <Info label={t('serviceView.capacity', language)} value={unit.capacity} />
-        <Info label={t('serviceView.privateBathroom', language)} value={yesNo(attributes.bathroomPrivate, language)} />
-        <Info label={t('serviceView.excludeInfants', language)} value={yesNo(attributes.excludeInfants, language)} />
-        <Info label={t('serviceView.status', language)} value={unit.isActive === false ? t('serviceView.inactive', language) : t('serviceView.active', language)} />
-      </dl>
-
-      {beds.length ? (
-        <div className="mt-3">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.beds', language)}</p>
-          <ChipList items={beds.map((bed) => `${bed.count} × ${lookupLabel(BED_TYPES, bed.type)}`)} />
-        </div>
-      ) : null}
-
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-        <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.pricingMode', language)}</p>
-        <p className="mt-1 font-semibold">
-          {pricingMode === 'per_guest' ? t('serviceView.pricingModePerGuestHint', language) : t('serviceView.pricingModeUnitHint', language)}
-        </p>
-      </div>
+      {copy?.kind === 'stay' ? (
+        <>
+          <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <Info label={t('serviceView.unitType', language)} value={lookupLabel(UNIT_TYPES, attributes.unitType)} />
+            <Info label={t('serviceView.maxGuests', language)} value={attributes.maxGuests} />
+            <Info label={t('serviceView.bedrooms', language)} value={attributes.bedrooms} />
+            <Info label={copy?.capacityLabel || t('serviceView.quantity', language)} value={attributes.quantity || unit.capacity} />
+            <Info label={t('serviceView.privateBathroom', language)} value={yesNo(attributes.bathroomPrivate, language)} />
+            <Info label={t('serviceView.excludeInfants', language)} value={yesNo(attributes.excludeInfants, language)} />
+            <Info label={t('serviceView.status', language)} value={unit.isActive === false ? t('serviceView.inactive', language) : t('serviceView.active', language)} />
+          </dl>
+          {beds.length ? (
+            <div className="mt-3">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.beds', language)}</p>
+              <ChipList items={beds.map((bed) => `${bed.count} × ${lookupLabel(BED_TYPES, bed.type)}`)} />
+            </div>
+          ) : null}
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t('serviceView.pricingMode', language)}</p>
+            <p className="mt-1 font-semibold">
+              {pricingMode === 'per_guest' ? t('serviceView.pricingModePerGuestHint', language) : t('serviceView.pricingModeUnitHint', language)}
+            </p>
+          </div>
+        </>
+      ) : (
+        <dl className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <Info label={copy?.capacityLabel || t('serviceView.quantity', language)} value={attributes.quantity || unit.capacity} />
+          <Info label={t('serviceView.status', language)} value={unit.isActive === false ? t('serviceView.inactive', language) : t('serviceView.active', language)} />
+        </dl>
+      )}
 
       {Array.isArray(attributes.roomAmenities) && attributes.roomAmenities.length ? (
         <div className="mt-3">
@@ -461,6 +500,7 @@ function UnitCard({
           serviceId={serviceId}
           optionId={unit._id || unit.id}
           stayMode={stayMode}
+          copy={copy}
           quantity={Number(attributes.quantity || unit.capacity || 1)}
           language={language}
           availabilityPolicy={availabilityPolicy}
@@ -471,7 +511,7 @@ function UnitCard({
   );
 }
 
-function ManageOptionAvailability({ serviceId, optionId, stayMode, quantity, language, availabilityPolicy, onSaved }) {
+function ManageOptionAvailability({ serviceId, optionId, stayMode, quantity, language, availabilityPolicy, onSaved, copy = null }) {
   const [open, setOpen] = useState(false);
   const token = getAuthData()?.token;
   return (
@@ -489,6 +529,7 @@ function ManageOptionAvailability({ serviceId, optionId, stayMode, quantity, lan
           serviceId={serviceId}
           optionId={optionId}
           stayMode={stayMode}
+          copy={copy}
           quantity={quantity}
           availabilityPolicy={availabilityPolicy}
           onSaved={onSaved}

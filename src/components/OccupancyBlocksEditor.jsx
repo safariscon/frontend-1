@@ -3,7 +3,7 @@ import { hotelApi } from '../lib/api';
 
 const EMPTY_FORM = { startDate: '', endDate: '', units: 1, note: '' };
 
-export default function OccupancyBlocksEditor({ token, serviceId, optionId, quantity = 1 }) {
+export default function OccupancyBlocksEditor({ token, serviceId, optionId, quantity = 1, copy = null }) {
   const [blocks, setBlocks] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM, units: Math.max(1, Number(quantity) || 1) });
@@ -72,20 +72,24 @@ export default function OccupancyBlocksEditor({ token, serviceId, optionId, quan
     }
   };
 
+  const units = Math.max(1, Number(quantity) || 1);
+  const unitNoun = copy?.unitNoun || 'unit';
+  const unitNounPlural = copy?.unitNounPlural || 'units';
+
   return (
     <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="font-black text-slate-950">Occupied / closed dates</h3>
+      <h3 className="font-black text-slate-950">{copy?.occupancyTitle || 'Occupied / closed dates'}</h3>
       <p className="mt-1 text-sm text-slate-500">
-        This option has {Math.max(1, Number(quantity) || 1)} unit{Number(quantity) === 1 ? '' : 's'}. Close a date range when a unit is occupied offline, under maintenance, or otherwise not bookable. Checkout morning is free: guests can check in on the “available again” date.
+        {copy?.occupancyHint || `This option has ${units} ${units === 1 ? 'unit' : 'units'}. Close a date range when a unit is occupied offline, under maintenance, or otherwise not bookable. Checkout morning is free: guests can check in on the “available again” date.`}
       </p>
 
       {bookings.length > 0 && (
         <div className="mt-3 rounded-lg bg-slate-50 p-3">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">Guest bookings already holding nights</p>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-400">Bookings already holding {unitNounPlural}</p>
           <ul className="mt-2 space-y-1 text-sm text-slate-700">
             {bookings.map((row, index) => (
               <li key={`${row.startDate}-${row.endDate}-${index}`}>
-                {row.startDate} → {row.endDate} · {row.units || 1} unit · {row.status}
+                {row.startDate} → {row.endDate} · {row.units || 1} {Number(row.units) === 1 ? unitNoun : unitNounPlural} · {row.status}
               </li>
             ))}
           </ul>
@@ -98,7 +102,7 @@ export default function OccupancyBlocksEditor({ token, serviceId, optionId, quan
             <li key={block.id || block._id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
               <span className="text-sm font-semibold text-slate-800">
                 Closed {block.startDate} until {block.endDate}
-                {block.units > 1 ? ` · ${block.units} units` : ''}
+                {block.units > 1 ? ` · ${block.units} ${unitNounPlural}` : ''}
                 {block.note ? ` · ${block.note}` : ''}
               </span>
               <button type="button" onClick={() => reopen(block.id || block._id)} className="text-sm font-bold text-primary">
@@ -111,7 +115,7 @@ export default function OccupancyBlocksEditor({ token, serviceId, optionId, quan
 
       <form onSubmit={closeDates} className="mt-4 grid gap-3 md:grid-cols-2">
         <label className="block">
-          <span className="text-sm font-semibold text-slate-700">Occupied from</span>
+          <span className="text-sm font-semibold text-slate-700">{copy?.occupancyStartLabel || 'Occupied from'}</span>
           <input
             type="date"
             value={form.startDate}
@@ -120,7 +124,7 @@ export default function OccupancyBlocksEditor({ token, serviceId, optionId, quan
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-slate-700">Available again on</span>
+          <span className="text-sm font-semibold text-slate-700">{copy?.occupancyEndLabel || 'Available again on'}</span>
           <input
             type="date"
             min={form.startDate || undefined}
@@ -130,11 +134,11 @@ export default function OccupancyBlocksEditor({ token, serviceId, optionId, quan
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-slate-700">Units to close</span>
+          <span className="text-sm font-semibold text-slate-700">{copy?.occupancyUnitsLabel || 'Units to close'}</span>
           <input
             type="number"
             min="1"
-            max={Math.max(1, Number(quantity) || 1)}
+            max={units}
             value={form.units}
             onChange={(event) => setForm((prev) => ({ ...prev, units: event.target.value }))}
             className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3"
@@ -145,7 +149,7 @@ export default function OccupancyBlocksEditor({ token, serviceId, optionId, quan
           <input
             value={form.note}
             onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
-            placeholder="Owner stay, maintenance…"
+            placeholder={copy?.occupancyNotePlaceholder || 'Owner stay, maintenance…'}
             className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3"
           />
         </label>

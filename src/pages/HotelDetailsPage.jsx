@@ -20,6 +20,7 @@ import StayValidityPanel from '../components/listing/StayValidityPanel';
 import { amenityLabel, listingOptions, optionLeft, optionPricingCopy, policyLabel } from '../lib/stayDisplay';
 import { optionMaxDate, optionMinDate } from '../lib/availability';
 import { staySearchFromParams, todayIsoDate, withStaySearch } from '../lib/staySearch';
+import { domainCopy } from '../features/domain/registry';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -105,9 +106,21 @@ export default function HotelDetailsPage() {
 
   const isNotAvailable = hotel.status === 'unavailable';
   const listing = hotel.listingAttributes || {};
+  const copy = domainCopy(hotel);
+  const rental = copy.kind === 'rental';
+  const tabs = rental
+    ? [
+        { id: 'overview', label: 'Overview' },
+        { id: 'rooms', label: 'Vehicles' },
+        { id: 'facilities', label: 'Features' },
+        { id: 'rules', label: 'Rental rules' },
+        { id: 'notes', label: 'Guest notes' },
+        { id: 'reviews', label: 'Reviews' },
+      ]
+    : TABS;
   const options = listingOptions(hotel);
   const selectedOption = options.find((option) => String(option.id || option.optionId) === String(selectedOptionId)) || options[0] || null;
-  const selectedPricing = selectedOption ? optionPricingCopy(selectedOption) : null;
+  const selectedPricing = selectedOption ? optionPricingCopy(selectedOption, undefined, copy.kind) : null;
   const optionWindow = {
     availableFrom: selectedOption?.availableFrom || selectedOption?.availability?.windowStartDate || '',
     availableTo: selectedOption?.availableTo || selectedOption?.availability?.windowEndDate || '',
@@ -190,7 +203,7 @@ export default function HotelDetailsPage() {
 
         <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 py-2">
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -217,7 +230,7 @@ export default function HotelDetailsPage() {
                   </div>
                 ) : null}
                 <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="text-xl font-black text-slate-950">About this property</h2>
+                  <h2 className="text-xl font-black text-slate-950">{rental ? 'About this rental' : 'About this property'}</h2>
                   <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{hotel.description}</p>
                   {amenities.length ? (
                     <div className="mt-6">
@@ -237,8 +250,12 @@ export default function HotelDetailsPage() {
 
               <section id="rooms" className="scroll-mt-28 space-y-4">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-950">Info & prices</h2>
-                  <p className="mt-1 text-sm text-slate-600">Each option has one nightly price. Guest count is how many people can stay, not a separate price list.</p>
+                  <h2 className="text-2xl font-black text-slate-950">{rental ? 'Vehicles & prices' : 'Info & prices'}</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {rental
+                      ? 'Each vehicle type has a daily price. Number of cars is how many of this type you can rent at once.'
+                      : 'Each option has one nightly price. Guest count is how many people can stay, not a separate price list.'}
+                  </p>
                 </div>
                 {options.length ? options.map((option) => (
                   <StayOptionCard
@@ -247,7 +264,8 @@ export default function HotelDetailsPage() {
                     selected={String(option.id || option.optionId) === String(selectedOption?.id || selectedOption?.optionId)}
                     selectable={!isNotAvailable && optionLeft(option) > 0}
                     onSelect={(next) => setSelectedOptionId(String(next.id || next.optionId))}
-                    ctaLabel="Select this option"
+                    copy={copy}
+                    ctaLabel={rental ? 'Select this vehicle' : 'Select this option'}
                   />
                 )) : (
                   <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -258,7 +276,7 @@ export default function HotelDetailsPage() {
               </section>
 
               <section id="facilities" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-2xl font-black text-slate-950">Facilities</h2>
+                <h2 className="text-2xl font-black text-slate-950">{rental ? 'Features' : 'Facilities'}</h2>
                 {amenities.length ? (
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     {amenities.map((item) => (
@@ -271,7 +289,7 @@ export default function HotelDetailsPage() {
               </section>
 
               <section id="rules" className="scroll-mt-28 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-2xl font-black text-slate-950">House rules</h2>
+                <h2 className="text-2xl font-black text-slate-950">{rental ? 'Rental rules' : 'House rules'}</h2>
                 <div className="mt-4">
                   <StayValidityPanel
                     listing={hotel}
@@ -283,9 +301,10 @@ export default function HotelDetailsPage() {
                     quantity={selectedOption?.quantity}
                     checkIn={stay.checkIn}
                     checkOut={stay.checkOut}
+                    copy={copy}
                   />
                 </div>
-                {listing.childrenStayFree != null && listing.childrenStayFree !== '' ? (
+                {listing.childrenStayFree != null && listing.childrenStayFree !== '' && !rental ? (
                   <dl className="mt-4 grid gap-3 sm:grid-cols-2">
                     <Rule label="Children stay free" value={listing.childrenStayFree ? 'Yes' : 'No'} />
                   </dl>
@@ -296,7 +315,7 @@ export default function HotelDetailsPage() {
                 <h2 className="text-2xl font-black text-slate-950">Important guest notes</h2>
                 <dl className="mt-4 grid gap-3 sm:grid-cols-2">
                   <Rule label="Deposit" value={hotel.paymentPolicy?.depositPercentage != null ? `${hotel.paymentPolicy.depositPercentage}%` : '50% to confirm'} />
-                  <Rule label="Remaining payment" value={policyLabel(hotel.paymentPolicy?.remainingPaymentMethod) || 'Paid according to the listing'} />
+                  <Rule label="Remaining payment" value={policyLabel(hotel.paymentPolicy?.remainingPaymentMethod, hotel) || 'Paid according to the listing'} />
                   <Rule label="Cancellation" value={hotel.cancellationPolicy?.type || hotel.bookingRules?.cancellationPolicy?.type} />
                   <Rule label="Free cancellation until" value={hotel.cancellationPolicy?.freeCancellationUntilHours != null ? `${hotel.cancellationPolicy.freeCancellationUntilHours} hours before` : hotel.cancelWindowHours ? `${hotel.cancelWindowHours} hours before` : ''} />
                 </dl>
@@ -328,7 +347,7 @@ export default function HotelDetailsPage() {
                     <p className={`mt-2 text-sm font-black ${optionLeft(selectedOption) <= 3 ? 'text-amber-700' : 'text-emerald-700'}`}>
                       {optionLeft(selectedOption) <= 0
                         ? (stay.checkIn ? 'Not free for these dates' : 'Sold out')
-                        : `${optionLeft(selectedOption)} left${stay.checkIn ? ' for these dates' : ''}`}
+                        : `${optionLeft(selectedOption)} ${optionLeft(selectedOption) === 1 ? copy.unitNoun : copy.unitNounPlural} left${stay.checkIn ? ' for these dates' : ''}`}
                     </p>
                   </>
                 ) : (
@@ -342,7 +361,9 @@ export default function HotelDetailsPage() {
                 >
                   {isNotAvailable ? t('catalog.notAvailable', language) : 'Continue to book'}
                 </button>
-                <p className="mt-3 text-center text-xs text-slate-500">Dates, guest details, then payment method. You are not charged on this page.</p>
+                <p className="mt-3 text-center text-xs text-slate-500">
+                  {rental ? 'Pickup and return dates, then your details and payment. You are not charged on this page.' : 'Dates, guest details, then payment method. You are not charged on this page.'}
+                </p>
                 <Link to="/services" className="mt-3 block text-center text-sm font-bold text-primary hover:underline">{t('details.browseMore', language)}</Link>
               </div>
             </aside>

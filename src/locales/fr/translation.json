@@ -1532,7 +1532,7 @@
     "noMapPin": "Aucun repère de carte n'a été enregistré pour ce service.",
     "updateAvailability": "Mettre à jour la disponibilité",
     "hideAvailability": "Masquer l'éditeur de disponibilité",
-    "availabilityActionHint": "Utilisez Mettre à jour la disponibilité sur un type de chambre ou une option pour définir les dates d'ouverture, la capacité et les nuits fermées. Vous n'avez pas besoin d'ouvrir tout l'éditeur de l'offre."
+    "availabilityActionHint": "Utilisez Mettre à jour la disponibilité sur un {option} pour définir les dates d'ouverture, la capacité et les périodes fermées. Vous n'avez pas besoin d'ouvrir tout l'éditeur de l'offre."
   },
   "customerDash": {
     "bookings": "Réservations",

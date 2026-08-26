@@ -4,7 +4,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import OptionAvailabilityPanel from '../components/OptionAvailabilityPanel';
 import AvailabilityEditor from '../components/AvailabilityEditor';
 import InventoryFields from '../features/domain/InventoryFields';
-import { emptyInventoryValues, isStayCategory, resolveDomain, validateInventoryClient } from '../features/domain/registry';
+import { domainCopy, emptyInventoryValues, isStayCategory, resolveDomain, validateInventoryClient } from '../features/domain/registry';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
@@ -53,6 +53,8 @@ export default function SellerServiceOptionsPage() {
     service?.schemaSnapshot?.supportsOptions
   );
   const stayListing = isStayCategory(service);
+  const copy = domainCopy(service);
+  const rangeOccupancy = copy.rangeMode;
   const editorHref = stayListing
     ? `/dashboard/seller/stays/${serviceId}`
     : `/dashboard/seller/services/${serviceId}/edit`;
@@ -161,7 +163,10 @@ export default function SellerServiceOptionsPage() {
         : await hotelApi.updateServiceOption(token, serviceId, editingId, payload);
       const optionId = response.option?._id || response.option?.id || (editingId !== 'new' ? editingId : null);
       if (optionId && editingId === 'new') {
-        await hotelApi.saveOptionAvailability(token, serviceId, optionId, availabilityForm);
+        await hotelApi.saveOptionAvailability(token, serviceId, optionId, {
+          ...availabilityForm,
+          capacityTotal: Number(form.attributes?.quantity || availabilityForm.capacityTotal || 1),
+        });
       }
       toast.success(response.message || 'Option saved.');
       setEditingId(null);
@@ -195,7 +200,7 @@ export default function SellerServiceOptionsPage() {
           <div className="mt-3 mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-3xl font-black text-slate-950">Service options</h1>
-              <p className="mt-1 text-sm text-slate-600">{service?.title || service?.name || 'Service'} — rooms, vehicles, or packages customers can book</p>
+              <p className="mt-1 text-sm text-slate-600">{service?.title || service?.name || 'Service'} — {copy.pageSubtitle}</p>
             </div>
             <div className="flex gap-2">
               <Link to={editorHref} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700">Edit service</Link>
@@ -223,7 +228,7 @@ export default function SellerServiceOptionsPage() {
 
               {options.length > 0 && (
                 <p className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950">
-                  Update each room type or option here. You do not need to open the full listing editor or walk through every tab.
+                  {copy.banner}
                 </p>
               )}
 
@@ -233,15 +238,19 @@ export default function SellerServiceOptionsPage() {
                     <div>
                       <h2 className="text-lg font-black text-slate-950">{option.name}</h2>
                       <p className="mt-1 text-sm text-slate-500">{formatRwf(option.price)}</p>
-                      {optionSchema.length > 0 && (
+                      {(optionSchema.length > 0 || option.attributes?.quantity != null) && (
                         <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {optionSchema.map((field) => {
+                          {(optionSchema.some((field) => field.id === 'quantity')
+                            ? optionSchema
+                            : [...optionSchema, { id: 'quantity', label: copy.capacityLabel }]
+                          ).map((field) => {
                             const value = option.attributes?.[field.id];
                             if (value === undefined || value === null || String(value).trim() === '') return null;
+                            const label = field.id === 'quantity' ? copy.capacityLabel : field.label;
                             return (
                               <div key={field.id} className="rounded-lg bg-slate-50 px-3 py-2">
-                                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{field.label}</dt>
-                                <dd className="mt-0.5 text-sm font-semibold text-slate-800">{Array.isArray(value) ? value.join(', ') : String(value)}</dd>
+                                <dt className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</dt>
+                                <dd className="mt-0.5 text-sm font-semibold text-slate-800">{Array.isArray(value) ? value.join(', ') : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}</dd>
                               </div>
                             );
                           })}
@@ -267,7 +276,8 @@ export default function SellerServiceOptionsPage() {
                       token={token}
                       serviceId={serviceId}
                       optionId={option._id || option.id}
-                      stayMode={stayListing}
+                      stayMode={rangeOccupancy}
+                      copy={copy}
                       quantity={Number(option.attributes?.quantity || option.capacity || 1)}
                       availabilityPolicy={availabilityPolicy}
                     />
@@ -284,7 +294,7 @@ export default function SellerServiceOptionsPage() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="block">
                       <span className="text-sm font-semibold text-slate-700">Option name *</span>
-                      <input required value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Example: Premium room" className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
+                      <input required value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} placeholder={copy.addPlaceholder} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
                     </label>
                     <label className="block">
                       <span className="text-sm font-semibold text-slate-700">Price (RWF) *</span>
@@ -305,9 +315,10 @@ export default function SellerServiceOptionsPage() {
                         title={requireOptionAvailability ? 'Option availability (required by admin)' : 'Option availability'}
                         value={availabilityForm}
                         onChange={setAvailabilityForm}
-                        stayMode={stayListing}
-                        modes={stayListing ? { dateWindow: true, daysOfWeek: false, timeOfDay: false } : availabilityPolicy?.modes}
-                        trackCapacity={!stayListing && availabilityPolicy?.trackCapacity !== false}
+                        stayMode={rangeOccupancy}
+                        copy={copy}
+                        modes={rangeOccupancy ? { dateWindow: true, daysOfWeek: false, timeOfDay: false } : availabilityPolicy?.modes}
+                        trackCapacity={!rangeOccupancy && availabilityPolicy?.trackCapacity !== false}
                       />
                     </div>
                   ) : null}
@@ -319,15 +330,16 @@ export default function SellerServiceOptionsPage() {
               )}
               {editingId && editingId !== 'new' ? (
                 <article className="rounded-2xl border border-primary/20 bg-white p-5 shadow-sm">
-                  <h2 className="text-lg font-black text-slate-950">Availability for this {stayListing ? 'room type' : 'option'}</h2>
+                  <h2 className="text-lg font-black text-slate-950">Availability for this {copy.optionNoun}</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Open dates, capacity, and closed nights are saved here. Name and price stay on Save option above.
+                    {copy.startLabel} and {copy.endLabel.toLowerCase()} dates, {copy.unitNounPlural}, and closed dates are saved here. Name and price stay on Save option above.
                   </p>
                   <OptionAvailabilityPanel
                     token={token}
                     serviceId={serviceId}
                     optionId={editingId}
-                    stayMode={stayListing}
+                    stayMode={rangeOccupancy}
+                    copy={copy}
                     quantity={Number(form.attributes?.quantity || 1)}
                     availabilityPolicy={availabilityPolicy}
                   />

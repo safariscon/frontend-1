@@ -1,5 +1,5 @@
 import { Field, FieldGrid } from './Field';
-import { resolveDomain, resolveSubtype } from './registry';
+import { domainCopy, joinDateTimeValue, resolveDomain, resolveSubtype, splitDateTimeValue } from './registry';
 import { addDaysIso } from '../../lib/staySearch';
 import { formatDisplayDate } from '../../lib/availability';
 import { stayBookingFacts } from '../../lib/stayDisplay';
@@ -123,12 +123,82 @@ export default function BookingFields({
   }
 
   if (domain === 'transport') {
+    const listingDetails = listing?.listingAttributes || {};
+    const copy = domainCopy(category || listing);
+    const pickupHours = listingDetails.pickupTime || '08:00';
+    const returnHours = listingDetails.returnTime || '18:00';
+    const minDays = Number(listingDetails.minRentalDays) || 1;
+    const maxDays = Number(listingDetails.maxRentalDays) || 30;
+    const pickup = splitDateTimeValue(values.pickupDateTime);
+    const ret = splitDateTimeValue(values.returnDateTime);
+    const returnMin = pickup.date ? addDaysIso(pickup.date, 1) : (dateMin ? addDaysIso(dateMin, 1) : undefined);
+    const lastPickup = dateMax ? addDaysIso(dateMax, -1) : undefined;
+    const pickupMax = lastPickup && dateMin && lastPickup < dateMin ? dateMin : lastPickup;
+    const patchDateTime = (key, date, time) => set(key, joinDateTimeValue(date, time));
+
     return (
-      <FieldGrid title="Rental details">
+      <FieldGrid title="Rental details" hint="Choose pickup and return dates. The vehicle is unavailable from pickup until the return date.">
+        <StayValidityPanel
+          listing={listing}
+          option={option}
+          availability={availability}
+          dateMin={dateMin}
+          dateMax={dateMax}
+          remaining={remaining}
+          quantity={quantity}
+          checkIn={pickup.date}
+          checkOut={ret.date}
+          copy={copy}
+        />
         <Field label="Pickup location" required value={values.pickupLocation} error={errors.pickupLocation} onChange={(value) => set('pickupLocation', value)} />
         <Field label="Return location" required value={values.returnLocation} error={errors.returnLocation} onChange={(value) => set('returnLocation', value)} />
-        <Field label="Pickup date/time" type="datetime-local" required value={values.pickupDateTime} error={errors.pickupDateTime} onChange={(value) => set('pickupDateTime', value)} />
-        <Field label="Return date/time" type="datetime-local" required value={values.returnDateTime} error={errors.returnDateTime} onChange={(value) => set('returnDateTime', value)} />
+        <Field
+          label="Pickup date"
+          type="date"
+          required
+          min={dateMin}
+          max={pickupMax || dateMax}
+          value={pickup.date}
+          error={errors.pickupDateTime}
+          help={dateMin ? `Earliest pickup: ${formatDisplayDate(dateMin)}` : ''}
+          onChange={(value) => {
+            const nextReturn = !ret.date || ret.date <= value ? addDaysIso(value, Math.max(1, minDays)) : ret.date;
+            onChange({
+              ...values,
+              pickupDateTime: joinDateTimeValue(value, pickup.time || pickupHours),
+              returnDateTime: joinDateTimeValue(nextReturn, ret.time || returnHours),
+            });
+          }}
+        />
+        <Field
+          label="Pickup time"
+          type="time"
+          required
+          min={pickupHours}
+          value={pickup.time || pickupHours}
+          help={`Desk opens at ${pickupHours}.`}
+          onChange={(value) => patchDateTime('pickupDateTime', pickup.date, value)}
+        />
+        <Field
+          label="Return date"
+          type="date"
+          required
+          min={returnMin}
+          max={dateMax}
+          value={ret.date}
+          error={errors.returnDateTime}
+          help={`Minimum ${minDays} day${minDays === 1 ? '' : 's'}${maxDays ? `, maximum ${maxDays} days` : ''}.`}
+          onChange={(value) => patchDateTime('returnDateTime', value, ret.time || returnHours)}
+        />
+        <Field
+          label="Return time"
+          type="time"
+          required
+          max={returnHours}
+          value={ret.time || returnHours}
+          help={`Return by ${returnHours}.`}
+          onChange={(value) => patchDateTime('returnDateTime', ret.date, value)}
+        />
         {subtype === 'car-rental' ? (
           <>
             <Field label="Driver age" type="number" required min="18" value={values.driverAge} error={errors.driverAge} onChange={(value) => set('driverAge', value)} />

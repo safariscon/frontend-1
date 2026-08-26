@@ -423,6 +423,7 @@ export default function SellerServiceEditorPage() {
 
               {selectedCategory ? (
                 <PolicyFields
+                  category={selectedCategory}
                   paymentPolicy={paymentPolicy}
                   cancellationPolicy={cancellationPolicy}
                   onPaymentChange={setPaymentPolicy}

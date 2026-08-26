@@ -1532,7 +1532,7 @@
     "noMapPin": "Nta kimenyetso cy'ikarita cyabitswe kuri iyi serivisi.",
     "updateAvailability": "Vugurura uko bihari",
     "hideAvailability": "Hisha aho uvugurura uko bihari",
-    "availabilityActionHint": "Koresha Vugurura uko bihari ku bwoko bw'icyumba cyangwa ihitamo kugira ngo ushireho amatariki yifungura, ubushobozi, n'amajoro afunze. Ntukenewe gufungura umwanditsi wose w'urutonde."
+    "availabilityActionHint": "Koresha Vugurura uko bihari ku {option} kugira ngo ushireho amatariki yifungura, ubushobozi, n'ibihe bifunze. Ntukenewe gufungura umwanditsi wose w'urutonde."
   },
   "customerDash": {
     "bookings": "Ibyasabwe",

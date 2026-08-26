@@ -1532,7 +1532,7 @@
     "noMapPin": "Hakuna alama ya ramani iliyohifadhiwa kwa huduma hii.",
     "updateAvailability": "Sasisha upatikanaji",
     "hideAvailability": "Ficha kihariri cha upatikanaji",
-    "availabilityActionHint": "Tumia Sasisha upatikanaji kwenye aina ya chumba au chaguo ili kuweka tarehe za kufungua, uwezo, na usiku zilizofungwa. Huhitaji kufungua kihariri kamili cha tangazo."
+    "availabilityActionHint": "Tumia Sasisha upatikanaji kwenye {option} ili kuweka tarehe za kufungua, uwezo, na vipindi vilivyofungwa. Huhitaji kufungua kihariri kamili cha tangazo."
   },
   "customerDash": {
     "bookings": "Uhifadhi",

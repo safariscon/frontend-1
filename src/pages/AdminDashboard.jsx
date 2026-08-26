@@ -10,6 +10,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { t } from '../lib/translations';
 import { DEFAULT_MARKETPLACE_BOOKING_RULES, normalizeBookingRules } from '../lib/bookingRules';
+import BookingDetailCards from '../components/BookingDetailCards';
 
 const EMPTY_PROVIDER_FORM = {
   providerName: '',
@@ -1169,7 +1170,6 @@ function BookingVerification({ token, verify }) {
 
 function InlineBookingDetails({ booking }) {
   const token = booking.verificationToken;
-  const responses = booking.bookingDetails?.customResponses || [];
   return (
     <div className="rounded-xl border border-gray-200 p-4">
       <DetailGrid data={{
@@ -1192,7 +1192,7 @@ function InlineBookingDetails({ booking }) {
         'Payment purpose': booking.paymentReason || '-',
       }} />
       {token && <img src={bookingApi.getQrImageUrl(token)} alt="Booking QR code" className="mt-4 h-40 w-40 rounded-xl border border-gray-200 p-2" />}
-      <ResponseBlock responses={responses.length ? responses : booking.bookingDetails} />
+      <BookingDetailCards details={booking.bookingDetails} title="Submitted booking details" />
     </div>
   );
 }

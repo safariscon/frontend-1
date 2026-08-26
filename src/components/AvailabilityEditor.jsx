@@ -18,11 +18,19 @@ export default function AvailabilityEditor({
   trackCapacity = true,
   title = 'Availability',
   stayMode = false,
+  copy = null,
 }) {
   const form = { ...EMPTY, ...value };
   const set = (patch) => onChange({ ...form, ...patch });
-  const showTimes = !stayMode && modes.timeOfDay !== false;
-  const showDays = !stayMode && modes.daysOfWeek !== false;
+  const rangeMode = Boolean(copy?.rangeMode ?? stayMode);
+  const startFromLabel = copy?.startFromLabel || (rangeMode ? 'Guests can check in from' : 'Available from');
+  const lastEndLabel = copy?.lastEndLabel || (rangeMode ? 'Last check-out date' : 'Available until');
+  const hint = copy?.availabilityHint || (rangeMode
+    ? 'The calendar window guests may book. House-rule check-in/out clocks are not used here. Occupied nights are blocked separately below.'
+    : 'When customers can consume this service/option. Empty date/day/time means unrestricted for that part.');
+  const capacityLabel = copy?.capacityLabel || 'Capacity (rooms / units)';
+  const showTimes = !rangeMode && modes.timeOfDay !== false;
+  const showDays = !rangeMode && modes.daysOfWeek !== false;
 
   const toggleDay = (key) => {
     const current = Array.isArray(form.daysOfWeek) ? form.daysOfWeek : [];
@@ -35,11 +43,7 @@ export default function AvailabilityEditor({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <h3 className="font-black text-slate-950">{title}</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        {stayMode
-          ? 'The calendar window guests may book. House-rule check-in/out clocks are not used here. Occupied nights are blocked separately below.'
-          : 'When customers can consume this service/option. Empty date/day/time means unrestricted for that part.'}
-      </p>
+      <p className="mt-1 text-sm text-slate-500">{hint}</p>
 
       <label className="mt-4 flex items-start gap-2 text-sm font-semibold text-slate-800">
         <input
@@ -56,7 +60,7 @@ export default function AvailabilityEditor({
           {modes.dateWindow !== false && (
             <>
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">{stayMode ? 'Guests can check in from' : 'Available from'}</span>
+                <span className="text-sm font-semibold text-slate-700">{startFromLabel}</span>
                 <input
                   type="date"
                   value={form.windowStartDate || ''}
@@ -65,7 +69,7 @@ export default function AvailabilityEditor({
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-slate-700">{stayMode ? 'Last check-out date' : 'Available until'}</span>
+                <span className="text-sm font-semibold text-slate-700">{lastEndLabel}</span>
                 <input
                   type="date"
                   value={form.windowEndDate || ''}
@@ -129,7 +133,7 @@ export default function AvailabilityEditor({
 
       {trackCapacity && (
         <label className="mt-4 block max-w-xs">
-          <span className="text-sm font-semibold text-slate-700">Capacity (rooms / units)</span>
+          <span className="text-sm font-semibold text-slate-700">{capacityLabel}</span>
           <input
             type="number"
             min="0"

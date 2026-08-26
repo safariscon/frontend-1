@@ -1,6 +1,19 @@
 import { Field, FieldGrid } from './Field';
+import { domainCopy, remainingPaymentOptions } from './registry';
 
-export default function PolicyFields({ paymentPolicy = {}, cancellationPolicy = {}, onPaymentChange, onCancellationChange }) {
+export default function PolicyFields({
+  category,
+  paymentPolicy = {},
+  cancellationPolicy = {},
+  onPaymentChange,
+  onCancellationChange,
+}) {
+  const copy = domainCopy(category);
+  const paymentOptions = remainingPaymentOptions(category);
+  const remainingHint = copy.kind === 'rental'
+    ? 'After the deposit, customers pay the rest when they pick up the car, when they return it, or in full when booking.'
+    : 'After the deposit, customers pay the rest on arrival, at checkout, or in full when booking.';
+
   return (
     <div className="space-y-4">
       <FieldGrid title="Payment policy" hint="Customers pay a deposit now. Platform commission is always 10% and is set by SafarisCon, not by you.">
@@ -15,8 +28,9 @@ export default function PolicyFields({ paymentPolicy = {}, cancellationPolicy = 
         <Field
           label="Remaining balance"
           type="select"
-          options={['PAY_AT_ARRIVAL', 'PAY_AT_CHECKOUT', 'PAY_AT_BOOKING']}
+          options={paymentOptions}
           value={paymentPolicy.remainingPaymentMethod || 'PAY_AT_ARRIVAL'}
+          help={remainingHint}
           onChange={(value) => onPaymentChange({ ...paymentPolicy, remainingPaymentMethod: value })}
         />
       </FieldGrid>

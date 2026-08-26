@@ -20,6 +20,7 @@ export default function OptionAvailabilityPanel({
   stayMode = false,
   quantity = 1,
   availabilityPolicy = null,
+  copy = null,
   onSaved,
 }) {
   const [form, setForm] = useState(EMPTY_AVAILABILITY);
@@ -47,19 +48,21 @@ export default function OptionAvailabilityPanel({
     return () => { cancelled = true; };
   }, [token, serviceId, optionId, quantity]);
 
+  const rangeMode = Boolean(copy?.rangeMode ?? stayMode);
+
   const save = async (event) => {
     event?.preventDefault?.();
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      const payload = stayMode
+      const payload = rangeMode
         ? {
             ...form,
             daysOfWeek: [],
             dayStartTime: '',
             dayEndTime: '',
-            capacityTotal: Number(form.capacityTotal || quantity || 1),
+            capacityTotal: Number(quantity || form.capacityTotal || 1),
           }
         : form;
       const response = await hotelApi.saveOptionAvailability(token, serviceId, optionId, payload);
@@ -80,19 +83,21 @@ export default function OptionAvailabilityPanel({
   return (
     <div className="mt-4 space-y-4">
       <AvailabilityEditor
-        title={stayMode ? 'Open calendar for this room / option' : 'When this option can be booked'}
+        title={copy?.availabilityTitle || (rangeMode ? 'Open calendar for this option' : 'When this option can be booked')}
         value={form}
         onChange={setForm}
-        stayMode={stayMode}
-        modes={stayMode ? { dateWindow: true, daysOfWeek: false, timeOfDay: false } : availabilityPolicy?.modes}
-        trackCapacity={!stayMode && availabilityPolicy?.trackCapacity !== false}
+        stayMode={rangeMode}
+        copy={copy}
+        modes={rangeMode ? { dateWindow: true, daysOfWeek: false, timeOfDay: false } : availabilityPolicy?.modes}
+        trackCapacity={!rangeMode && availabilityPolicy?.trackCapacity !== false}
       />
-      {stayMode ? (
+      {rangeMode ? (
         <OccupancyBlocksEditor
           token={token}
           serviceId={serviceId}
           optionId={optionId}
           quantity={quantity}
+          copy={copy}
         />
       ) : null}
       {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}

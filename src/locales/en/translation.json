@@ -1618,7 +1618,7 @@
     "depositRefundable": "Deposit refundable",
     "updateAvailability": "Update availability",
     "hideAvailability": "Hide availability editor",
-    "availabilityActionHint": "Use Update availability on a room type or option to set open dates, capacity, and closed nights. You do not need to open the full listing editor.",
+    "availabilityActionHint": "Use Update availability on a {option} to set open dates, capacity, and closed periods. You do not need to open the full listing editor.",
     "unitType": "Unit type",
     "maxGuests": "Max guests",
     "bedrooms": "Bedrooms",

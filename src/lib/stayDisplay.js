@@ -5,6 +5,7 @@ import {
   ROOM_AMENITY_GROUPS,
   UNIT_TYPES,
 } from '../features/accommodation/contract';
+import { remainingPaymentLabel } from '../features/domain/registry';
 import { addDaysIso, todayIsoDate } from './staySearch';
 import { formatRwf } from './currency';
 
@@ -15,6 +16,7 @@ const POLICY = {
   upon_request: 'Upon request',
   PAY_AT_ARRIVAL: 'Pay remaining at arrival',
   PAY_AT_CHECKOUT: 'Pay remaining at checkout',
+  PAY_AT_BOOKING: 'Pay full amount at booking',
 };
 
 export function listingOptions(hotel) {
@@ -71,10 +73,13 @@ export function optionLeft(option) {
   return Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
 }
 
-export function leftLabel(option) {
+export function leftLabel(option, copy = null) {
   const left = optionLeft(option);
   if (option?.availableForDates === false || left <= 0) {
     return option?.availableForDates === false ? 'Not free for these dates' : 'Sold out';
+  }
+  if (copy?.unitNoun && copy?.unitNounPlural) {
+    return `${left} ${left === 1 ? copy.unitNoun : copy.unitNounPlural} left`;
   }
   return left === 1 ? '1 left' : `${left} left`;
 }
@@ -116,11 +121,22 @@ export function optionNightlyForGuests(option, guests) {
   return optionPricingMode(option) === 'per_guest' ? base * count : base;
 }
 
-export function optionPricingCopy(option, guests) {
+export function optionPricingCopy(option, guests, kind = 'stay') {
   const maxGuests = Number(option?.attributes?.maxGuests || 0);
   const base = optionUnitPrice(option);
   const perGuest = optionPricingMode(option) === 'per_guest';
   const count = Math.max(1, Number(guests) || Math.min(2, maxGuests || 2) || 2);
+  if (kind === 'rental') {
+    return {
+      perGuest: false,
+      headline: 'Per vehicle, per day',
+      detail: base
+        ? `${formatRwf(base)} for each rental day. Pickup and return dates set how long the car is hired.`
+        : 'Price is set by the provider for this vehicle type.',
+      priceCaption: 'Per day',
+      exampleNightly: base,
+    };
+  }
   if (!base) {
     return {
       perGuest,
@@ -161,8 +177,11 @@ export function priceLabel(option) {
   return price > 0 ? formatRwf(price) : 'Quote on request';
 }
 
-export function policyLabel(value) {
+export function policyLabel(value, listing = null) {
   if (!value) return '';
+  if (String(value).startsWith('PAY_AT_')) {
+    return remainingPaymentLabel(value, listing) || POLICY[value] || humanize(value);
+  }
   return POLICY[value] || humanize(value);
 }
 
@@ -230,6 +249,10 @@ export function stayBookingFacts({
     longStays: Boolean(attrs.allowLongStays) || maxStayNights > 30,
     checkInHours: timeRange(attrs.checkInFrom || attrs.checkInTime, attrs.checkInUntil),
     checkOutHours: timeRange(attrs.checkOutFrom, attrs.checkOutUntil || attrs.checkOutTime),
+    pickupHours: attrs.pickupTime || '',
+    returnHours: attrs.returnTime || '',
+    minRentalDays: Number(attrs.minRentalDays) || 1,
+    maxRentalDays: Number(attrs.maxRentalDays) || 0,
     allowsChildren: policyLabel(attrs.allowsChildren),
     allowsPets: policyLabel(attrs.allowsPets),
     units,

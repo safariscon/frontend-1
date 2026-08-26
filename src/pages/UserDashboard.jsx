@@ -14,6 +14,8 @@ import { t } from '../lib/translations';
 import CustomerChangeRequestCard from '../components/rebook/CustomerChangeRequestCard';
 import CustomerChangeRequests from '../components/rebook/CustomerChangeRequests';
 import UnlockedServiceMap from '../components/UnlockedServiceMap';
+import BookingDetailCards from '../components/BookingDetailCards';
+import { getBookingDetailSections, hasBookingDetailSections } from '../lib/bookingDetailDisplay';
 
 const statusStyle = {
   confirmed: 'bg-green-100 text-green-800',
@@ -477,7 +479,6 @@ function BookingDetailModal({ booking, language, changeOpen, usableRebook, onClo
     longitude: service?.serviceLocation?.longitude ?? business?.serviceLocation?.longitude ?? contacts.longitude,
   };
   const address = locationUnlocked ? serviceLocation.fullAddress || formatFullLocation(business?.locationDetails, contacts.exactAddress || business?.location) : t('customerDash.payToUnlock', language);
-  const submittedRows = getBookingDetailRows(booking.bookingDetails);
   const summaryLocation = locationUnlocked
     ? address
     : formatLocationLine(serviceLocation) || formatDestination(booking);
@@ -491,8 +492,27 @@ function BookingDetailModal({ booking, language, changeOpen, usableRebook, onClo
     || service?._id
     || service?.id;
 
+  const actionButtons = (
+    <div className="flex flex-wrap gap-2">
+      {canPay && <button type="button" onClick={onPay} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">{t('pay', language, { amount: formatRwf(depositAmount) })}</button>}
+      {booking.canCancel === true && <button type="button" onClick={onCancel} className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700">{t('cancel', language)}</button>}
+      {canRequestRebook && <button type="button" onClick={onRequestChange} className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700">{t('rebook.rebook', language)}</button>}
+      {usableRebook?.rebookId && rebookServiceId && (
+        <Link
+          to={`/booking/${rebookServiceId}?rebookId=${encodeURIComponent(usableRebook.rebookId)}`}
+          className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white"
+        >
+          {t('rebook.useRebook', language)} ({usableRebook.rebookId})
+        </Link>
+      )}
+      {depositPaid && booking.verificationToken && <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Download PDF</a>}
+      {depositPaid && booking.verificationToken && <a href={bookingApi.getPrintableReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Print PDF</a>}
+      {depositPaid && booking.verificationToken && <Link to={`/verify/${booking.verificationToken}`} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Verify Booking</Link>}
+    </div>
+  );
+
   return (
-    <Modal title={t('customerDash.detailsTitle', language)} onClose={onClose}>
+    <Modal title={t('customerDash.detailsTitle', language)} onClose={onClose} stickyActions={actionButtons}>
       <DetailGrid data={{
         [t('profilePage.name', language)]: title,
         [t('type', language)]: formatStatus(booking.bookingModel || booking.bookingDetails?.bookingType || business?.type || 'service'),
@@ -554,29 +574,7 @@ function BookingDetailModal({ booking, language, changeOpen, usableRebook, onClo
         </div>
       )}
 
-      {submittedRows.length > 0 && (
-        <>
-          <h3 className="mt-5 font-bold text-gray-900">Submitted Booking Details</h3>
-          <DetailGrid data={Object.fromEntries(submittedRows)} />
-        </>
-      )}
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        {canPay && <button type="button" onClick={onPay} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">{t('pay', language, { amount: formatRwf(depositAmount) })}</button>}
-        {booking.canCancel === true && <button type="button" onClick={onCancel} className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700">{t('cancel', language)}</button>}
-        {canRequestRebook && <button type="button" onClick={onRequestChange} className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700">{t('rebook.rebook', language)}</button>}
-        {usableRebook?.rebookId && rebookServiceId && (
-          <Link
-            to={`/booking/${rebookServiceId}?rebookId=${encodeURIComponent(usableRebook.rebookId)}`}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white"
-          >
-            {t('rebook.useRebook', language)} ({usableRebook.rebookId})
-          </Link>
-        )}
-        {depositPaid && booking.verificationToken && <a href={bookingApi.getReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Download PDF</a>}
-        {depositPaid && booking.verificationToken && <a href={bookingApi.getPrintableReceiptUrl(booking.verificationToken)} target="_blank" rel="noreferrer" className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Print PDF</a>}
-        {depositPaid && booking.verificationToken && <Link to={`/verify/${booking.verificationToken}`} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-bold text-gray-800">Verify Booking</Link>}
-      </div>
+      <BookingDetailCards details={booking.bookingDetails} title="Submitted booking details" />
 
       {depositPaid && booking.verificationToken && <img src={bookingApi.getQrImageUrl(booking.verificationToken)} alt={t('customerDash.qrAlt', language)} className="mt-4 h-32 w-32 rounded-xl border border-gray-200 bg-white p-2" />}
       {depositPaid && booking.bookingCode && <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">Give this Booking Code to the seller when you arrive. There is no extra payment on arrival.{booking.cancellation?.refundableUntil ? ` You can cancel until ${formatCancelUntil(booking.cancellation.refundableUntil)}.` : ''}</p>}
@@ -585,16 +583,21 @@ function BookingDetailModal({ booking, language, changeOpen, usableRebook, onClo
   );
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, stickyActions }) {
   const { language } = useLanguage();
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-8" role="dialog" aria-modal="true">
-      <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-gray-900">{title}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">{t('close', language)}</button>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-8" role="dialog" aria-modal="true">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+            <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold">{t('close', language)}</button>
+          </div>
+          {stickyActions ? <div className="mt-3">{stickyActions}</div> : null}
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -661,22 +664,6 @@ function formatDestination(booking) {
   return [booking.destinationPlace, booking.destinationLocation].filter(Boolean).join(' - ') || '-';
 }
 
-function getBookingDetailRows(details) {
-  if (!details || typeof details !== 'object') return [];
-  return Object.entries(details).flatMap(([key, value]) => {
-    if (['totalPrice', 'providerRules'].includes(key) || value === undefined || value === null || value === '') return [];
-    if (key === 'customResponses' && Array.isArray(value)) {
-      return value.flatMap((item) => {
-        const answer = item.value ?? item.answer;
-        return answer === undefined || answer === null || answer === '' ? [] : [[item.label || item.name || 'Response', answer]];
-      });
-    }
-    if (typeof value === 'object' && !Array.isArray(value)) return [];
-    const display = Array.isArray(value) ? value.filter((item) => typeof item !== 'object').join(', ') : String(value);
-    return display ? [[key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()), display]] : [];
-  });
-}
-
 function formatCreatedDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'date unavailable';
@@ -684,23 +671,11 @@ function formatCreatedDate(value) {
 }
 
 function BookingRequestDetails({ details }) {
-  if (!details || typeof details !== 'object') return null;
-  const rows = Object.entries(details).flatMap(([key, value]) => {
-    if (['totalPrice', 'providerRules'].includes(key) || value === undefined || value === null || value === '') return [];
-    if (key === 'customResponses' && Array.isArray(value)) {
-      return value.map((item) => [item.label || item.name || 'Response', item.value]);
-    }
-    if (typeof value === 'object' && !Array.isArray(value)) return [];
-    const display = Array.isArray(value) ? value.filter((item) => typeof item !== 'object').join(', ') : String(value);
-    return display ? [[key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()), display]] : [];
-  });
-  if (!rows.length) return null;
+  if (!hasBookingDetailSections(getBookingDetailSections(details))) return null;
   return (
     <details className="mt-3 rounded-xl border border-gray-200 p-4 text-sm">
       <summary className="cursor-pointer font-bold text-gray-800">View submitted booking details</summary>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {rows.map(([label, value], index) => <Detail key={`${label}-${index}`} label={label} value={value} tone="slate" />)}
-      </div>
+      <BookingDetailCards details={details} />
     </details>
   );
 }

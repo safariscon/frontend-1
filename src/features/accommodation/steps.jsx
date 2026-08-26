@@ -445,6 +445,7 @@ export function PricingStep({ draft, setDraft }) {
         ) : null}
       </div>
       <PolicyFields
+        category={{ domain: 'accommodation', subtype: 'hotel', slug: 'hotel' }}
         paymentPolicy={draft.paymentPolicy}
         cancellationPolicy={draft.cancellationPolicy}
         onPaymentChange={(paymentPolicy) => setDraft({ ...draft, paymentPolicy: { ...paymentPolicy, depositPercentage: 50 } })}

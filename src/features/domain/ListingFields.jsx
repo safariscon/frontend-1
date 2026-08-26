@@ -1,5 +1,5 @@
 import { Field, FieldGrid } from './Field';
-import { resolveDomain, resolveSubtype } from './registry';
+import { CAR_FUEL_TYPES, resolveDomain, resolveSubtype } from './registry';
 
 export default function ListingFields({ category, values = {}, onChange, errors = {} }) {
   const domain = resolveDomain(category);
@@ -30,10 +30,22 @@ export default function ListingFields({ category, values = {}, onChange, errors 
       <FieldGrid title="Rental company details">
         <Field label="Vehicle class" type="select" required options={['Economy', 'Compact', 'SUV', 'Van', 'Luxury']} value={values.vehicleClass} error={errors.vehicleClass} onChange={(value) => set('vehicleClass', value)} />
         <Field label="Transmission" type="select" required options={['Automatic', 'Manual']} value={values.transmission} error={errors.transmission} onChange={(value) => set('transmission', value)} />
-        <Field label="Fuel policy" type="select" options={['Full-to-full', 'Same-to-same', 'Prepaid']} value={values.fuelPolicy} onChange={(value) => set('fuelPolicy', value)} />
+        <Field
+          label="Fuel type"
+          type="select"
+          options={CAR_FUEL_TYPES}
+          value={values.fuelType || 'Petrol'}
+          onChange={(value) => set('fuelType', value)}
+          help="Petrol for most cars, diesel for efficiency / torque, hybrid or electric for lower emissions."
+        />
+        <Field label="Fuel policy" type="select" options={['Full-to-full', 'Same-to-same', 'Prepaid']} value={values.fuelPolicy} onChange={(value) => set('fuelPolicy', value)} help="How the tank should be returned (separate from fuel type)." />
         <Field label="Minimum driver age" type="number" required min="18" value={values.minimumDriverAge} error={errors.minimumDriverAge} onChange={(value) => set('minimumDriverAge', value)} />
         <Field label="With driver" type="boolean" value={values.withDriver} onChange={(value) => set('withDriver', value)} />
         <Field label="Insurance included" type="boolean" value={values.insuranceIncluded} onChange={(value) => set('insuranceIncluded', value)} />
+        <Field label="Pickup from" type="time" value={values.pickupTime || '08:00'} onChange={(value) => set('pickupTime', value)} help="Earliest time a customer can pick up a car." />
+        <Field label="Return by" type="time" value={values.returnTime || '18:00'} onChange={(value) => set('returnTime', value)} help="Latest time a customer must return a car." />
+        <Field label="Minimum rental (days)" type="number" min="1" value={values.minRentalDays ?? 1} error={errors.minRentalDays} onChange={(value) => set('minRentalDays', value)} />
+        <Field label="Maximum rental (days)" type="number" min="1" value={values.maxRentalDays ?? 30} error={errors.maxRentalDays} onChange={(value) => set('maxRentalDays', value)} help="How long a customer can keep this car." />
         <Field label="Security deposit note" type="textarea" value={values.depositNote} onChange={(value) => set('depositNote', value)} />
       </FieldGrid>
     );

@@ -17,6 +17,14 @@ const SLUG_TO_DOMAIN = {
   'event-hall': 'venues',
 };
 
+const SLUG_ALIASES = {
+  'car-rentals': 'car-rental',
+  cars: 'car-rental',
+  'motorbike-and-scooter-rentals': 'motorbike',
+  'taxi-and-ride-services': 'taxi',
+  'bus-and-minivan-charters': 'taxi',
+};
+
 export const INVENTORY_LABELS = {
   accommodation: { singular: 'Room', plural: 'Rooms' },
   transport: { singular: 'Vehicle', plural: 'Vehicles' },
@@ -25,28 +33,261 @@ export const INVENTORY_LABELS = {
   venues: { singular: 'Package', plural: 'Packages' },
 };
 
+export function normalizeCategorySlug(value) {
+  const raw = String(value || '').trim().toLowerCase().replace(/[ /]+/g, '-');
+  return SLUG_ALIASES[raw] || raw;
+}
+
+function slugCandidates(categoryOrSlug) {
+  if (!categoryOrSlug) return [];
+  if (typeof categoryOrSlug === 'string') return [normalizeCategorySlug(categoryOrSlug)].filter(Boolean);
+  const nested = categoryOrSlug.category && typeof categoryOrSlug.category === 'object'
+    ? categoryOrSlug.category
+    : null;
+  return [
+    categoryOrSlug.categorySlug,
+    nested?.slug,
+    nested?.categorySlug,
+    typeof categoryOrSlug.category === 'string' ? categoryOrSlug.category : '',
+    categoryOrSlug.slug,
+    categoryOrSlug.subtype,
+    nested?.subtype,
+    categoryOrSlug.type,
+    nested?.type,
+    categoryOrSlug.serviceType,
+    categoryOrSlug.serviceCategory,
+  ].map(normalizeCategorySlug).filter(Boolean);
+}
+
+function inferTransportSubtype(categoryOrSlug) {
+  const attrs = categoryOrSlug?.listingAttributes || categoryOrSlug || {};
+  if (attrs.vehicleClass || attrs.pickupTime || attrs.returnTime || attrs.minRentalDays || attrs.maxRentalDays) {
+    return 'car-rental';
+  }
+  if (attrs.helmetIncluded != null) return 'motorbike';
+  if (attrs.vehicleType) return 'taxi';
+  return '';
+}
+
+function readSlug(categoryOrSlug) {
+  const candidates = slugCandidates(categoryOrSlug);
+  const domainHint = typeof categoryOrSlug === 'object' ? categoryOrSlug.domain : '';
+  const known = candidates.find((slug) => {
+    const mapped = SLUG_TO_DOMAIN[slug];
+    if (!mapped) return false;
+    if (domainHint === 'transport' && mapped === 'accommodation') return false;
+    if (domainHint === 'accommodation' && mapped === 'transport') return false;
+    return true;
+  });
+  if (known) return known;
+  if (domainHint === 'transport') return inferTransportSubtype(categoryOrSlug) || candidates[0] || '';
+  return candidates[0] || '';
+}
+
 export function resolveDomain(categoryOrSlug) {
   if (!categoryOrSlug) return 'experiences';
-  if (typeof categoryOrSlug === 'string') {
-    return SLUG_TO_DOMAIN[categoryOrSlug] || 'experiences';
-  }
-  return (
-    categoryOrSlug.domain ||
-    SLUG_TO_DOMAIN[categoryOrSlug.slug] ||
-    SLUG_TO_DOMAIN[categoryOrSlug.categorySlug] ||
-    SLUG_TO_DOMAIN[categoryOrSlug.type] ||
-    'experiences'
-  );
+  const slug = readSlug(categoryOrSlug);
+  if (SLUG_TO_DOMAIN[slug]) return SLUG_TO_DOMAIN[slug];
+  if (typeof categoryOrSlug === 'object' && categoryOrSlug.domain) return categoryOrSlug.domain;
+  return 'experiences';
 }
 
 export function resolveSubtype(categoryOrSlug) {
-  if (!categoryOrSlug) return '';
-  if (typeof categoryOrSlug === 'string') return categoryOrSlug;
-  return categoryOrSlug.subtype || categoryOrSlug.slug || categoryOrSlug.categorySlug || categoryOrSlug.type || '';
+  return readSlug(categoryOrSlug);
 }
 
 export function isStayCategory(categoryOrSlug) {
   return resolveDomain(categoryOrSlug) === 'accommodation';
+}
+
+/** Same stored codes; labels change by domain (cars use pickup / return). */
+export function remainingPaymentOptions(categoryOrSlug) {
+  const copy = domainCopy(categoryOrSlug);
+  if (copy.kind === 'rental') {
+    return [
+      { value: 'PAY_AT_ARRIVAL', label: 'Pay at pickup' },
+      { value: 'PAY_AT_CHECKOUT', label: 'Pay at return' },
+      { value: 'PAY_AT_BOOKING', label: 'Pay full amount at booking' },
+    ];
+  }
+  return [
+    { value: 'PAY_AT_ARRIVAL', label: 'Pay at arrival' },
+    { value: 'PAY_AT_CHECKOUT', label: 'Pay at checkout' },
+    { value: 'PAY_AT_BOOKING', label: 'Pay full amount at booking' },
+  ];
+}
+
+export function remainingPaymentLabel(method, categoryOrSlug) {
+  const code = String(method || '').trim().toUpperCase();
+  if (!code) return '';
+  const match = remainingPaymentOptions(categoryOrSlug).find((option) => option.value === code);
+  if (match) return match.label;
+  if (code === 'PAY_AT_ARRIVAL') return 'Pay at arrival';
+  if (code === 'PAY_AT_CHECKOUT') return 'Pay at checkout';
+  if (code === 'PAY_AT_BOOKING') return 'Pay full amount at booking';
+  return code.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+export const CAR_FUEL_TYPES = [
+  { value: 'Petrol', label: 'Petrol (regular unleaded)' },
+  { value: 'Diesel', label: 'Diesel' },
+  { value: 'Hybrid / Electric', label: 'Hybrid / Electric' },
+];
+
+export function splitDateTimeValue(value) {
+  const text = String(value || '');
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) {
+    return { date: text.slice(0, 10), time: text.slice(11, 16) };
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return { date: text, time: '' };
+  return { date: '', time: '' };
+}
+
+export function joinDateTimeValue(date, time) {
+  if (!date) return '';
+  return `${date}T${time || '00:00'}`;
+}
+
+export function rangeDays(startDate, endDate) {
+  const start = String(startDate || '').slice(0, 10);
+  const end = String(endDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end <= start) return 0;
+  return Math.round((new Date(`${end}T12:00:00Z`) - new Date(`${start}T12:00:00Z`)) / 86400000);
+}
+
+export function isRangeOccupancyCategory(categoryOrSlug) {
+  const domain = resolveDomain(categoryOrSlug);
+  const subtype = resolveSubtype(categoryOrSlug);
+  if (domain === 'accommodation') return true;
+  return domain === 'transport' && (subtype === 'car-rental' || subtype === 'motorbike');
+}
+
+export function domainCopy(categoryOrSlug) {
+  const domain = resolveDomain(categoryOrSlug);
+  const subtype = resolveSubtype(categoryOrSlug);
+  const rangeMode = isRangeOccupancyCategory(categoryOrSlug);
+
+  if (domain === 'accommodation') {
+    return {
+      kind: 'stay',
+      domain,
+      subtype,
+      rangeMode: true,
+      optionNoun: 'room type',
+      optionNounPlural: 'room types',
+      unitNoun: 'room',
+      unitNounPlural: 'rooms',
+      startLabel: 'Check-in',
+      endLabel: 'Check-out',
+      startFromLabel: 'Guests can check in from',
+      lastEndLabel: 'Last check-out date',
+      hoursStartLabel: 'Check-in from',
+      hoursEndLabel: 'Check-out until',
+      capacityLabel: 'Rooms of this type',
+      occupancyTitle: 'Occupied / closed dates',
+      occupancyHint: 'Close dates when a room is occupied offline or under maintenance. Checkout morning is free: the next guest can check in on the “available again” date.',
+      occupancyStartLabel: 'Occupied from',
+      occupancyEndLabel: 'Available again on',
+      occupancyUnitsLabel: 'Rooms to close',
+      occupancyNotePlaceholder: 'Owner stay, maintenance…',
+      availabilityTitle: 'Open calendar for this room type',
+      availabilityHint: 'The calendar window guests may book. Occupied nights are blocked separately below.',
+      pageSubtitle: 'room types customers can book',
+      addPlaceholder: 'Example: Deluxe double',
+      banner: 'Update each room type here. You do not need to open the full listing editor or walk through every tab.',
+    };
+  }
+
+  if (domain === 'transport' && subtype === 'car-rental') {
+    return {
+      kind: 'rental',
+      domain,
+      subtype,
+      rangeMode: true,
+      optionNoun: 'vehicle type',
+      optionNounPlural: 'vehicle types',
+      unitNoun: 'car',
+      unitNounPlural: 'cars',
+      startLabel: 'Pickup',
+      endLabel: 'Return',
+      startFromLabel: 'Customers can pick up from',
+      lastEndLabel: 'Last return date',
+      hoursStartLabel: 'Pickup from',
+      hoursEndLabel: 'Return by',
+      capacityLabel: 'Number of cars of this type',
+      occupancyTitle: 'Cars out / closed dates',
+      occupancyHint: 'A car is unavailable from pickup until return. The next customer can pick up on the return date. Close dates for maintenance or cars already rented offline.',
+      occupancyStartLabel: 'Unavailable from',
+      occupancyEndLabel: 'Available again on',
+      occupancyUnitsLabel: 'Cars to close',
+      occupancyNotePlaceholder: 'Maintenance, already rented offline…',
+      availabilityTitle: 'When this vehicle can be rented',
+      availabilityHint: 'Set the pickup window and how many cars you have of this type. Pickup and return hours, plus min/max rental days, are on the service details.',
+      pageSubtitle: 'vehicles customers can rent',
+      addPlaceholder: 'Example: Premium SUV',
+      banner: 'Update each vehicle type here. Pickup and return dates are set on availability — not check-in or check-out.',
+    };
+  }
+
+  if (domain === 'transport' && subtype === 'motorbike') {
+    return {
+      kind: 'rental',
+      domain,
+      subtype,
+      rangeMode: true,
+      optionNoun: 'bike type',
+      optionNounPlural: 'bike types',
+      unitNoun: 'bike',
+      unitNounPlural: 'bikes',
+      startLabel: 'Pickup',
+      endLabel: 'Return',
+      startFromLabel: 'Customers can pick up from',
+      lastEndLabel: 'Last return date',
+      hoursStartLabel: 'Pickup from',
+      hoursEndLabel: 'Return by',
+      capacityLabel: 'Number of bikes of this type',
+      occupancyTitle: 'Bikes out / closed dates',
+      occupancyHint: 'A bike is unavailable from pickup until return. Close dates for maintenance or bikes already rented offline.',
+      occupancyStartLabel: 'Unavailable from',
+      occupancyEndLabel: 'Available again on',
+      occupancyUnitsLabel: 'Bikes to close',
+      occupancyNotePlaceholder: 'Maintenance, already rented offline…',
+      availabilityTitle: 'When this bike can be rented',
+      availabilityHint: 'Set the pickup window and how many bikes you have of this type.',
+      pageSubtitle: 'bikes customers can rent',
+      addPlaceholder: 'Example: 125cc scooter',
+      banner: 'Update each bike type here. Pickup and return dates are set on availability.',
+    };
+  }
+
+  return {
+    kind: 'option',
+    domain,
+    subtype,
+    rangeMode,
+    optionNoun: 'option',
+    optionNounPlural: 'options',
+    unitNoun: 'unit',
+    unitNounPlural: 'units',
+    startLabel: 'Start',
+    endLabel: 'End',
+    startFromLabel: 'Available from',
+    lastEndLabel: 'Available until',
+    hoursStartLabel: 'Open time',
+    hoursEndLabel: 'Close time',
+    capacityLabel: 'Capacity',
+    occupancyTitle: 'Closed dates',
+    occupancyHint: 'Close dates when this option cannot be booked.',
+    occupancyStartLabel: 'Closed from',
+    occupancyEndLabel: 'Available again on',
+    occupancyUnitsLabel: 'Units to close',
+    occupancyNotePlaceholder: 'Owner stay, maintenance…',
+    availabilityTitle: 'When this option can be booked',
+    availabilityHint: 'When customers can use this option. Empty date, day, or time means unrestricted for that part.',
+    pageSubtitle: 'options customers can book',
+    addPlaceholder: 'Example: Standard package',
+    banner: 'Update each option here. You do not need to open the full listing editor or walk through every tab.',
+  };
 }
 
 export function emptyListingValues(domain, subtype) {
@@ -69,10 +310,15 @@ export function emptyListingValues(domain, subtype) {
       vehicleClass: '',
       transmission: '',
       withDriver: false,
+      fuelType: 'Petrol',
       fuelPolicy: 'Full-to-full',
       insuranceIncluded: false,
       minimumDriverAge: 21,
       depositNote: '',
+      pickupTime: '08:00',
+      returnTime: '18:00',
+      minRentalDays: 1,
+      maxRentalDays: 30,
     };
   }
   if (domain === 'transport' && subtype === 'taxi') return { vehicleType: '' };
@@ -89,7 +335,7 @@ export function emptyListingValues(domain, subtype) {
 
 export function emptyInventoryValues(domain) {
   if (domain === 'accommodation') return { maxGuests: 2, bedType: '', numberOfBeds: 1, bedrooms: 1, quantity: 1, unitType: 'double' };
-  if (domain === 'transport') return { make: '', model: '', seats: 4, luggage: '', ac: true };
+  if (domain === 'transport') return { make: '', model: '', seats: 4, luggage: '', ac: true, quantity: 1 };
   if (domain === 'experiences') return { packageType: 'Adult' };
   if (domain === 'venues') return { packageName: '' };
   return {};
@@ -137,6 +383,15 @@ export function validateListingClient(domain, subtype, values = {}) {
     if (!values.vehicleClass) errors.vehicleClass = 'Vehicle class is required.';
     if (!values.transmission) errors.transmission = 'Transmission is required.';
     if (Number(values.minimumDriverAge) < 18) errors.minimumDriverAge = 'Minimum age must be at least 18.';
+    if (values.minRentalDays != null && values.minRentalDays !== '' && !(Number(values.minRentalDays) >= 1)) {
+      errors.minRentalDays = 'Minimum rental must be at least 1 day.';
+    }
+    if (values.maxRentalDays != null && values.maxRentalDays !== '' && !(Number(values.maxRentalDays) >= 1)) {
+      errors.maxRentalDays = 'Maximum rental must be at least 1 day.';
+    }
+    if (Number(values.minRentalDays) > 0 && Number(values.maxRentalDays) > 0 && Number(values.maxRentalDays) < Number(values.minRentalDays)) {
+      errors.maxRentalDays = 'Maximum rental must be at least the minimum.';
+    }
   }
   if (domain === 'transport' && subtype === 'taxi' && !values.vehicleType) {
     errors.vehicleType = 'Vehicle type is required.';
@@ -159,6 +414,9 @@ export function validateInventoryClient(domain, values = {}) {
   }
   if (domain === 'transport' && values.seats !== '' && values.seats != null && !(Number(values.seats) > 0)) {
     errors.seats = 'Seats must be at least 1.';
+  }
+  if (domain === 'transport' && values.quantity !== '' && values.quantity != null && !(Number(values.quantity) > 0)) {
+    errors.quantity = 'Number of vehicles must be at least 1.';
   }
   return errors;
 }
@@ -190,16 +448,33 @@ export function validateBookingClient(domain, values = {}, { listing = {}, inven
   if (domain === 'transport') {
     if (!values.pickupLocation) errors.pickupLocation = 'Pickup location is required.';
     if (!values.pickupDateTime) errors.pickupDateTime = 'Pickup date/time is required.';
-    if (listing.subtype === 'taxi' || listing.categorySlug === 'taxi') {
+    if (listing.subtype === 'taxi' || listing.categorySlug === 'taxi' || resolveSubtype(listing) === 'taxi') {
       if (!values.dropoffLocation) errors.dropoffLocation = 'Drop-off location is required.';
     } else {
       if (!values.returnLocation) errors.returnLocation = 'Return location is required.';
-      if (!values.returnDateTime) errors.returnDateTime = 'Return date/time is required.';
-      if (values.pickupDateTime && values.returnDateTime && values.returnDateTime <= values.pickupDateTime) {
-        errors.returnDateTime = 'Return must be after pickup.';
+      if (!values.returnDateTime) errors.returnDateTime = 'Return date is required.';
+      const pickup = splitDateTimeValue(values.pickupDateTime);
+      const ret = splitDateTimeValue(values.returnDateTime);
+      if (pickup.date && ret.date && ret.date <= pickup.date) {
+        errors.returnDateTime = 'Return date must be after pickup date.';
+      }
+      const minDays = Number(listingDetails.minRentalDays) || 1;
+      const maxDays = Number(listingDetails.maxRentalDays) || 0;
+      const days = rangeDays(pickup.date, ret.date);
+      if (days > 0) {
+        if (days < minDays) errors.returnDateTime = `Minimum rental is ${minDays} day${minDays === 1 ? '' : 's'}.`;
+        if (maxDays > 0 && days > maxDays) errors.returnDateTime = `Maximum rental is ${maxDays} day${maxDays === 1 ? '' : 's'}.`;
+      }
+      const openFrom = String(listingDetails.pickupTime || '').slice(0, 5);
+      const closeBy = String(listingDetails.returnTime || '').slice(0, 5);
+      if (openFrom && pickup.time && pickup.time < openFrom) {
+        errors.pickupDateTime = `Pickup starts from ${openFrom}.`;
+      }
+      if (closeBy && ret.time && ret.time > closeBy) {
+        errors.returnDateTime = `Return by ${closeBy}.`;
       }
     }
-    if ((listing.subtype === 'car-rental' || listing.categorySlug === 'car-rental')) {
+    if ((listing.subtype === 'car-rental' || listing.categorySlug === 'car-rental' || resolveSubtype(listing) === 'car-rental')) {
       if (!(Number(values.driverAge) >= 18)) errors.driverAge = 'Driver age must be at least 18.';
       if (Number(listingDetails.minimumDriverAge) && Number(values.driverAge) < Number(listingDetails.minimumDriverAge)) {
         errors.driverAge = `Minimum age is ${listingDetails.minimumDriverAge}.`;

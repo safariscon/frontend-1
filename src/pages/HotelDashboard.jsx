@@ -21,6 +21,7 @@ import { emptyLocationDetails, isAdministrativeLocationComplete, normalizeLocati
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { t } from '../lib/translations';
+import BookingDetailCards from '../components/BookingDetailCards';
 
 const EMPTY_FORM = {
   title: '',
@@ -1068,6 +1069,7 @@ function SellerBookingApprovalModal({ booking, onSubmit, onClose }) {
           [t('sellerDash.quantity', language)]: booking.quantity || booking.guests || 1,
           [t('status', language)]: booking.status,
         }} />
+        <BookingDetailCards details={booking.bookingDetails} title={t('serviceView.bookingForm', language)} />
         <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
           <h3 className="font-bold text-green-950">{t('sellerDash.approveSend', language)}</h3>
           <p className="mt-1 text-sm text-green-800">{t('sellerDash.approveSendLead', language)}</p>
@@ -1932,7 +1934,7 @@ function BookingDetailModal({ booking, onClose }) {
           [t('booking.date', language)]: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
         }} />
         <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
-        <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
+        <BookingDetailCards details={booking.bookingDetails} title={t('serviceView.bookingForm', language)} />
       </div>
     </div>
   );
@@ -1983,7 +1985,7 @@ function BookingDetailBody({ booking }) {
         [t('booking.date', language)]: booking.createdAt ? new Date(booking.createdAt).toLocaleString() : '-',
       }} />
       <BookingPromotionSnapshot promotion={booking.promotionSnapshot} />
-      <ResponseList responses={booking.bookingDetails?.customResponses?.length ? Object.fromEntries(booking.bookingDetails.customResponses.map((item) => [item.label, item.value])) : booking.bookingDetails} />
+      <BookingDetailCards details={booking.bookingDetails} title={t('serviceView.bookingForm', language)} />
     </>
   );
 }
@@ -2004,13 +2006,6 @@ function BookingPromotionSnapshot({ promotion }) {
 
 function DetailGrid({ data }) {
   return <dl className="grid gap-3 md:grid-cols-2">{Object.entries(data).map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-3"><dt className="text-xs font-semibold uppercase text-gray-500">{label}</dt><dd className="mt-1 break-all text-sm font-semibold text-gray-900">{String(value || '-')}</dd></div>)}</dl>;
-}
-
-function ResponseList({ responses }) {
-  const { language } = useLanguage();
-  const entries = Object.entries(responses || {}).filter(([, value]) => value !== undefined && value !== null && value !== '');
-  if (!entries.length) return <p className="mt-4 text-sm text-gray-500">{t('sellerDash.noBookingsYet', language)}</p>;
-  return <div className="mt-4"><h3 className="font-bold text-gray-900">{t('serviceView.bookingForm', language)}</h3><div className="mt-2 grid gap-2">{entries.map(([key, value]) => <div key={key} className="rounded-lg border border-gray-200 p-3"><p className="text-xs font-semibold uppercase text-gray-500">{key}</p><p className="break-all text-sm text-gray-800">{Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value)}</p></div>)}</div></div>;
 }
 
 function PayoutDetailsForm({ token, initial, onSaved }) {
