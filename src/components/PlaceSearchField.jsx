@@ -27,36 +27,33 @@ export default function PlaceSearchField({
 
   useEffect(() => {
     const text = String(query || '').trim();
-    if (text.length < 3) {
-      setResults([]);
-      setSearching(false);
-      return undefined;
-    }
-    if (hasSelection && selectedLabel && text === selectedLabel) {
-      setResults([]);
-      setSearching(false);
-      return undefined;
-    }
-
+    const skip = text.length < 3 || Boolean(hasSelection && selectedLabel && text === selectedLabel);
     let cancelled = false;
-    setSearching(true);
-    const timer = setTimeout(async () => {
-      try {
-        const places = await searchPlaces(text, { country: 'rw', countryCode: 'rw', countryName: 'Rwanda' });
-        if (!cancelled) {
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      if (skip) {
+        setResults([]);
+        setSearching(false);
+        return;
+      }
+      setSearching(true);
+      searchPlaces(text, { country: 'rw', countryCode: 'rw', countryName: 'Rwanda' })
+        .then((places) => {
+          if (cancelled) return;
           setResults(places.slice(0, 8));
           setOpen(true);
-        }
-      } catch {
-        if (!cancelled) setResults([]);
-      } finally {
-        if (!cancelled) setSearching(false);
-      }
-    }, DEBOUNCE_MS);
+        })
+        .catch(() => {
+          if (!cancelled) setResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, skip ? 0 : DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     };
   }, [query, hasSelection, selectedLabel]);
 

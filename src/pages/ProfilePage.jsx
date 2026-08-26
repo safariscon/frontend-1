@@ -17,7 +17,7 @@ export default function ProfilePage() {
   const [payout, setPayout] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [payoutForm, setPayoutForm] = useState({ method: 'momo', providerId: '', accountName: '', accountNumber: '' });
-  const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
+  const [profileForm, setProfileForm] = useState(() => ({ name: user?.name || '', phone: user?.phone || '' }));
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', otp: '' });
   const [otpSent, setOtpSent] = useState(false);
   const [message, setMessage] = useState('');
@@ -44,8 +44,14 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) navigate('/login');
-    else setProfileForm({ name: user.name || '', phone: user.phone || '' });
   }, [navigate, user]);
+
+  const profileUserKey = user?._id || user?.id || user?.email || '';
+  const [syncedProfileUser, setSyncedProfileUser] = useState(profileUserKey);
+  if (user && profileUserKey !== syncedProfileUser) {
+    setSyncedProfileUser(profileUserKey);
+    setProfileForm({ name: user.name || '', phone: user.phone || '' });
+  }
 
   useEffect(() => {
     if (!user || !isSellerRole(user.role) || !token) return undefined;

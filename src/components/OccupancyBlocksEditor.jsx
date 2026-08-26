@@ -23,9 +23,20 @@ export default function OccupancyBlocksEditor({ token, serviceId, optionId, quan
   };
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, serviceId, optionId]);
+    if (!token || !serviceId || !optionId) return undefined;
+    let cancelled = false;
+    hotelApi.listOptionBlocks(token, serviceId, optionId)
+      .then((response) => {
+        if (cancelled) return;
+        setBlocks(response.blocks || []);
+        setBookings(response.bookings || []);
+        setForm((prev) => ({ ...prev, units: Math.max(1, Number(response.quantity || quantity || 1)) }));
+      })
+      .catch((loadError) => {
+        if (!cancelled) setError(loadError.message);
+      });
+    return () => { cancelled = true; };
+  }, [token, serviceId, optionId, quantity]);
 
   const closeDates = async (event) => {
     event.preventDefault();

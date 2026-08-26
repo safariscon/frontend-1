@@ -623,6 +623,7 @@
     "optional": "(optional)",
     "notAvailableYet": "This service is not available for booking yet.",
     "currentlyNotAvailable": "This service is currently not available.",
+    "fullyBookedForDates": "This option is fully booked for the selected dates. Choose other dates.",
     "chooseFromTable": "Please choose a service from the price table.",
     "completeName": "Please complete Full name.",
     "validPhone": "Please enter a valid phone number for the selected country.",

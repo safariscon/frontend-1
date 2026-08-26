@@ -195,7 +195,7 @@ export default function ServiceLocationPicker({ value, onChange }) {
       window.clearTimeout(startTimer);
       window.clearTimeout(timer);
     };
-  }, [query, location.countryCode, location.latitude, location.longitude]);
+  }, [query, location.country, location.countryCode, location.latitude, location.longitude]);
 
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {

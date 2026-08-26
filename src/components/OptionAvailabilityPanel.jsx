@@ -28,25 +28,24 @@ export default function OptionAvailabilityPanel({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const load = async () => {
-    if (!token || !serviceId || !optionId) return;
-    setLoading(true);
-    setError('');
-    try {
-      const response = await hotelApi.getServiceAvailability(token, serviceId, optionId);
-      setForm(response.availability || EMPTY_AVAILABILITY);
-    } catch (loadError) {
-      setForm({ ...EMPTY_AVAILABILITY, capacityTotal: Math.max(1, Number(quantity) || 1) });
-      setError(loadError.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, serviceId, optionId]);
+    if (!token || !serviceId || !optionId) return undefined;
+    let cancelled = false;
+    hotelApi.getServiceAvailability(token, serviceId, optionId)
+      .then((response) => {
+        if (cancelled) return;
+        setForm(response.availability || EMPTY_AVAILABILITY);
+        setError('');
+        setLoading(false);
+      })
+      .catch((loadError) => {
+        if (cancelled) return;
+        setForm({ ...EMPTY_AVAILABILITY, capacityTotal: Math.max(1, Number(quantity) || 1) });
+        setError(loadError.message);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [token, serviceId, optionId, quantity]);
 
   const save = async (event) => {
     event?.preventDefault?.();

@@ -8,7 +8,7 @@ import { emptyInventoryValues, isStayCategory, resolveDomain, validateInventoryC
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
-import { categorySupportsOptions } from '../lib/serviceSchema';
+import { categorySupportsOptions, sortSchemaFields } from '../lib/serviceSchema';
 import { formatRwf } from '../lib/currency';
 import { isSellerRole } from '../lib/dashboard';
 

@@ -27,14 +27,22 @@ export default function SearchBar({ variant = 'compact', children = null }) {
   const hasSelection = Boolean(lat && lng);
   const isHero = variant === 'hero';
   const skipDebounceRef = useRef(false);
-
-  useEffect(() => {
+  const urlSnapshot = [
+    searchParams.get('location') || '',
+    searchParams.get('lat') || '',
+    searchParams.get('lng') || '',
+    searchParams.get('checkIn') || '',
+    searchParams.get('checkOut') || '',
+  ].join('\0');
+  const [syncedUrl, setSyncedUrl] = useState(urlSnapshot);
+  if (urlSnapshot !== syncedUrl) {
+    setSyncedUrl(urlSnapshot);
     setQuery(searchParams.get('location') || '');
     setLat(searchParams.get('lat') || '');
     setLng(searchParams.get('lng') || '');
     setCheckIn(searchParams.get('checkIn') || '');
     setCheckOut(searchParams.get('checkOut') || '');
-  }, [searchParams]);
+  }
 
   const buildParams = ({ location, lat: nextLat, lng: nextLng, checkIn: nextIn, checkOut: nextOut }) => {
     const params = new URLSearchParams();
