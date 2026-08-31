@@ -159,20 +159,20 @@ export default function LoginPage() {
       />
       <Navbar />
 
-      <main className="flex-1 flex items-center justify-center py-12 px-4">
+      <main className="flex-1 flex items-start justify-center px-4 py-3 sm:items-center sm:py-8">
         <div className="max-w-md w-full">
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            <div className="text-center mb-8">
+          <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8">
+            <div className="text-center mb-5 sm:mb-8">
               {step === 'otp' ? (
                 <>
                   <p className="text-sm font-bold uppercase tracking-wider text-primary">{t('loginOtpLabel', language)}</p>
-                  <h1 className="mt-2 text-3xl font-bold text-gray-900">{t('enterLoginCode', language)}</h1>
-                  <p className="mt-2 text-gray-600">{t('loginOtpSent', language, { email })}</p>
+                  <h1 className="mt-1 text-2xl font-bold text-gray-900 sm:mt-2 sm:text-3xl">{t('enterLoginCode', language)}</h1>
+                  <p className="mt-1 text-sm text-gray-600 sm:mt-2">{t('loginOtpSent', language, { email })}</p>
                 </>
               ) : (
                 <>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('welcomeBack', language)}</h1>
-                  <p className="text-gray-600">{t('signInAccount', language)}</p>
+                  <h1 className="mb-1 text-2xl font-bold text-gray-900 sm:mb-2 sm:text-3xl">{t('welcomeBack', language)}</h1>
+                  <p className="text-sm text-gray-600 sm:text-base">{t('signInAccount', language)}</p>
                 </>
               )}
             </div>

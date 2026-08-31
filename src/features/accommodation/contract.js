@@ -1,3 +1,5 @@
+import { emptyServiceLocation, resolveServiceLocation } from "../../lib/serviceSchema";
+
 export const STAY_FAMILIES = [
   {
     id: "apartment",
@@ -177,24 +179,7 @@ export const WIZARD_STEPS = [
   { id: "review", title: "Review & open", hint: "Confirm details, then submit for booking.", scope: "global" },
 ];
 
-export const emptyLocation = {
-  country: "",
-  countryCode: "",
-  state: "",
-  city: "",
-  area: "",
-  placeName: "",
-  referenceName: "",
-  formattedAddress: "",
-  fullAddress: "",
-  latitude: null,
-  longitude: null,
-  latitudeRaw: "",
-  longitudeRaw: "",
-  placeId: "",
-  locationSource: "search",
-  isExactLocationVerified: false,
-};
+export const emptyLocation = emptyServiceLocation();
 
 const newId = () => `unit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -429,7 +414,6 @@ export function draftFromService(service, options = []) {
   const attrs = service?.listingAttributes || {};
   const identity = attrs.hostIdentity || {};
   const plans = attrs.ratePlans || {};
-  const loc = service.location || service.serviceLocation || service.catalogLocation || {};
   const kind = kindMeta(attrs.propertyKind || service.subtype || service.categorySlug || "apartment");
   const cover = service.primaryImage || (Array.isArray(service.images) ? service.images[0] : "") || "";
   return emptyStayDraft({
@@ -441,12 +425,7 @@ export function draftFromService(service, options = []) {
     title: service.title || service.name || "",
     description: service.description || "",
     starRating: attrs.starRating || "unrated",
-    location: {
-      ...emptyLocation,
-      ...loc,
-      formattedAddress: loc.formattedAddress || loc.fullAddress || "",
-      fullAddress: loc.fullAddress || loc.formattedAddress || "",
-    },
+    location: resolveServiceLocation(service),
     phoneE164: service.contactDetails?.phoneE164 || service.contactDetails?.phone || "",
     whatsappE164: service.contactDetails?.whatsappE164 || service.contactDetails?.whatsapp || "",
     checkInFrom: attrs.checkInFrom || attrs.checkInTime || "14:00",

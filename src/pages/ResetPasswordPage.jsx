@@ -57,11 +57,11 @@ export default function ResetPasswordPage() {
         })}
       />
       <Navbar />
-      <main className="flex-1 flex items-center justify-center py-12 px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('resetPassword', language)}</h1>
-            <p className="text-gray-600">{t('resetPasswordLead', language)}</p>
+      <main className="flex-1 flex items-center justify-center px-4 py-4 sm:py-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-5 sm:p-6">
+          <div className="text-center mb-4">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1 sm:text-3xl">{t('resetPassword', language)}</h1>
+            <p className="text-sm text-gray-600">{t('resetPasswordLead', language)}</p>
           </div>
 
           {message && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">{message}</div>}

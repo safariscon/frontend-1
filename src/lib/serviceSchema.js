@@ -83,6 +83,98 @@ export function categorySupportsOptions(...candidates) {
   return true;
 }
 
+export function emptyServiceLocation() {
+  return {
+    country: '',
+    countryCode: '',
+    state: '',
+    city: '',
+    area: '',
+    placeName: '',
+    referenceName: '',
+    formattedAddress: '',
+    fullAddress: '',
+    latitude: null,
+    longitude: null,
+    latitudeRaw: '',
+    longitudeRaw: '',
+    placeId: '',
+    locationSource: 'search',
+    isExactLocationVerified: false,
+  };
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function firstCoordinate(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+/**
+ * Rebuild the picker value from a saved service.
+ * `service.location` is a legacy display string on the API, so it is only used as an
+ * address fallback and never spread as an object.
+ */
+export function resolveServiceLocation(service) {
+  const base = emptyServiceLocation();
+  if (!service) return base;
+
+  const catalog = service.catalogLocation && typeof service.catalogLocation === 'object' ? service.catalogLocation : {};
+  const legacy = service.serviceLocation && typeof service.serviceLocation === 'object' ? service.serviceLocation : {};
+  const details = service.locationDetails && typeof service.locationDetails === 'object' ? service.locationDetails : {};
+  const contact = service.contactDetails && typeof service.contactDetails === 'object' ? service.contactDetails : {};
+  const inline = service.location && typeof service.location === 'object' ? service.location : {};
+  const locationLine = typeof service.location === 'string' ? service.location : '';
+
+  const latitude = firstCoordinate(inline.latitude, catalog.latitude, legacy.latitude, contact.latitude);
+  const longitude = firstCoordinate(inline.longitude, catalog.longitude, legacy.longitude, contact.longitude);
+  const address = firstText(
+    inline.formattedAddress,
+    inline.fullAddress,
+    catalog.formattedAddress,
+    legacy.formattedAddress,
+    legacy.fullAddress,
+    contact.exactAddress,
+    locationLine
+  );
+
+  return {
+    ...base,
+    country: firstText(inline.country, catalog.country, legacy.country),
+    countryCode: firstText(inline.countryCode, catalog.countryCode),
+    state: firstText(inline.state, inline.province, catalog.state, legacy.province, details.province),
+    city: firstText(inline.city, inline.district, catalog.city, legacy.district, details.district),
+    area: firstText(inline.area, inline.sector, catalog.area, legacy.sector, details.sector),
+    placeName: firstText(inline.placeName, catalog.placeName, legacy.name),
+    referenceName: firstText(inline.referenceName, inline.landmark, catalog.referenceName, legacy.referenceName),
+    formattedAddress: address,
+    fullAddress: address,
+    latitude,
+    longitude,
+    latitudeRaw: firstText(inline.latitudeRaw, catalog.latitudeRaw, legacy.latitudeRaw) || (latitude === null ? '' : String(latitude)),
+    longitudeRaw: firstText(inline.longitudeRaw, catalog.longitudeRaw, legacy.longitudeRaw) || (longitude === null ? '' : String(longitude)),
+    placeId: firstText(inline.placeId, catalog.placeId, legacy.placeId),
+    locationSource: firstText(inline.locationSource, catalog.locationSource, legacy.locationSource) || 'search',
+    isExactLocationVerified: Boolean(
+      inline.isExactLocationVerified
+      ?? catalog.isExactLocationVerified
+      ?? legacy.isExactLocationVerified
+      ?? (latitude !== null && longitude !== null)
+    ),
+  };
+}
+
 export function buildLocationPayload(location = {}) {
   const latitude = Number(location.latitude);
   const longitude = Number(location.longitude);

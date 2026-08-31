@@ -73,32 +73,32 @@ export default function EmailVerificationPage() {
         })}
       />
       <Navbar />
-      <main className="flex-1 flex items-center justify-center py-12 px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-          <div className="text-center mb-8">
+      <main className="flex-1 flex items-start justify-center px-4 py-3 sm:items-center sm:py-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-4 sm:p-6">
+          <div className="mb-3 text-center sm:mb-4">
             <p className="text-sm font-bold uppercase tracking-wider text-primary">{t('emailVerification', language)}</p>
-            <h1 className="mt-2 text-3xl font-bold text-gray-900">{t('enterYourCode', language)}</h1>
-            <p className="mt-2 text-gray-600">{t('codeSentToEmail', language)}</p>
+            <h1 className="mt-1 text-xl font-bold text-gray-900 sm:text-3xl">{t('enterYourCode', language)}</h1>
+            <p className="mt-1 text-sm text-gray-600">{t('codeSentToEmail', language)}</p>
           </div>
 
-          {error && <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>}
-          {message && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg text-sm">{message}</div>}
+          {error && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+          {message && <div className="mb-3 rounded-lg bg-green-50 p-3 text-sm text-green-700">{message}</div>}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('email', language)}</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('email', language)}</label>
               <input
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 transition focus:border-primary focus:ring-2 focus:ring-primary"
                 placeholder="your@email.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('verificationCode', language)}</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('verificationCode', language)}</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -108,7 +108,7 @@ export default function EmailVerificationPage() {
                 required
                 minLength={4}
                 maxLength={8}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-center text-2xl font-bold tracking-widest focus:ring-2 focus:ring-primary focus:border-primary transition"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-center text-2xl font-bold tracking-widest transition focus:border-primary focus:ring-2 focus:ring-primary"
                 placeholder="123456"
               />
             </div>
@@ -116,13 +116,13 @@ export default function EmailVerificationPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl transition disabled:opacity-50"
+              className="w-full rounded-xl bg-primary py-3 font-bold text-white transition hover:bg-primary-dark disabled:opacity-50"
             >
               {loading ? t('verifying', language) : t('verifyEmail', language)}
             </button>
           </form>
 
-          <div className="mt-6 flex flex-col gap-3 text-center text-sm">
+          <div className="mt-3 flex flex-col gap-2 text-center text-sm sm:mt-4">
             <button
               type="button"
               onClick={handleResend}

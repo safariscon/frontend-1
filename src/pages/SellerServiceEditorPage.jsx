@@ -21,29 +21,12 @@ import { detectPhoneCountry } from '../lib/phone';
 import {
   buildLocationPayload,
   categorySupportsOptions,
+  emptyServiceLocation,
   getServiceCover,
   resolveCategoryId,
+  resolveServiceLocation,
 } from '../lib/serviceSchema';
 import { isSellerRole } from '../lib/dashboard';
-
-const emptyLocation = {
-  country: '',
-  countryCode: '',
-  state: '',
-  city: '',
-  area: '',
-  placeName: '',
-  referenceName: '',
-  formattedAddress: '',
-  fullAddress: '',
-  latitude: null,
-  longitude: null,
-  latitudeRaw: '',
-  longitudeRaw: '',
-  placeId: '',
-  locationSource: 'search',
-  isExactLocationVerified: false,
-};
 
 export default function SellerServiceEditorPage() {
   const { serviceId } = useParams();
@@ -60,7 +43,7 @@ export default function SellerServiceEditorPage() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('available');
   const [basePrice, setBasePrice] = useState('');
-  const [location, setLocation] = useState(emptyLocation);
+  const [location, setLocation] = useState(emptyServiceLocation);
   const [phoneE164, setPhoneE164] = useState('');
   const [whatsappE164, setWhatsappE164] = useState('');
   const [listingAttributes, setListingAttributes] = useState({});
@@ -127,19 +110,13 @@ export default function SellerServiceEditorPage() {
         if (serviceResp) {
           const service = serviceResp.service || serviceResp;
           const cover = getServiceCover(service);
-          const loc = service.location || service.serviceLocation || service.catalogLocation || emptyLocation;
           const boundId = resolveCategoryId(list, service.categoryId || service.category?._id || '');
           setCategoryId(boundId);
           setTitle(service.title || service.name || '');
           setDescription(service.description || '');
           setStatus(service.status === 'unavailable' ? 'unavailable' : 'available');
           setBasePrice(service.basePrice ?? service.pricing?.amount ?? '');
-          setLocation({
-            ...emptyLocation,
-            ...loc,
-            formattedAddress: loc.formattedAddress || loc.fullAddress || '',
-            fullAddress: loc.fullAddress || loc.formattedAddress || '',
-          });
+          setLocation(resolveServiceLocation(service));
           setPhoneE164(service.contactDetails?.phoneE164 || service.contactDetails?.phone || '');
           setWhatsappE164(service.contactDetails?.whatsappE164 || service.contactDetails?.whatsapp || '');
           setListingAttributes(service.listingAttributes || emptyListingValues(resolveDomain(service), resolveSubtype(service)));

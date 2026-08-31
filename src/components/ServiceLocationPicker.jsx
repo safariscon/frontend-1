@@ -36,7 +36,12 @@ export default function ServiceLocationPicker({ value, onChange }) {
   const mapNodeRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
   const [query, setQuery] = useState(location.formattedAddress || location.placeName || '');
+  // Latest handlers, so map listeners registered once never patch a stale location.
+  const handlersRef = useRef({});
+  // Address the picker itself wrote into the search box; used to avoid re-searching it.
+  const syncedAddressRef = useRef(location.formattedAddress || location.placeName || '');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
@@ -91,7 +96,9 @@ export default function ServiceLocationPicker({ value, onChange }) {
     if (!next.fullAddress) next.fullAddress = next.formattedAddress;
     update(next);
     drawMarker(latitude, longitude);
-    setQuery(next.formattedAddress || place.label || query);
+    const nextQuery = next.formattedAddress || place.label || query;
+    syncedAddressRef.current = nextQuery;
+    setQuery(nextQuery);
   };
 
   const applyCoordinates = async (latitude, longitude, source, extras = {}) => {
@@ -122,7 +129,7 @@ export default function ServiceLocationPicker({ value, onChange }) {
     setMessage('No place name found for this pin. Type the place name, city, region, and country below.');
   };
 
-  const drawMarker = (latitude, longitude) => {
+  const drawMarker = (latitude, longitude, { recenter = true } = {}) => {
     if (!mapRef.current || !window.L) return;
     const latLng = [latitude, longitude];
     if (!markerRef.current) {
@@ -132,38 +139,71 @@ export default function ServiceLocationPicker({ value, onChange }) {
       }).addTo(mapRef.current);
       markerRef.current.on('dragend', (event) => {
         const next = event.target.getLatLng();
-        applyCoordinates(Number(next.lat), Number(next.lng), 'map_drag');
+        handlersRef.current.applyCoordinates?.(Number(next.lat), Number(next.lng), 'map_drag');
       });
     } else {
       markerRef.current.setLatLng(latLng);
     }
-    mapRef.current.setView(latLng, 16);
+    if (recenter) mapRef.current.setView(latLng, Math.max(mapRef.current.getZoom() || 0, 16));
   };
+
+  useEffect(() => {
+    handlersRef.current.applyCoordinates = applyCoordinates;
+  });
 
   useEffect(() => {
     let cancelled = false;
     loadLeaflet()
       .then((leaflet) => {
         if (cancelled || !mapNodeRef.current || mapRef.current) return;
-        const start = [location.latitude || DEFAULT_MAP_CENTER.latitude, location.longitude || DEFAULT_MAP_CENTER.longitude];
-        mapRef.current = leaflet.map(mapNodeRef.current).setView(start, location.latitude ? 16 : 2);
+        mapRef.current = leaflet
+          .map(mapNodeRef.current)
+          .setView([DEFAULT_MAP_CENTER.latitude, DEFAULT_MAP_CENTER.longitude], 2);
         leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; OpenStreetMap contributors',
         }).addTo(mapRef.current);
         mapRef.current.on('click', (event) => {
-          applyCoordinates(Number(event.latlng.lat), Number(event.latlng.lng), 'map_click');
+          handlersRef.current.applyCoordinates?.(Number(event.latlng.lat), Number(event.latlng.lng), 'map_click');
         });
-        if (location.latitude && location.longitude) drawMarker(Number(location.latitude), Number(location.longitude));
+        setMapReady(true);
       })
       .catch(() => setMessage('Map could not load. Search a place name instead.'));
     return () => {
       cancelled = true;
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        markerRef.current = null;
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Restore / follow the saved pin. Runs for services loaded after mount (editing) and
+  // whenever this step is re-mounted after a back navigation.
+  useEffect(() => {
+    if (!mapReady) return;
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    drawMarker(latitude, longitude);
+  }, [mapReady, location.latitude, location.longitude]);
+
+  // Keep the search box showing the saved address unless the user is typing their own text.
+  useEffect(() => {
+    const address = location.formattedAddress || location.placeName || '';
+    if (!address || address === syncedAddressRef.current) return;
+    setQuery((current) => (current && current !== syncedAddressRef.current ? current : address));
+    syncedAddressRef.current = address;
+  }, [location.formattedAddress, location.placeName]);
 
   useEffect(() => {
     const text = query.trim();
+    // The box was filled from the saved/selected place, not typed: nothing to look up.
+    if (text && text === String(syncedAddressRef.current || '').trim()) {
+      setSearchResults([]);
+      setSearching(false);
+      return undefined;
+    }
     if (text.length < 3) {
       const clearTimer = window.setTimeout(() => {
         setSearchResults([]);
