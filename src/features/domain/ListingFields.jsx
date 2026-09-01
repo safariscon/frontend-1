@@ -1,5 +1,5 @@
 import { Field, FieldGrid } from './Field';
-import { CAR_FUEL_TYPES, districtOptions, licenceClassOptions, resolveDomain, resolveSubtype } from './registry';
+import { CAR_FUEL_TYPES, licenceClassOptions, resolveDomain, resolveSubtype } from './registry';
 import { useLanguage } from '../../context/LanguageContext';
 import { t } from '../../lib/translations';
 
