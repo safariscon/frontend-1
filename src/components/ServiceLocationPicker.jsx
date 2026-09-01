@@ -13,6 +13,21 @@ function composeAddress(parts = {}) {
   ].map((part) => String(part || '').trim()).filter(Boolean).join(', ');
 }
 
+// Number(null) and Number('') are 0, which would read as a valid pin at the equator.
+function toCoordinate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function resetMapContainer(node) {
+  if (!node) return;
+  if (node._leaflet_id) {
+    delete node._leaflet_id;
+  }
+  node.replaceChildren();
+}
+
 export default function ServiceLocationPicker({ value, onChange }) {
   const location = useMemo(() => ({
     country: value?.country || '',
@@ -24,8 +39,8 @@ export default function ServiceLocationPicker({ value, onChange }) {
     referenceName: value?.referenceName || value?.landmark || '',
     fullAddress: value?.fullAddress || value?.formattedAddress || '',
     formattedAddress: value?.formattedAddress || value?.fullAddress || '',
-    latitude: value?.latitude ?? null,
-    longitude: value?.longitude ?? null,
+    latitude: toCoordinate(value?.latitude),
+    longitude: toCoordinate(value?.longitude),
     latitudeRaw: value?.latitudeRaw || '',
     longitudeRaw: value?.longitudeRaw || '',
     placeId: value?.placeId || value?.googlePlaceId || '',
@@ -45,7 +60,7 @@ export default function ServiceLocationPicker({ value, onChange }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
-  const hasPin = Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+  const hasPin = location.latitude !== null && location.longitude !== null;
   const needsManualDetails = hasPin && !(location.country && location.city);
 
   const update = (patch) => {
@@ -131,20 +146,24 @@ export default function ServiceLocationPicker({ value, onChange }) {
 
   const drawMarker = (latitude, longitude, { recenter = true } = {}) => {
     if (!mapRef.current || !window.L) return;
-    const latLng = [latitude, longitude];
-    if (!markerRef.current) {
-      markerRef.current = window.L.marker(latLng, {
-        draggable: true,
-        icon: leafletMarkerIcon(window.L),
-      }).addTo(mapRef.current);
-      markerRef.current.on('dragend', (event) => {
-        const next = event.target.getLatLng();
-        handlersRef.current.applyCoordinates?.(Number(next.lat), Number(next.lng), 'map_drag');
-      });
-    } else {
-      markerRef.current.setLatLng(latLng);
+    try {
+      const latLng = [latitude, longitude];
+      if (!markerRef.current) {
+        markerRef.current = window.L.marker(latLng, {
+          draggable: true,
+          icon: leafletMarkerIcon(window.L),
+        }).addTo(mapRef.current);
+        markerRef.current.on('dragend', (event) => {
+          const next = event.target.getLatLng();
+          handlersRef.current.applyCoordinates?.(Number(next.lat), Number(next.lng), 'map_drag');
+        });
+      } else {
+        markerRef.current.setLatLng(latLng);
+      }
+      if (recenter) mapRef.current.setView(latLng, Math.max(mapRef.current.getZoom() || 0, 16));
+    } catch {
+      setMessage('Map marker could not be placed. Refresh the page or search for the place.');
     }
-    if (recenter) mapRef.current.setView(latLng, Math.max(mapRef.current.getZoom() || 0, 16));
   };
 
   useEffect(() => {
@@ -153,9 +172,11 @@ export default function ServiceLocationPicker({ value, onChange }) {
 
   useEffect(() => {
     let cancelled = false;
+    const mapNode = mapNodeRef.current;
     loadLeaflet()
       .then((leaflet) => {
         if (cancelled || !mapNodeRef.current || mapRef.current) return;
+        resetMapContainer(mapNodeRef.current);
         mapRef.current = leaflet
           .map(mapNodeRef.current)
           .setView([DEFAULT_MAP_CENTER.latitude, DEFAULT_MAP_CENTER.longitude], 2);
@@ -165,16 +186,22 @@ export default function ServiceLocationPicker({ value, onChange }) {
         mapRef.current.on('click', (event) => {
           handlersRef.current.applyCoordinates?.(Number(event.latlng.lat), Number(event.latlng.lng), 'map_click');
         });
-        setMapReady(true);
+        if (!cancelled) setMapReady(true);
       })
       .catch(() => setMessage('Map could not load. Search a place name instead.'));
     return () => {
       cancelled = true;
+      setMapReady(false);
       if (mapRef.current) {
-        mapRef.current.remove();
+        try {
+          mapRef.current.remove();
+        } catch {
+          /* Leaflet may already be torn down in StrictMode */
+        }
         mapRef.current = null;
         markerRef.current = null;
       }
+      resetMapContainer(mapNode);
     };
   }, []);
 
@@ -182,10 +209,8 @@ export default function ServiceLocationPicker({ value, onChange }) {
   // whenever this step is re-mounted after a back navigation.
   useEffect(() => {
     if (!mapReady) return;
-    const latitude = Number(location.latitude);
-    const longitude = Number(location.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-    drawMarker(latitude, longitude);
+    if (location.latitude === null || location.longitude === null) return;
+    drawMarker(location.latitude, location.longitude);
   }, [mapReady, location.latitude, location.longitude]);
 
   // Keep the search box showing the saved address unless the user is typing their own text.

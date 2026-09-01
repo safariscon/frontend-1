@@ -43,7 +43,7 @@ export default function SellerServiceEditorPage() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('available');
   const [basePrice, setBasePrice] = useState('');
-  const [location, setLocation] = useState(emptyServiceLocation);
+  const [location, setLocation] = useState(() => emptyServiceLocation());
   const [phoneE164, setPhoneE164] = useState('');
   const [whatsappE164, setWhatsappE164] = useState('');
   const [listingAttributes, setListingAttributes] = useState({});

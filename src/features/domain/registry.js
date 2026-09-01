@@ -70,6 +70,7 @@ function inferTransportSubtype(categoryOrSlug) {
 }
 
 function readSlug(categoryOrSlug) {
+  if (!categoryOrSlug) return '';
   const candidates = slugCandidates(categoryOrSlug);
   const domainHint = typeof categoryOrSlug === 'object' ? categoryOrSlug.domain : '';
   const known = candidates.find((slug) => {
