@@ -41,6 +41,25 @@ export default function BookingDetailCards({ details, title = 'Submitted details
         </SectionCard>
       ) : null}
 
+      {sections.documents?.length ? (
+        <SectionCard title="Licence documents">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {sections.documents.map((document) => (
+              <a
+                key={document.label}
+                href={document.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-xl bg-slate-50 p-3"
+              >
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-400">{document.label}</span>
+                <img src={document.url} alt={document.label} className="mt-2 h-40 w-full rounded-lg object-cover" />
+              </a>
+            ))}
+          </div>
+        </SectionCard>
+      ) : null}
+
       {sections.location.length ? (
         <SectionCard title="Customer location">
           <FieldGrid rows={sections.location} />

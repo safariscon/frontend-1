@@ -251,6 +251,8 @@ export function stayBookingFacts({
     checkOutHours: timeRange(attrs.checkOutFrom, attrs.checkOutUntil || attrs.checkOutTime),
     pickupHours: attrs.pickupTime || '',
     returnHours: attrs.returnTime || '',
+    pickupLocation: attrs.pickupLocation || '',
+    returnLocation: attrs.returnLocation || '',
     minRentalDays: Number(attrs.minRentalDays) || 1,
     maxRentalDays: Number(attrs.maxRentalDays) || 0,
     allowsChildren: policyLabel(attrs.allowsChildren),

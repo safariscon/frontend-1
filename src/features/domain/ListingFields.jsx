@@ -1,10 +1,54 @@
 import { Field, FieldGrid } from './Field';
-import { CAR_FUEL_TYPES, resolveDomain, resolveSubtype } from './registry';
+import { CAR_FUEL_TYPES, districtOptions, licenceClassOptions, resolveDomain, resolveSubtype } from './registry';
+import { useLanguage } from '../../context/LanguageContext';
+import { t } from '../../lib/translations';
 
 export default function ListingFields({ category, values = {}, onChange, errors = {} }) {
   const domain = resolveDomain(category);
   const subtype = resolveSubtype(category);
+  const { language } = useLanguage();
   const set = (key, value) => onChange({ ...values, [key]: value });
+
+  const permitFields = (vehicleSubtype) => (
+    <>
+      <Field
+        label={t('domain.transport.licence.allowedClasses', language)}
+        type="multiselect"
+        required
+        wide
+        options={licenceClassOptions(vehicleSubtype, language)}
+        value={values.allowedLicenceClasses || []}
+        error={errors.allowedLicenceClasses}
+        help={t('domain.transport.licence.allowedClassesHelp', language)}
+        onChange={(value) => set('allowedLicenceClasses', value)}
+      />
+      <Field
+        label={t('domain.transport.pickupLocation', language)}
+        required
+        wide
+        value={values.pickupLocation}
+        error={errors.pickupLocation}
+        help={t('domain.transport.pickupLocationProviderHelp', language)}
+        onChange={(value) => set('pickupLocation', value)}
+      />
+      <Field
+        label={t('domain.transport.returnLocation', language)}
+        required
+        wide
+        value={values.returnLocation}
+        error={errors.returnLocation}
+        help={t('domain.transport.returnLocationProviderHelp', language)}
+        onChange={(value) => set('returnLocation', value)}
+      />
+      <Field
+        label={t('domain.transport.licence.requireUpload', language)}
+        type="boolean"
+        wide
+        value={values.requireLicenceUpload !== false}
+        onChange={(value) => set('requireLicenceUpload', value)}
+      />
+    </>
+  );
 
   if (domain === 'accommodation') {
     return (
@@ -47,6 +91,7 @@ export default function ListingFields({ category, values = {}, onChange, errors 
         <Field label="Minimum rental (days)" type="number" min="1" value={values.minRentalDays ?? 1} error={errors.minRentalDays} onChange={(value) => set('minRentalDays', value)} />
         <Field label="Maximum rental (days)" type="number" min="1" value={values.maxRentalDays ?? 30} error={errors.maxRentalDays} onChange={(value) => set('maxRentalDays', value)} help="How long a customer can keep this car." />
         <Field label="Security deposit note" type="textarea" value={values.depositNote} onChange={(value) => set('depositNote', value)} />
+        {permitFields('car-rental')}
       </FieldGrid>
     );
   }
@@ -61,9 +106,58 @@ export default function ListingFields({ category, values = {}, onChange, errors 
 
   if (domain === 'transport' && subtype === 'motorbike') {
     return (
-      <FieldGrid title="Motorbike details">
-        <Field label="Helmet included" type="boolean" value={values.helmetIncluded} onChange={(value) => set('helmetIncluded', value)} />
-        <Field label="Minimum rider age" type="number" min="18" value={values.minimumDriverAge} onChange={(value) => set('minimumDriverAge', value)} />
+      <FieldGrid title={t('domain.transport.moto.listingTitle', language)} hint={t('domain.transport.moto.listingHint', language)}>
+        <Field
+          label={t('domain.transport.moto.helmetIncluded', language)}
+          type="boolean"
+          value={values.helmetIncluded !== false}
+          onChange={(value) => set('helmetIncluded', value)}
+        />
+        <Field
+          label={t('domain.transport.moto.minimumRiderAge', language)}
+          type="number"
+          min="16"
+          value={values.minimumDriverAge ?? 18}
+          error={errors.minimumDriverAge}
+          onChange={(value) => set('minimumDriverAge', value)}
+        />
+        <Field
+          label={t('domain.transport.pickupFrom', language)}
+          type="time"
+          value={values.pickupTime || '08:00'}
+          help={t('domain.transport.pickupFromHelpMoto', language)}
+          onChange={(value) => set('pickupTime', value)}
+        />
+        <Field
+          label={t('domain.transport.returnBy', language)}
+          type="time"
+          value={values.returnTime || '18:00'}
+          help={t('domain.transport.returnByHelpMoto', language)}
+          onChange={(value) => set('returnTime', value)}
+        />
+        <Field
+          label={t('domain.transport.minRentalDays', language)}
+          type="number"
+          min="1"
+          value={values.minRentalDays ?? 1}
+          error={errors.minRentalDays}
+          onChange={(value) => set('minRentalDays', value)}
+        />
+        <Field
+          label={t('domain.transport.maxRentalDays', language)}
+          type="number"
+          min="1"
+          value={values.maxRentalDays ?? 30}
+          error={errors.maxRentalDays}
+          onChange={(value) => set('maxRentalDays', value)}
+        />
+        <Field
+          label={t('domain.transport.depositNote', language)}
+          type="textarea"
+          value={values.depositNote}
+          onChange={(value) => set('depositNote', value)}
+        />
+        {permitFields('motorbike')}
       </FieldGrid>
     );
   }

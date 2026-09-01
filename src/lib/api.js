@@ -540,6 +540,15 @@ export const authApi = {
       formData,
     });
   },
+  uploadDocuments: (token, files = []) => {
+    const formData = new FormData();
+    files.slice(0, 2).forEach((file) => formData.append("documents", file));
+    return uploadRequest("/api/auth/documents", {
+      method: "POST",
+      token,
+      formData,
+    });
+  },
   completeProviderRegistration: (payload) => {
     const businessName = String(payload?.businessName || payload?.providerName || '').trim();
     const payoutDetails = payload?.payoutDetails || {};

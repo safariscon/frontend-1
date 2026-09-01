@@ -23,6 +23,16 @@ const toInputValue = (type, value) => {
   return value;
 };
 
+function normalizeOptions(options) {
+  return (Array.isArray(options) ? options : [])
+    .map((option) => {
+      const optionValue = option && typeof option === 'object' ? (option.value ?? option.id ?? '') : option;
+      const optionLabel = option && typeof option === 'object' ? (option.label ?? option.value ?? option.id ?? '') : option;
+      return { value: String(optionValue ?? ''), label: String(optionLabel ?? '') };
+    })
+    .filter((option) => option.value !== '');
+}
+
 export function Field({
   label,
   required,
@@ -75,6 +85,48 @@ export function Field({
         {helpNode}
         {errorNode}
       </label>
+    );
+  }
+
+  if (type === 'radio' || type === 'multiselect') {
+    const selected = type === 'multiselect' ? (Array.isArray(value) ? value.map(String) : []) : [];
+    const toggle = (optionValue) => {
+      if (type === 'radio') {
+        onChange(optionValue);
+        return;
+      }
+      onChange(selected.includes(optionValue)
+        ? selected.filter((item) => item !== optionValue)
+        : [...selected, optionValue]);
+    };
+    return (
+      <div className={`block ${wide ? 'md:col-span-2' : ''}`}>
+        {labelNode}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {normalizeOptions(options).map((option) => {
+            const active = type === 'radio'
+              ? String(value ?? '') === option.value
+              : selected.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => toggle(option.value)}
+                aria-pressed={active}
+                className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                  active
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        {helpNode}
+        {errorNode}
+      </div>
     );
   }
 

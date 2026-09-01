@@ -1,3 +1,8 @@
+import { t } from '../../lib/translations';
+import { resolveRentalLocations } from '../../lib/rentalLocations';
+
+export { resolveRentalLocations };
+
 const SLUG_TO_DOMAIN = {
   hotel: 'accommodation',
   apartment: 'accommodation',
@@ -61,11 +66,12 @@ function slugCandidates(categoryOrSlug) {
 
 function inferTransportSubtype(categoryOrSlug) {
   const attrs = categoryOrSlug?.listingAttributes || categoryOrSlug || {};
-  if (attrs.vehicleClass || attrs.pickupTime || attrs.returnTime || attrs.minRentalDays || attrs.maxRentalDays) {
-    return 'car-rental';
-  }
+  // Bikes share the rental window fields with cars, so check bike-only
+  // markers first or every motorbike would read as a car rental.
   if (attrs.helmetIncluded != null) return 'motorbike';
+  if (attrs.vehicleClass || attrs.transmission || attrs.fuelPolicy) return 'car-rental';
   if (attrs.vehicleType) return 'taxi';
+  if (attrs.pickupTime || attrs.returnTime || attrs.minRentalDays || attrs.maxRentalDays) return 'car-rental';
   return '';
 }
 
@@ -134,6 +140,40 @@ export const CAR_FUEL_TYPES = [
   { value: 'Diesel', label: 'Diesel' },
   { value: 'Hybrid / Electric', label: 'Hybrid / Electric' },
 ];
+
+/** Motorbike fleet categories a rider can choose between. */
+export const MOTORBIKE_CATEGORIES = ['scooter', 'taxi-moto', 'safari-adventure'];
+
+/** Rwandan permit classes, per vehicle kind. A1 = automatic scooters under 125cc. */
+export const MOTORBIKE_LICENCE_CLASSES = ['A1', 'A'];
+export const CAR_LICENCE_CLASSES = ['B', 'C', 'D', 'E'];
+
+export function licenceClassesFor(subtype) {
+  return subtype === 'motorbike' ? MOTORBIKE_LICENCE_CLASSES : CAR_LICENCE_CLASSES;
+}
+
+/** Engine size decides which permit class a rider legally needs. */
+export function requiredLicenceClassForEngine(engineCc) {
+  return Number(engineCc) > 0 && Number(engineCc) <= 125 ? 'A1' : 'A';
+}
+
+export function motorbikeCategoryOptions(language) {
+  return MOTORBIKE_CATEGORIES.map((value) => ({
+    value,
+    label: t(`domain.transport.moto.categories.${value}`, language),
+  }));
+}
+
+export function licenceClassOptions(subtype, language) {
+  return licenceClassesFor(subtype).map((value) => ({
+    value,
+    label: t(`domain.transport.licence.classes.${value}`, language),
+  }));
+}
+
+export function districtOptions(allowed = []) {
+  return allowed.map((value) => ({ value, label: value }));
+}
 
 export function splitDateTimeValue(value) {
   const text = String(value || '');
@@ -320,10 +360,28 @@ export function emptyListingValues(domain, subtype) {
       returnTime: '18:00',
       minRentalDays: 1,
       maxRentalDays: 30,
+      allowedLicenceClasses: ['B'],
+      requireLicenceUpload: true,
+      pickupLocation: '',
+      returnLocation: '',
     };
   }
   if (domain === 'transport' && subtype === 'taxi') return { vehicleType: '' };
-  if (domain === 'transport' && subtype === 'motorbike') return { helmetIncluded: true, minimumDriverAge: 18 };
+  if (domain === 'transport' && subtype === 'motorbike') {
+    return {
+      helmetIncluded: true,
+      minimumDriverAge: 18,
+      allowedLicenceClasses: ['A1', 'A'],
+      requireLicenceUpload: true,
+      pickupTime: '08:00',
+      returnTime: '18:00',
+      minRentalDays: 1,
+      maxRentalDays: 30,
+      depositNote: '',
+      pickupLocation: '',
+      returnLocation: '',
+    };
+  }
   if (domain === 'experiences') {
     return { duration: '', difficulty: 'Easy', meetingPoint: '', included: '', excluded: '' };
   }
@@ -334,8 +392,21 @@ export function emptyListingValues(domain, subtype) {
   return {};
 }
 
-export function emptyInventoryValues(domain) {
+export function emptyInventoryValues(domain, subtype) {
   if (domain === 'accommodation') return { maxGuests: 2, bedType: '', numberOfBeds: 1, bedrooms: 1, quantity: 1, unitType: 'double' };
+  if (domain === 'transport' && subtype === 'motorbike') {
+    return {
+      make: '',
+      model: '',
+      plateNumber: '',
+      chassisNumber: '',
+      motoCategory: 'scooter',
+      engineCc: 125,
+      insuranceExpiry: '',
+      helmetsProvided: 1,
+      quantity: 1,
+    };
+  }
   if (domain === 'transport') return { make: '', model: '', seats: 4, luggage: '', ac: true, quantity: 1 };
   if (domain === 'experiences') return { packageType: 'Adult' };
   if (domain === 'venues') return { packageName: '' };
@@ -347,13 +418,16 @@ export function emptyBookingValues(domain) {
   if (domain === 'transport') {
     return {
       pickupLocation: '',
-      returnLocation: '',
-      dropoffLocation: '',
       pickupDateTime: '',
       returnDateTime: '',
+      dropoffLocation: '',
       driverAge: '',
       driverLicenseNumber: '',
       numberOfDrivers: 1,
+      licenceClass: '',
+      licenceImageFront: '',
+      licenceImageBack: '',
+      selectedCategory: '',
     };
   }
   if (domain === 'experiences') {
@@ -374,25 +448,40 @@ export function emptyBookingValues(domain) {
   return {};
 }
 
-export function validateListingClient(domain, subtype, values = {}) {
+function validateRentalWindow(values, errors, language) {
+  if (values.minRentalDays != null && values.minRentalDays !== '' && !(Number(values.minRentalDays) >= 1)) {
+    errors.minRentalDays = t('domain.transport.errors.minRentalDays', language);
+  }
+  if (values.maxRentalDays != null && values.maxRentalDays !== '' && !(Number(values.maxRentalDays) >= 1)) {
+    errors.maxRentalDays = t('domain.transport.errors.maxRentalDays', language);
+  }
+  if (Number(values.minRentalDays) > 0 && Number(values.maxRentalDays) > 0 && Number(values.maxRentalDays) < Number(values.minRentalDays)) {
+    errors.maxRentalDays = t('domain.transport.errors.maxBelowMin', language);
+  }
+  if (!Array.isArray(values.allowedLicenceClasses) || !values.allowedLicenceClasses.length) {
+    errors.allowedLicenceClasses = t('domain.transport.errors.licenceClassesRequired', language);
+  }
+}
+
+export function validateListingClient(domain, subtype, values = {}, language) {
   const errors = {};
   if (domain === 'accommodation') {
     if (!values.checkInTime) errors.checkInTime = 'Check-in time is required.';
     if (!values.checkOutTime) errors.checkOutTime = 'Check-out time is required.';
   }
   if (domain === 'transport' && subtype === 'car-rental') {
-    if (!values.vehicleClass) errors.vehicleClass = 'Vehicle class is required.';
-    if (!values.transmission) errors.transmission = 'Transmission is required.';
-    if (Number(values.minimumDriverAge) < 18) errors.minimumDriverAge = 'Minimum age must be at least 18.';
-    if (values.minRentalDays != null && values.minRentalDays !== '' && !(Number(values.minRentalDays) >= 1)) {
-      errors.minRentalDays = 'Minimum rental must be at least 1 day.';
-    }
-    if (values.maxRentalDays != null && values.maxRentalDays !== '' && !(Number(values.maxRentalDays) >= 1)) {
-      errors.maxRentalDays = 'Maximum rental must be at least 1 day.';
-    }
-    if (Number(values.minRentalDays) > 0 && Number(values.maxRentalDays) > 0 && Number(values.maxRentalDays) < Number(values.minRentalDays)) {
-      errors.maxRentalDays = 'Maximum rental must be at least the minimum.';
-    }
+    if (!values.vehicleClass) errors.vehicleClass = t('domain.transport.errors.vehicleClassRequired', language);
+    if (!values.transmission) errors.transmission = t('domain.transport.errors.transmissionRequired', language);
+    if (Number(values.minimumDriverAge) < 18) errors.minimumDriverAge = t('domain.transport.errors.minAge', language);
+    validateRentalWindow(values, errors, language);
+    if (!String(values.pickupLocation || '').trim()) errors.pickupLocation = t('domain.transport.errors.pickupLocationRequired', language);
+    if (!String(values.returnLocation || '').trim()) errors.returnLocation = t('domain.transport.errors.returnLocationRequired', language);
+  }
+  if (domain === 'transport' && subtype === 'motorbike') {
+    if (Number(values.minimumDriverAge) < 16) errors.minimumDriverAge = t('domain.transport.errors.minRiderAge', language);
+    validateRentalWindow(values, errors, language);
+    if (!String(values.pickupLocation || '').trim()) errors.pickupLocation = t('domain.transport.errors.pickupLocationRequired', language);
+    if (!String(values.returnLocation || '').trim()) errors.returnLocation = t('domain.transport.errors.returnLocationRequired', language);
   }
   if (domain === 'transport' && subtype === 'taxi' && !values.vehicleType) {
     errors.vehicleType = 'Vehicle type is required.';
@@ -408,21 +497,33 @@ export function validateListingClient(domain, subtype, values = {}) {
   return errors;
 }
 
-export function validateInventoryClient(domain, values = {}) {
+export function validateInventoryClient(domain, values = {}, { subtype, language } = {}) {
   const errors = {};
   if (domain === 'accommodation' && !(Number(values.maxGuests) > 0)) {
     errors.maxGuests = 'Max guests is required.';
   }
-  if (domain === 'transport' && values.seats !== '' && values.seats != null && !(Number(values.seats) > 0)) {
+  if (domain === 'transport' && subtype === 'motorbike') {
+    if (!String(values.plateNumber || '').trim()) {
+      errors.plateNumber = t('domain.transport.errors.plateRequired', language);
+    }
+    if (!(Number(values.engineCc) > 0)) {
+      errors.engineCc = t('domain.transport.errors.engineCcRequired', language);
+    }
+    if (!values.insuranceExpiry) {
+      errors.insuranceExpiry = t('domain.transport.errors.insuranceExpiryRequired', language);
+    } else if (values.insuranceExpiry <= new Date().toISOString().slice(0, 10)) {
+      errors.insuranceExpiry = t('domain.transport.errors.insuranceExpired', language);
+    }
+  } else if (domain === 'transport' && values.seats !== '' && values.seats != null && !(Number(values.seats) > 0)) {
     errors.seats = 'Seats must be at least 1.';
   }
   if (domain === 'transport' && values.quantity !== '' && values.quantity != null && !(Number(values.quantity) > 0)) {
-    errors.quantity = 'Number of vehicles must be at least 1.';
+    errors.quantity = t('domain.transport.errors.quantityRequired', language);
   }
   return errors;
 }
 
-export function validateBookingClient(domain, values = {}, { listing = {}, inventory = {} } = {}) {
+export function validateBookingClient(domain, values = {}, { listing = {}, inventory = {}, language } = {}) {
   const errors = {};
   const listingDetails = listing.listingAttributes || {};
   const inventoryDetails = inventory.attributes || inventory;
@@ -447,12 +548,15 @@ export function validateBookingClient(domain, values = {}, { listing = {}, inven
     }
   }
   if (domain === 'transport') {
-    if (!values.pickupLocation) errors.pickupLocation = 'Pickup location is required.';
+    const transportSubtype = listing.subtype || listing.categorySlug || resolveSubtype(listing);
     if (!values.pickupDateTime) errors.pickupDateTime = 'Pickup date/time is required.';
-    if (listing.subtype === 'taxi' || listing.categorySlug === 'taxi' || resolveSubtype(listing) === 'taxi') {
+    if (transportSubtype === 'taxi') {
+      if (!values.pickupLocation) errors.pickupLocation = 'Pickup location is required.';
       if (!values.dropoffLocation) errors.dropoffLocation = 'Drop-off location is required.';
     } else {
-      if (!values.returnLocation) errors.returnLocation = 'Return location is required.';
+      const locations = resolveRentalLocations(listing);
+      if (!locations.pickupLocation) errors.pickupLocation = t('domain.transport.errors.providerPickupMissing', language);
+      if (!locations.returnLocation) errors.returnLocation = t('domain.transport.errors.providerReturnMissing', language);
       if (!values.returnDateTime) errors.returnDateTime = 'Return date is required.';
       const pickup = splitDateTimeValue(values.pickupDateTime);
       const ret = splitDateTimeValue(values.returnDateTime);
@@ -475,13 +579,42 @@ export function validateBookingClient(domain, values = {}, { listing = {}, inven
         errors.returnDateTime = `Return by ${closeBy}.`;
       }
     }
-    if ((listing.subtype === 'car-rental' || listing.categorySlug === 'car-rental' || resolveSubtype(listing) === 'car-rental')) {
+    if (transportSubtype === 'car-rental') {
       if (!(Number(values.driverAge) >= 18)) errors.driverAge = 'Driver age must be at least 18.';
       if (Number(listingDetails.minimumDriverAge) && Number(values.driverAge) < Number(listingDetails.minimumDriverAge)) {
         errors.driverAge = `Minimum age is ${listingDetails.minimumDriverAge}.`;
       }
       if (!listingDetails.withDriver && !values.driverLicenseNumber) {
         errors.driverLicenseNumber = 'Driver license number is required.';
+      }
+    }
+    if (transportSubtype === 'motorbike') {
+      const minAge = Number(listingDetails.minimumDriverAge) || 16;
+      if (!(Number(values.driverAge) >= minAge)) {
+        errors.driverAge = t('domain.transport.errors.riderAgeMin', language, { n: minAge });
+      }
+      if (!String(values.driverLicenseNumber || '').trim()) {
+        errors.driverLicenseNumber = t('domain.transport.errors.licenceNumberRequired', language);
+      }
+    }
+    if (transportSubtype === 'car-rental' || transportSubtype === 'motorbike') {
+      const allowed = Array.isArray(listingDetails.allowedLicenceClasses) ? listingDetails.allowedLicenceClasses : [];
+      if (!values.licenceClass) {
+        errors.licenceClass = t('domain.transport.errors.licenceClassRequired', language);
+      } else if (allowed.length && !allowed.includes(values.licenceClass)) {
+        errors.licenceClass = t('domain.transport.errors.licenceClassNotAccepted', language, { classes: allowed.join(', ') });
+      }
+      // A rider on a bike over 125cc needs the full class A permit, not A1.
+      const engineCc = Number(inventoryDetails.engineCc) || 0;
+      if (transportSubtype === 'motorbike' && engineCc > 0 && values.licenceClass) {
+        const required = requiredLicenceClassForEngine(engineCc);
+        if (required === 'A' && values.licenceClass === 'A1') {
+          errors.licenceClass = t('domain.transport.errors.licenceClassTooSmall', language, { cc: engineCc });
+        }
+      }
+      if (listingDetails.requireLicenceUpload !== false) {
+        if (!values.licenceImageFront) errors.licenceImageFront = t('domain.transport.errors.licenceFrontRequired', language);
+        if (!values.licenceImageBack) errors.licenceImageBack = t('domain.transport.errors.licenceBackRequired', language);
       }
     }
   }

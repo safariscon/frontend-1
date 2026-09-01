@@ -4,7 +4,9 @@ import DashboardLayout from '../components/DashboardLayout';
 import OptionAvailabilityPanel from '../components/OptionAvailabilityPanel';
 import AvailabilityEditor from '../components/AvailabilityEditor';
 import InventoryFields from '../features/domain/InventoryFields';
-import { domainCopy, emptyInventoryValues, isStayCategory, resolveDomain, validateInventoryClient } from '../features/domain/registry';
+import { domainCopy, emptyInventoryValues, isStayCategory, resolveDomain, resolveSubtype, validateInventoryClient } from '../features/domain/registry';
+import { useLanguage } from '../context/LanguageContext';
+import { t } from '../lib/translations';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
@@ -34,6 +36,7 @@ export default function SellerServiceOptionsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const { language } = useLanguage();
   const token = getAuthData()?.token;
   const [service, setService] = useState(null);
   const [options, setOptions] = useState([]);
@@ -114,7 +117,7 @@ export default function SellerServiceOptionsPage() {
 
   const startCreate = () => {
     setEditingId('new');
-    setForm({ ...EMPTY_OPTION, attributes: emptyInventoryValues(resolveDomain(service)) });
+    setForm({ ...EMPTY_OPTION, attributes: emptyInventoryValues(resolveDomain(service), resolveSubtype(service)) });
     setAvailabilityForm(EMPTY_AVAILABILITY);
     setErrors({});
   };
@@ -126,7 +129,7 @@ export default function SellerServiceOptionsPage() {
       name: option.name || '',
       price: option.price ?? '',
       currency: option.currency || 'RWF',
-      attributes: option.attributes || emptyInventoryValues(resolveDomain(service)),
+      attributes: option.attributes || emptyInventoryValues(resolveDomain(service), resolveSubtype(service)),
     });
     setErrors({});
     try {
@@ -144,7 +147,10 @@ export default function SellerServiceOptionsPage() {
       toast.error('Option name and price are required.');
       return;
     }
-    const schemaErrors = validateInventoryClient(resolveDomain(service), form.attributes);
+    const schemaErrors = validateInventoryClient(resolveDomain(service), form.attributes, {
+      subtype: resolveSubtype(service),
+      language,
+    });
     setErrors(schemaErrors);
     if (Object.keys(schemaErrors).length) {
       toast.error('Fill required option fields.');
@@ -297,7 +303,9 @@ export default function SellerServiceOptionsPage() {
                       <input required value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} placeholder={copy.addPlaceholder} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
                     </label>
                     <label className="block">
-                      <span className="text-sm font-semibold text-slate-700">Price (RWF) *</span>
+                      <span className="text-sm font-semibold text-slate-700">
+                        {copy.kind === 'rental' ? t('domain.transport.dailyRate', language) : 'Price (RWF)'} *
+                      </span>
                       <input required type="number" min="1" value={form.price} onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))} placeholder="85000" className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
                     </label>
                   </div>

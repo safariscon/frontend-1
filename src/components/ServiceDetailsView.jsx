@@ -6,6 +6,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { t, translateCategory } from '../lib/translations';
 import { categorySupportsOptions } from '../lib/serviceSchema';
 import { domainCopy, remainingPaymentLabel } from '../features/domain/registry';
+import { resolveRentalLocations } from '../lib/rentalLocations';
 import OptionAvailabilityPanel from './OptionAvailabilityPanel';
 import { getAuthData } from '../lib/api';
 import {
@@ -300,10 +301,17 @@ function ListingAttributesSection({ listing, service, showPrivateFields, languag
   const hasIdentity = Boolean(identity.legalName || identity.companyName || identity.idNumber);
 
   if (copy.kind === 'rental') {
+    const rentalLocations = resolveRentalLocations(service);
     return (
       <section className="rounded-2xl bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-slate-950">Rental rules</h2>
+        <h2 className="text-lg font-black text-slate-950">{t('domain.transport.rentalRulesTitle', language)}</h2>
         <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          {rentalLocations.pickupLocation ? (
+            <Info label={t('domain.transport.pickupLocation', language)} value={rentalLocations.pickupLocation} />
+          ) : null}
+          {rentalLocations.returnLocation ? (
+            <Info label={t('domain.transport.returnLocation', language)} value={rentalLocations.returnLocation} />
+          ) : null}
           <Info label="Vehicle class" value={listing.vehicleClass} />
           <Info label="Transmission" value={listing.transmission} />
           <Info label="Fuel type" value={listing.fuelType} />

@@ -1,5 +1,15 @@
 import { Field, FieldGrid } from './Field';
-import { domainCopy, joinDateTimeValue, resolveDomain, resolveSubtype, splitDateTimeValue } from './registry';
+import LicencePhotoField from './LicencePhotoField';
+import {
+  domainCopy,
+  joinDateTimeValue,
+  licenceClassOptions,
+  motorbikeCategoryOptions,
+  resolveDomain,
+  resolveRentalLocations,
+  resolveSubtype,
+  splitDateTimeValue,
+} from './registry';
 import { addDaysIso } from '../../lib/staySearch';
 import { formatDisplayDate } from '../../lib/availability';
 import { stayBookingFacts } from '../../lib/stayDisplay';
@@ -136,8 +146,15 @@ export default function BookingFields({
     const pickupMax = lastPickup && dateMin && lastPickup < dateMin ? dateMin : lastPickup;
     const patchDateTime = (key, date, time) => set(key, joinDateTimeValue(date, time));
 
+    const needsLicence = subtype === 'car-rental' || subtype === 'motorbike';
+    const requireLicencePhotos = listingDetails.requireLicenceUpload !== false;
+    const rentalLocations = resolveRentalLocations(listing);
+    const allowedClasses = Array.isArray(listingDetails.allowedLicenceClasses) && listingDetails.allowedLicenceClasses.length
+      ? licenceClassOptions(subtype, language).filter((option) => listingDetails.allowedLicenceClasses.includes(option.value))
+      : licenceClassOptions(subtype, language);
+
     return (
-      <FieldGrid title="Rental details" hint="Choose pickup and return dates. The vehicle is unavailable from pickup until the return date.">
+      <FieldGrid title={t('domain.transport.rentalDetailsTitle', language)} hint={t('domain.transport.rentalDetailsHint', language)}>
         <StayValidityPanel
           listing={listing}
           option={option}
@@ -149,11 +166,22 @@ export default function BookingFields({
           checkIn={pickup.date}
           checkOut={ret.date}
           copy={copy}
+          rentalLocations={rentalLocations}
         />
-        <Field label="Pickup location" required value={values.pickupLocation} error={errors.pickupLocation} onChange={(value) => set('pickupLocation', value)} />
-        <Field label="Return location" required value={values.returnLocation} error={errors.returnLocation} onChange={(value) => set('returnLocation', value)} />
+        {subtype === 'motorbike' ? (
+          <Field
+            label={t('domain.transport.moto.selectedCategory', language)}
+            type="radio"
+            wide
+            options={motorbikeCategoryOptions(language)}
+            value={values.selectedCategory || ''}
+            error={errors.selectedCategory}
+            help={t('domain.transport.moto.selectedCategoryHelp', language)}
+            onChange={(value) => set('selectedCategory', value)}
+          />
+        ) : null}
         <Field
-          label="Pickup date"
+          label={t('domain.transport.pickupDate', language)}
           type="date"
           required
           min={dateMin}
@@ -201,9 +229,61 @@ export default function BookingFields({
         />
         {subtype === 'car-rental' ? (
           <>
-            <Field label="Driver age" type="number" required min="18" value={values.driverAge} error={errors.driverAge} onChange={(value) => set('driverAge', value)} />
-            <Field label="Driver license number" required value={values.driverLicenseNumber} error={errors.driverLicenseNumber} onChange={(value) => set('driverLicenseNumber', value)} />
-            <Field label="Number of drivers" type="number" required min="1" value={values.numberOfDrivers} onChange={(value) => set('numberOfDrivers', value)} />
+            <Field label={t('domain.transport.driverAge', language)} type="number" required min="18" value={values.driverAge} error={errors.driverAge} onChange={(value) => set('driverAge', value)} />
+            <Field label={t('domain.transport.numberOfDrivers', language)} type="number" required min="1" value={values.numberOfDrivers} onChange={(value) => set('numberOfDrivers', value)} />
+          </>
+        ) : null}
+        {subtype === 'motorbike' ? (
+          <Field
+            label={t('domain.transport.moto.riderAge', language)}
+            type="number"
+            required
+            min={Number(listingDetails.minimumDriverAge) || 16}
+            value={values.driverAge}
+            error={errors.driverAge}
+            onChange={(value) => set('driverAge', value)}
+          />
+        ) : null}
+        {needsLicence ? (
+          <>
+            <Field
+              label={t('domain.transport.licence.number', language)}
+              required
+              value={values.driverLicenseNumber}
+              error={errors.driverLicenseNumber}
+              help={t('domain.transport.licence.numberHelp', language)}
+              onChange={(value) => set('driverLicenseNumber', String(value || '').toUpperCase())}
+            />
+            <Field
+              label={t('domain.transport.licence.class', language)}
+              type="select"
+              required
+              options={allowedClasses}
+              value={values.licenceClass}
+              error={errors.licenceClass}
+              help={t('domain.transport.licence.classHelp', language)}
+              onChange={(value) => set('licenceClass', value)}
+            />
+            {requireLicencePhotos ? (
+              <>
+                <LicencePhotoField
+                  label={t('domain.transport.licence.front', language)}
+                  help={t('domain.transport.licence.frontHelp', language)}
+                  required
+                  value={values.licenceImageFront}
+                  error={errors.licenceImageFront}
+                  onChange={(value) => set('licenceImageFront', value)}
+                />
+                <LicencePhotoField
+                  label={t('domain.transport.licence.back', language)}
+                  help={t('domain.transport.licence.backHelp', language)}
+                  required
+                  value={values.licenceImageBack}
+                  error={errors.licenceImageBack}
+                  onChange={(value) => set('licenceImageBack', value)}
+                />
+              </>
+            ) : null}
           </>
         ) : null}
       </FieldGrid>

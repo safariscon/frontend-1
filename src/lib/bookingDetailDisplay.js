@@ -20,6 +20,12 @@ const SKIP_ROOT_KEYS = new Set([
 
 const SKIP_WHEN_CONSUMPTION = ['bookingDate', 'endBookingDate', 'startDate', 'endDate', 'startTime', 'endTime'];
 
+/** Licence photos render as thumbnails, not as raw URLs in the field list. */
+const DOCUMENT_KEYS = [
+  ['licenceImageFront', 'Licence photo (front)'],
+  ['licenceImageBack', 'Licence photo (back)'],
+];
+
 const KEY_LABELS = {
   fullName: 'Full name',
   checkIn: 'Check-in',
@@ -176,9 +182,17 @@ export function getBookingDetailSections(details = {}) {
     .map((item) => String(item || '').trim())
     .filter(Boolean);
 
+  const attributes = details.bookingAttributes && typeof details.bookingAttributes === 'object'
+    ? details.bookingAttributes
+    : {};
+  const documents = DOCUMENT_KEYS
+    .map(([key, label]) => ({ label, url: String(attributes[key] || '').trim() }))
+    .filter((item) => /^https?:\/\//i.test(item.url));
+
   return {
     fields,
-    stay: objectRows(details.bookingAttributes),
+    documents,
+    stay: objectRows(details.bookingAttributes, DOCUMENT_KEYS.map(([key]) => key)),
     location: locationRows(details.customerLocationDetails),
     consumption: objectRows(details.consumption),
     rules,
@@ -189,6 +203,7 @@ export function getBookingDetailSections(details = {}) {
 export function hasBookingDetailSections(sections) {
   return Boolean(
     sections?.fields?.length
+    || sections?.documents?.length
     || sections?.stay?.length
     || sections?.location?.length
     || sections?.consumption?.length

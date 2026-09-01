@@ -1,5 +1,6 @@
-import { formatDisplayDate } from '../../lib/availability';
+import { resolveRentalLocations } from '../../lib/rentalLocations';
 import { stayBookingFacts, stayNights } from '../../lib/stayDisplay';
+import { formatDisplayDate } from '../../lib/availability';
 import { domainCopy } from '../../features/domain/registry';
 import { useLanguage } from '../../context/LanguageContext';
 import { t } from '../../lib/translations';
@@ -26,9 +27,11 @@ export default function StayValidityPanel({
   checkIn,
   checkOut,
   copy: copyProp,
+  rentalLocations: rentalLocationsProp,
 }) {
   const { language } = useLanguage();
   const copy = copyProp || domainCopy(listing);
+  const rentalLocations = rentalLocationsProp || (copy.kind === 'rental' ? resolveRentalLocations(listing) : null);
   const facts = stayBookingFacts({ listing, option, availability, dateMin, dateMax, remaining, quantity });
   const nights = stayNights(checkIn, checkOut);
   const rental = copy.kind === 'rental';
@@ -55,10 +58,16 @@ export default function StayValidityPanel({
       </p>
       <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
         {rental
-          ? 'Choose a pickup date and a return date. Hours below are when you can collect and drop the vehicle.'
+          ? t('domain.transport.rentalRulesLead', language)
           : t('booking.stayRules.lead', language)}
       </p>
       <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+        {rental && rentalLocations?.pickupLocation ? (
+          <Fact label={t('domain.transport.pickupLocation', language)} value={rentalLocations.pickupLocation} />
+        ) : null}
+        {rental && rentalLocations?.returnLocation ? (
+          <Fact label={t('domain.transport.returnLocation', language)} value={rentalLocations.returnLocation} />
+        ) : null}
         <Fact
           label={rental ? copy.startFromLabel : t('booking.stayRules.openFrom', language)}
           value={facts.anytime ? (rental ? 'Open calendar' : t('booking.stayRules.openAnytime', language)) : formatDisplayDate(facts.checkInFrom)}

@@ -15,6 +15,7 @@ import {
   validateListingClient,
 } from '../features/domain/registry';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { categoriesApi, getAuthData, hotelApi } from '../lib/api';
 import { detectPhoneCountry } from '../lib/phone';
@@ -34,6 +35,7 @@ export default function SellerServiceEditorPage() {
   const editing = Boolean(serviceId);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { language } = useLanguage();
   const toast = useToast();
   const token = getAuthData()?.token;
   const [categories, setCategories] = useState([]);
@@ -223,7 +225,7 @@ export default function SellerServiceEditorPage() {
       toast.error('Primary phone number is required.');
       return;
     }
-    const schemaErrors = validateListingClient(domain, subtype, listingAttributes);
+    const schemaErrors = validateListingClient(domain, subtype, listingAttributes, language);
     setAttributeErrors(schemaErrors);
     if (Object.keys(schemaErrors).length) {
       toast.error('Fill all required category fields.');

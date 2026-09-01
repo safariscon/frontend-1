@@ -408,6 +408,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     const schemaErrors = validateBookingClient(domain, stayAttributes, {
       listing: { ...business, listingAttributes: business?.listingAttributes, subtype: liveCategory?.subtype, categorySlug: business?.categorySlug },
       inventory: selectedOfferRow || {},
+      language,
     });
     if (Object.keys(schemaErrors).length) {
       setBookingAttributeErrors(schemaErrors);

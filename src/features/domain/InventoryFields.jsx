@@ -1,9 +1,13 @@
 import { Field, FieldGrid } from './Field';
-import { domainCopy, resolveDomain } from './registry';
+import { domainCopy, motorbikeCategoryOptions, resolveDomain, resolveSubtype } from './registry';
+import { useLanguage } from '../../context/LanguageContext';
+import { t } from '../../lib/translations';
 
 export default function InventoryFields({ category, values = {}, onChange, errors = {} }) {
   const domain = resolveDomain(category);
+  const subtype = resolveSubtype(category);
   const copy = domainCopy(category);
+  const { language } = useLanguage();
   const set = (key, value) => onChange({ ...values, [key]: value });
 
   if (domain === 'accommodation') {
@@ -19,15 +23,95 @@ export default function InventoryFields({ category, values = {}, onChange, error
     );
   }
 
+  if (domain === 'transport' && subtype === 'motorbike') {
+    return (
+      <FieldGrid title={t('domain.transport.moto.fleetTitle', language)} hint={t('domain.transport.moto.fleetHint', language)}>
+        <Field
+          label={t('domain.transport.moto.make', language)}
+          value={values.make}
+          placeholder={t('domain.transport.moto.makePlaceholder', language)}
+          onChange={(value) => set('make', value)}
+        />
+        <Field
+          label={t('domain.transport.moto.model', language)}
+          value={values.model}
+          placeholder={t('domain.transport.moto.modelPlaceholder', language)}
+          onChange={(value) => set('model', value)}
+        />
+        <Field
+          label={t('domain.transport.moto.plateNumber', language)}
+          required
+          value={values.plateNumber}
+          error={errors.plateNumber}
+          placeholder={t('domain.transport.moto.platePlaceholder', language)}
+          help={t('domain.transport.moto.plateHelp', language)}
+          onChange={(value) => set('plateNumber', String(value || '').toUpperCase())}
+        />
+        <Field
+          label={t('domain.transport.moto.chassisNumber', language)}
+          value={values.chassisNumber}
+          error={errors.chassisNumber}
+          help={t('domain.transport.moto.chassisHelp', language)}
+          onChange={(value) => set('chassisNumber', String(value || '').toUpperCase())}
+        />
+        <Field
+          label={t('domain.transport.moto.category', language)}
+          type="select"
+          required
+          options={motorbikeCategoryOptions(language)}
+          value={values.motoCategory || 'scooter'}
+          error={errors.motoCategory}
+          onChange={(value) => set('motoCategory', value)}
+        />
+        <Field
+          label={t('domain.transport.moto.engineCc', language)}
+          type="number"
+          required
+          min="30"
+          value={values.engineCc}
+          error={errors.engineCc}
+          help={t('domain.transport.moto.engineCcHelp', language)}
+          onChange={(value) => set('engineCc', value)}
+        />
+        <Field
+          label={t('domain.transport.moto.insuranceExpiry', language)}
+          type="date"
+          required
+          min={new Date().toISOString().slice(0, 10)}
+          value={values.insuranceExpiry}
+          error={errors.insuranceExpiry}
+          help={t('domain.transport.moto.insuranceExpiryHelp', language)}
+          onChange={(value) => set('insuranceExpiry', value)}
+        />
+        <Field
+          label={t('domain.transport.moto.helmetsProvided', language)}
+          type="number"
+          min="0"
+          value={values.helmetsProvided ?? 1}
+          onChange={(value) => set('helmetsProvided', value)}
+        />
+        <Field
+          label={copy.capacityLabel}
+          type="number"
+          min="1"
+          value={values.quantity ?? 1}
+          error={errors.quantity}
+          help={t('domain.transport.moto.quantityHelp', language)}
+          onChange={(value) => set('quantity', value)}
+        />
+      </FieldGrid>
+    );
+  }
+
   if (domain === 'transport') {
     return (
-      <FieldGrid title="Vehicle details">
-        <Field label="Make" value={values.make} placeholder="Toyota" onChange={(value) => set('make', value)} />
-        <Field label="Model" value={values.model} placeholder="RAV4" onChange={(value) => set('model', value)} />
-        <Field label="Seats" type="number" min="1" value={values.seats} error={errors.seats} onChange={(value) => set('seats', value)} />
-        <Field label="Luggage" value={values.luggage} onChange={(value) => set('luggage', value)} />
-        <Field label="Air conditioning" type="boolean" value={values.ac} onChange={(value) => set('ac', value)} />
-        <Field label={copy.capacityLabel} type="number" min="1" value={values.quantity ?? 1} error={errors.quantity} onChange={(value) => set('quantity', value)} help="How many cars of this make and model you can rent at the same time." />
+      <FieldGrid title={t('domain.transport.car.fleetTitle', language)}>
+        <Field label={t('domain.transport.car.make', language)} value={values.make} placeholder="Toyota" onChange={(value) => set('make', value)} />
+        <Field label={t('domain.transport.car.model', language)} value={values.model} placeholder="RAV4" onChange={(value) => set('model', value)} />
+        <Field label={t('domain.transport.car.seats', language)} type="number" min="1" value={values.seats} error={errors.seats} onChange={(value) => set('seats', value)} />
+        <Field label={t('domain.transport.car.luggage', language)} value={values.luggage} onChange={(value) => set('luggage', value)} />
+        <Field label={t('domain.transport.car.ac', language)} type="boolean" value={values.ac} onChange={(value) => set('ac', value)} />
+        <Field label={copy.capacityLabel} type="number" min="1" value={values.quantity ?? 1} error={errors.quantity} onChange={(value) => set('quantity', value)} help={t('domain.transport.car.quantityHelp', language)} />
       </FieldGrid>
     );
   }
