@@ -75,7 +75,7 @@ export default function AdminDashboard() {
   const [modeErrors, setModeErrors] = useState({});
   const [financeSummary, setFinanceSummary] = useState(null);
   const [payouts, setPayouts] = useState([]);
-  const [payoutStatusFilter, setPayoutStatusFilter] = useState('pending');
+  const [payoutStatusFilter, setPayoutStatusFilter] = useState('held');
   const token = getAuthData()?.token;
 
   const loadData = async ({ silent = false } = {}) => {
@@ -154,6 +154,32 @@ export default function AdminDashboard() {
     try {
       const response = await adminApi.syncPayout(token, transaction._id || transaction.transactionId);
       setInfo(response.message || 'Payout synced.');
+      await loadData({ silent: true });
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const triggerPayout = async (transaction) => {
+    if (!token) return;
+    try {
+      const response = await adminApi.triggerPayout(token, transaction._id || transaction.transactionId);
+      const breakdown = response.breakdown;
+      const detail = breakdown
+        ? ` Customer paid ${Number(breakdown.customerPaid || 0).toLocaleString()} RWF. Platform commission ${Number(breakdown.platformCommission || 0).toLocaleString()} RWF. Provider share ${Number(breakdown.providerShare || 0).toLocaleString()} RWF.`
+        : '';
+      setInfo((response.message || 'Provider payout submitted.') + detail);
+      await loadData({ silent: true });
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
+  const triggerAllEligiblePayouts = async () => {
+    if (!token) return;
+    try {
+      const response = await adminApi.triggerAllEligiblePayouts(token);
+      setInfo(response.message || 'Eligible payouts processed.');
       await loadData({ silent: true });
     } catch (requestError) {
       setError(requestError.message);
@@ -462,7 +488,7 @@ export default function AdminDashboard() {
             {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingTable bookings={bookings} onView={openBookingDetails} />}
             {!loading && view === 'bookings' && bookingSubTab === 'rebook-requests' && <AdminRebookRequests />}
             {!loading && view === 'bookings' && bookingSubTab === 'verification' && <BookingVerification token={token} verify={adminApi.verifyBooking} />}
-            {!loading && view === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} />}
+            {!loading && view === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} onTrigger={triggerPayout} onTriggerAll={triggerAllEligiblePayouts} />}
           </section>
         </div>
       </main>
@@ -711,7 +737,7 @@ function formatAdminBookingDate(booking) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function RevenueList({ revenueByType, transactions, summary, financeSummary, payouts = [], payoutStatusFilter, setPayoutStatusFilter, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect, onSync }) {
+function RevenueList({ revenueByType, transactions, summary, financeSummary, payouts = [], payoutStatusFilter, setPayoutStatusFilter, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect, onSync, onTrigger, onTriggerAll }) {
   const { language } = useLanguage();
   const entries = Object.entries(revenueByType);
   const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value, page: key === 'page' ? value : 1 }));
@@ -749,30 +775,49 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
       <div className="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-black text-blue-950">Payout queue</h3>
-          <select value={payoutStatusFilter} onChange={(event) => setPayoutStatusFilter(event.target.value)} className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm">
-            <option value="held">Held</option>
-            <option value="pending">Pending OTP</option>
-            <option value="successful">Successful</option>
-            <option value="failed">Failed</option>
-            <option value="">All</option>
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={onTriggerAll} className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white">
+              Pay all held shares (one OTP batch)
+            </button>
+            <select value={payoutStatusFilter} onChange={(event) => setPayoutStatusFilter(event.target.value)} className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm">
+              <option value="held">Held</option>
+              <option value="pending">Pending OTP</option>
+              <option value="successful">Successful</option>
+              <option value="failed">Failed</option>
+              <option value="">All</option>
+            </select>
+          </div>
         </div>
-        <p className="mt-1 text-sm text-blue-800">After you confirm the XentriPay merchant OTP, sync the transaction. Cancelled rows also show the guest refund payout.</p>
+        <p className="mt-1 text-xs text-blue-700">Commission is 10% of the booking total, taken from the online payment. Provider share = customer paid − commission.</p>
         {!payouts.length ? <p className="mt-3 text-sm text-blue-900">No payouts for this filter.</p> : (
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-left text-xs">
-              <thead><tr className="border-b border-blue-200"><th className="py-2 pr-2">Booking</th><th className="py-2 pr-2">Provider</th><th className="py-2 pr-2">Share</th><th className="py-2 pr-2">Status</th><th className="py-2 pr-2">Refund</th><th className="py-2">Action</th></tr></thead>
+              <thead><tr className="border-b border-blue-200"><th className="py-2 pr-2">Booking</th><th className="py-2 pr-2">Provider</th><th className="py-2 pr-2">Total</th><th className="py-2 pr-2">Paid online</th><th className="py-2 pr-2">Commission</th><th className="py-2 pr-2">Provider share</th><th className="py-2 pr-2">Status</th><th className="py-2 pr-2">Refund</th><th className="py-2">Action</th></tr></thead>
               <tbody>
-                {payouts.map((tx) => (
+                {payouts.map((tx) => {
+                  const canPay = tx.status === 'paid' && ['held', 'none', 'failed'].includes(tx.payoutStatus);
+                  const totalPrice = Number(tx.bookingId?.totalPrice || 0);
+                  return (
                   <tr key={tx._id || tx.transactionId} className="border-b border-blue-100">
                     <td className="py-2 pr-2">{tx.bookingId?.bookingCode || tx.bookingId?._id || '-'}</td>
                     <td className="py-2 pr-2">{tx.businessId?.name || tx.sellerId?.name || '-'}</td>
-                    <td className="py-2 pr-2">{Number(tx.providerAmount || 0).toLocaleString()} RWF</td>
+                    <td className="py-2 pr-2">{totalPrice ? `${totalPrice.toLocaleString()} RWF` : '-'}</td>
+                    <td className="py-2 pr-2">{Number(tx.amount || 0).toLocaleString()} RWF</td>
+                    <td className="py-2 pr-2">{Number(tx.platformAmount || tx.commissionAmount || 0).toLocaleString()} RWF</td>
+                    <td className="py-2 pr-2 font-bold">{Number(tx.providerAmount || tx.sellerEarnings || 0).toLocaleString()} RWF</td>
                     <td className="py-2 pr-2">{tx.payoutStatus || '-'}</td>
                     <td className="py-2 pr-2">{tx.refundPayoutStatus || tx.refundPayoutReference || '-'}</td>
-                    <td className="py-2"><button type="button" onClick={() => onSync(tx)} className="rounded-lg bg-primary px-3 py-1 font-bold text-white">Sync after OTP</button></td>
+                    <td className="py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {canPay ? (
+                          <button type="button" onClick={() => onTrigger(tx)} className="rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white">Pay provider</button>
+                        ) : null}
+                        <button type="button" onClick={() => onSync(tx)} className="rounded-lg bg-primary px-3 py-1 font-bold text-white">Sync after OTP</button>
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

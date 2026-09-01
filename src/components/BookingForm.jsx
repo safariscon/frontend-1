@@ -9,8 +9,8 @@ import {
   mapBookingToSchedule,
   resolveDomain,
   splitDateTimeValue,
-  validateBookingClient,
 } from '../features/domain/registry';
+import { validateStayStepBooking, mapApiErrorToStayFieldErrors } from '../lib/stayStepValidation';
 import { bookingApi, categoriesApi, getAuthData, publicApi, rebookApi } from '../lib/api';
 import { amountDueNow, completeBookingPayment, listingCancelHours, listingCancelPenalty } from '../lib/payments';
 import { formatRwf } from '../lib/currency';
@@ -27,7 +27,6 @@ import {
   optionMaxDate,
   optionMinDate,
   parseOptionAvailability,
-  validateOptionSchedule,
 } from '../lib/availability';
 import { addDaysIso, staySearchFromParams } from '../lib/staySearch';
 import CustomerLocationPicker from './CustomerLocationPicker';
@@ -421,29 +420,22 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
     if (supportsOptions && (!selectedOffer || !selectedOfferRow)) return t('booking.chooseFromTable', language);
     if (useRebook && !rebookId.trim()) return t('booking.enterRebookId', language);
     if (useRebook && verifiedRebookId !== rebookId.trim().toUpperCase()) return t('booking.verifyRebookFirst', language);
-    const schemaErrors = validateBookingClient(domain, stayAttributes, {
+
+    const { fieldErrors, message } = validateStayStepBooking({
+      domain,
+      stayAttributes,
+      optionSchedule,
+      bookingValues,
+      today: TODAY,
       listing: { ...business, listingAttributes: business?.listingAttributes, subtype: liveCategory?.subtype, categorySlug: business?.categorySlug },
       inventory: selectedOfferRow || {},
       language,
     });
-    if (Object.keys(schemaErrors).length) {
-      setBookingAttributeErrors(schemaErrors);
-      return Object.values(schemaErrors)[0] || t('booking.completeField', language, { label: 'stay details' });
+    if (Object.keys(fieldErrors).length) {
+      setBookingAttributeErrors(fieldErrors);
+      return message || t('booking.completeField', language, { label: 'stay details' });
     }
     setBookingAttributeErrors({});
-    const mapped = mapBookingToSchedule(domain, stayAttributes);
-    const scheduleError = validateOptionSchedule(
-      optionSchedule,
-      {
-        ...bookingValues,
-        bookingDate: mapped.startDate || bookingValues.bookingDate,
-        endBookingDate: mapped.endDate || bookingValues.endBookingDate,
-        startTime: mapped.startTime || bookingValues.startTime,
-        endTime: mapped.endTime || bookingValues.endTime,
-      },
-      TODAY
-    );
-    if (scheduleError) return scheduleError;
     if (publicAvailability?.remaining != null && Number(publicAvailability.remaining) <= 0) {
       return t('booking.fullyBookedForDates', language);
     }
@@ -637,7 +629,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       if (response.quote) setQuoteResult({ booking: response.booking, quote: response.quote });
       else onSuccess?.(response.booking);
     } catch (requestError) {
-      setError(requestError.message);
+      const apiMessage = requestError.message || 'Could not submit booking.';
+      const apiFieldErrors = mapApiErrorToStayFieldErrors(domain, apiMessage);
+      if (Object.keys(apiFieldErrors).length) {
+        setBookingAttributeErrors(apiFieldErrors);
+        setStep(1);
+      }
+      setError(apiMessage);
     } finally {
       setLoading(false);
     }

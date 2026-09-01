@@ -216,7 +216,7 @@ export default function AccommodationOnboardingPage() {
           whatsapp: draft.whatsappE164 || undefined,
         },
         listingAttributes: buildListingAttributes(draft),
-        paymentPolicy: { ...draft.paymentPolicy, depositPercentage: 50 },
+        paymentPolicy: draft.paymentPolicy,
         cancellationPolicy: draft.cancellationPolicy,
       };
 

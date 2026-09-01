@@ -764,6 +764,18 @@ export const adminApi = {
       method: "POST",
       token,
     }),
+  triggerPayout: (token, transactionId) =>
+    apiRequest(`/api/admin/payouts/${transactionId}/trigger`, {
+      method: "POST",
+      token,
+      body: { force: true },
+    }),
+  triggerAllEligiblePayouts: (token) =>
+    apiRequest("/api/admin/payouts/trigger-all", {
+      method: "POST",
+      token,
+      body: { force: true },
+    }),
 };
 
 export const analyticsApi = {

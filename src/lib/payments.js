@@ -44,13 +44,13 @@ export const guestCancelCopy = (listing) => {
 
 export const payoutStatusLabel = (status) =>
   ({
-    held: 'Guest paid. Waiting until cancel window ends. Not in your account yet.',
-    pending: 'Payout sent to XentriPay. SafarisCon confirming OTP.',
-    successful: 'Paid to your MoMo/bank',
-    failed: 'Failed. Contact SafarisCon',
-    reversed: 'Booking cancelled/refunded',
-    none: 'No payout yet',
-  }[status] || status || 'No payout yet');
+    held: 'Held',
+    pending: 'Pending',
+    successful: 'Paid',
+    failed: 'Failed',
+    reversed: 'Reversed',
+    none: '—',
+  }[status] || status || '—');
 
 export const normalizeMomoPhone = (value) => {
   const digits = String(value || '').replace(/\D/g, '');

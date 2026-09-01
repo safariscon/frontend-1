@@ -20,10 +20,11 @@ export default function PolicyFields({
         <Field
           label="Deposit %"
           type="number"
-          min="1"
+          min="20"
           max="100"
           value={paymentPolicy.depositPercentage ?? 50}
-          onChange={(value) => onPaymentChange({ ...paymentPolicy, depositPercentage: Number(value) })}
+          help="Minimum 20% of the full booking amount must be paid online. SafarisCon keeps 10% of the full booking price from that deposit; the rest goes to you after the cancellation window."
+          onChange={(value) => onPaymentChange({ ...paymentPolicy, depositPercentage: Math.max(20, Math.min(100, Number(value) || 20)) })}
         />
         <Field
           label="Remaining balance"

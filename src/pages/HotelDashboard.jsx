@@ -2064,7 +2064,6 @@ function FinancePanel({ finance }) {
   const rows = finance?.transactions || [];
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">{finance?.message || t('profilePage.paymentLead', language)}</p>
       <div className="grid gap-3 md:grid-cols-3">
         <Metric label={t('heldMoney', language)} value={formatRwf(summary.grossCollected)} />
         <Metric label={t('payouts', language)} value={formatRwf(summary.pendingPayout ?? summary.heldPayout)} />
@@ -2073,16 +2072,15 @@ function FinancePanel({ finance }) {
       {!rows.length ? <p className="rounded-xl border border-slate-200 p-4 text-sm text-slate-600">{t('sellerDash.noBookingsYet', language)}</p> : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
-            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">{t('sellerDash.booking', language)}</th><th className="py-2 pr-3">{t('sellerDash.paid', language)}</th><th className="py-2 pr-3">{t('status', language)}</th><th className="py-2 pr-3">{t('payout', language)}</th><th className="py-2 pr-3">{t('customerDash.destination', language)}</th><th className="py-2">{t('admin.message', language)}</th></tr></thead>
+            <thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500"><th className="py-2 pr-3">{t('sellerDash.booking', language)}</th><th className="py-2 pr-3">{t('sellerDash.paid', language)}</th><th className="py-2 pr-3">{t('payout', language)}</th><th className="py-2 pr-3">{t('status', language)}</th><th className="py-2">{t('customerDash.destination', language)}</th></tr></thead>
             <tbody>
               {rows.map((tx) => (
                 <tr key={tx._id || tx.payoutReference} className="border-b border-slate-100">
                   <td className="py-2 pr-3">{tx.bookingId?.bookingCode || tx.bookingId?._id || '-'}</td>
                   <td className="py-2 pr-3">{formatRwf(tx.amount)}</td>
+                  <td className="py-2 pr-3">{formatRwf(tx.providerAmount || tx.sellerEarnings)}</td>
                   <td className="py-2 pr-3">{payoutStatusLabel(tx.payoutStatus)}</td>
-                  <td className="py-2 pr-3">{tx.payoutReference || '-'}</td>
-                  <td className="py-2 pr-3">{tx.payoutAccount || '-'}</td>
-                  <td className="py-2">{tx.payoutMessage || '-'}</td>
+                  <td className="py-2">{tx.payoutAccount || '-'}</td>
                 </tr>
               ))}
             </tbody>

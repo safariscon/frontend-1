@@ -549,8 +549,14 @@ export function validateBookingClient(domain, values = {}, { listing = {}, inven
   const inventoryDetails = inventory.attributes || inventory;
 
   if (domain === 'accommodation') {
+    const today = new Date().toISOString().slice(0, 10);
     if (!values.checkIn) errors.checkIn = 'Check-in is required.';
     if (!values.checkOut) errors.checkOut = 'Check-out is required.';
+    if (values.checkIn && values.checkIn < today) errors.checkIn = 'Check-in cannot be in the past.';
+    const firstCheckIn = listingDetails.firstCheckInMode === 'date' ? String(listingDetails.firstCheckInDate || '').slice(0, 10) : '';
+    if (values.checkIn && firstCheckIn && values.checkIn < firstCheckIn) {
+      errors.checkIn = `Guests can check in from ${firstCheckIn}.`;
+    }
     if (values.checkIn && values.checkOut && values.checkOut <= values.checkIn) {
       errors.checkOut = 'Check-out must be after check-in.';
     }
@@ -582,6 +588,17 @@ export function validateBookingClient(domain, values = {}, { listing = {}, inven
       const ret = splitDateTimeValue(values.returnDateTime);
       if (pickup.date && ret.date && ret.date <= pickup.date) {
         errors.returnDateTime = 'Return date must be after pickup date.';
+      }
+      if (values.pickupDateTime && values.returnDateTime) {
+        const pickupMs = new Date(values.pickupDateTime).getTime();
+        const returnMs = new Date(values.returnDateTime).getTime();
+        if (!Number.isNaN(pickupMs) && !Number.isNaN(returnMs) && returnMs <= pickupMs) {
+          errors.returnDateTime = 'Return time must be after pickup time.';
+        }
+      }
+      const pickupMs = new Date(values.pickupDateTime).getTime();
+      if (values.pickupDateTime && !Number.isNaN(pickupMs) && pickupMs < Date.now() - 60 * 1000) {
+        errors.pickupDateTime = 'Pickup cannot be in the past.';
       }
       const minDays = Number(listingDetails.minRentalDays) || 1;
       const maxDays = Number(listingDetails.maxRentalDays) || 0;

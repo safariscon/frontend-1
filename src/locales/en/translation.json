@@ -1567,7 +1567,7 @@
     "commissionTitle": "Platform commission terms",
     "commissionPending": "Your commission terms appear here after SafarisCon approves your listing. Guests never see this number.",
     "commissionLabel": "{percent}% platform commission",
-    "commissionDesc": "SafarisCon takes this commission from the full paid booking after the cancellation window closes. If the customer cancels in time, commission is half that rate on the cancellation fee only.",
+    "commissionDesc": "10% of your full listing price, deducted from the customer's online deposit.",
     "bookingRulesSaved": "Booking rules saved.",
     "bookingModeSaved": "Booking mode saved.",
     "name": "Name",

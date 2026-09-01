@@ -204,6 +204,7 @@ export default function BookingFields({
           required
           min={pickupHours}
           value={pickup.time || pickupHours}
+          error={errors.pickupDateTime}
           help={`Desk opens at ${pickupHours}.`}
           onChange={(value) => patchDateTime('pickupDateTime', pickup.date, value)}
         />
@@ -224,6 +225,7 @@ export default function BookingFields({
           required
           max={returnHours}
           value={ret.time || returnHours}
+          error={errors.returnDateTime}
           help={`Return by ${returnHours}.`}
           onChange={(value) => patchDateTime('returnDateTime', ret.date, value)}
         />
