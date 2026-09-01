@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const [payout, setPayout] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [payoutForm, setPayoutForm] = useState({ method: 'momo', providerId: '', accountName: '', accountNumber: '' });
+  const [payoutPreview, setPayoutPreview] = useState(null);
   const [profileForm, setProfileForm] = useState(() => ({ name: user?.name || '', phone: user?.phone || '' }));
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '', otp: '' });
   const [otpSent, setOtpSent] = useState(false);
@@ -62,7 +63,7 @@ export default function ProfilePage() {
       setPayoutForm({
         method: details?.method === 'bank' ? 'bank' : 'momo',
         providerId: details?.providerId || '',
-        accountName: details?.accountName || user.name || '',
+        accountName: details?.accountName || '',
         accountNumber: details?.accountNumber || details?.msisdn || '',
       });
     }).catch(() => setPayout(null));
@@ -125,10 +126,27 @@ export default function ProfilePage() {
     setBusy(true);
     setError('');
     setMessage('');
+    setPayoutPreview(null);
     try {
       const response = await hotelApi.savePayoutDetails(token, payoutForm);
       setMessage(response.message || t('profilePage.payoutSavedMsg', language));
       setPayout(response.payoutDetails || payoutForm);
+      if (response.gatewayPreview) setPayoutPreview(response.gatewayPreview);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const previewPayout = async () => {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await hotelApi.previewPayoutDetails(token, payoutForm);
+      setPayoutPreview(response.preview || null);
+      setMessage(response.message || 'Payout account preview ready.');
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -343,8 +361,25 @@ export default function ProfilePage() {
                   <span className="text-sm font-semibold text-slate-700">{payoutForm.method === 'bank' ? t('profilePage.accountNumber', language) : t('profilePage.momoNumber', language)}</span>
                   <input required value={payoutForm.accountNumber} onChange={(event) => setPayoutForm((prev) => ({ ...prev, accountNumber: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3" />
                 </label>
+                {payout?.verifiedAccountName ? (
+                  <p className="text-xs font-semibold text-emerald-700">
+                    Verified MoMo name: {payout.verifiedAccountName}
+                  </p>
+                ) : null}
                 {payout?.accountNumber || payout?.msisdn ? <p className="text-xs font-semibold text-emerald-700">{t('profilePage.payoutSaved', language)}</p> : <p className="text-xs font-semibold text-amber-800">{t('profilePage.noPayout', language)}</p>}
-                <button disabled={busy} className="rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? t('savingEllipsis', language) : t('profilePage.savePayout', language)}</button>
+                {payoutPreview ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                    <p className="font-bold text-slate-900">Sent to XentriPay on payout</p>
+                    <p className="mt-1">Name: <span className="font-semibold">{payoutPreview.recipientName}</span></p>
+                    <p>MoMo: <span className="font-semibold">{payoutPreview.localMsisdn || payoutPreview.msisdn}</span> ({payoutPreview.providerName || 'provider'})</p>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={busy} onClick={previewPayout} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 disabled:opacity-50">
+                    Check payout format
+                  </button>
+                  <button disabled={busy} className="rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? t('savingEllipsis', language) : t('profilePage.savePayout', language)}</button>
+                </div>
               </form>
               <p className="mt-3 text-sm text-slate-500">
                 {t('profilePage.commissionHint', language, { link: '___LINK___' }).split('___LINK___')[0]}

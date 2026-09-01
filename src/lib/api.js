@@ -907,6 +907,12 @@ export const hotelApi = {
       token,
       body: { payoutDetails },
     }),
+  previewPayoutDetails: (token, payoutDetails) =>
+    apiRequest("/api/hotel/payout-details/preview", {
+      method: "POST",
+      token,
+      body: { payoutDetails },
+    }),
   getFinance: (token) => apiRequest("/api/hotel/finance", { token }),
   verifyBooking: (token, lookup) =>
     apiRequest(`/api/hotel/booking-verification/${encodeURIComponent(lookup)}`, { token }),

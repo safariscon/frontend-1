@@ -76,13 +76,19 @@ export default function AdminDashboard() {
   const [financeSummary, setFinanceSummary] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [payoutStatusFilter, setPayoutStatusFilter] = useState('held');
+  const [payoutAlert, setPayoutAlert] = useState(null);
   const token = getAuthData()?.token;
 
-  const loadData = async ({ silent = false } = {}) => {
+  const formatPayoutError = (requestError) =>
+    requestError?.message || requestError?.payload?.message || 'Payout request failed.';
+
+  const loadData = async ({ silent = false, keepMessages = false } = {}) => {
     if (!token) return;
     if (!silent) setLoading(true);
-    setError('');
-    setInfo('');
+    if (!keepMessages) {
+      setError('');
+      setInfo('');
+    }
     try {
       const [statsResp, , serviceResp, bookingResp, userResp, transactionResp, financeResp, payoutsResp] = await Promise.all([
         adminApi.getStats(token),
@@ -151,38 +157,57 @@ export default function AdminDashboard() {
 
   const syncPayout = async (transaction) => {
     if (!token) return;
+    setPayoutAlert(null);
     try {
-      const response = await adminApi.syncPayout(token, transaction._id || transaction.transactionId);
-      setInfo(response.message || 'Payout synced.');
-      await loadData({ silent: true });
+      const response = await adminApi.syncPayout(token, transaction._id || transaction.id || transaction.transactionId);
+      const message = response.message || 'Payout synced.';
+      setPayoutAlert({ type: 'success', message });
+      setInfo(message);
+      await loadData({ silent: true, keepMessages: true });
     } catch (requestError) {
-      setError(requestError.message);
+      const message = formatPayoutError(requestError);
+      setPayoutAlert({ type: 'error', message });
     }
   };
 
   const triggerPayout = async (transaction) => {
     if (!token) return;
+    setPayoutAlert(null);
+    setError('');
+    setInfo('');
     try {
-      const response = await adminApi.triggerPayout(token, transaction._id || transaction.transactionId);
+      const response = await adminApi.triggerPayout(token, transaction._id || transaction.id || transaction.transactionId);
       const breakdown = response.breakdown;
-      const detail = breakdown
+      const failed = response.transaction?.payoutStatus === 'failed';
+      const detail = breakdown && !failed
         ? ` Customer paid ${Number(breakdown.customerPaid || 0).toLocaleString()} RWF. Platform commission ${Number(breakdown.platformCommission || 0).toLocaleString()} RWF. Provider share ${Number(breakdown.providerShare || 0).toLocaleString()} RWF.`
         : '';
-      setInfo((response.message || 'Provider payout submitted.') + detail);
-      await loadData({ silent: true });
+      const message = failed
+        ? (response.transaction?.payoutMessage || response.message || 'Provider payout failed.')
+        : (response.message || 'Provider payout submitted.') + detail;
+      setPayoutAlert({ type: failed ? 'error' : 'success', message });
+      if (!failed) setInfo(message);
+      await loadData({ silent: true, keepMessages: true });
     } catch (requestError) {
-      setError(requestError.message);
+      const message = formatPayoutError(requestError);
+      setPayoutAlert({ type: 'error', message });
     }
   };
 
   const triggerAllEligiblePayouts = async () => {
     if (!token) return;
+    setPayoutAlert(null);
     try {
       const response = await adminApi.triggerAllEligiblePayouts(token);
-      setInfo(response.message || 'Eligible payouts processed.');
-      await loadData({ silent: true });
+      const summary = response.summary || {};
+      const failed = Number(summary.failed || 0) > 0;
+      const message = response.message || 'Eligible payouts processed.';
+      setPayoutAlert({ type: failed ? 'error' : 'success', message });
+      if (!failed) setInfo(message);
+      await loadData({ silent: true, keepMessages: true });
     } catch (requestError) {
-      setError(requestError.message);
+      const message = formatPayoutError(requestError);
+      setPayoutAlert({ type: 'error', message });
     }
   };
 
@@ -488,7 +513,7 @@ export default function AdminDashboard() {
             {!loading && view === 'bookings' && bookingSubTab === 'bookings' && <BookingTable bookings={bookings} onView={openBookingDetails} />}
             {!loading && view === 'bookings' && bookingSubTab === 'rebook-requests' && <AdminRebookRequests />}
             {!loading && view === 'bookings' && bookingSubTab === 'verification' && <BookingVerification token={token} verify={adminApi.verifyBooking} />}
-            {!loading && view === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} onTrigger={triggerPayout} onTriggerAll={triggerAllEligiblePayouts} />}
+            {!loading && view === 'revenue' && <RevenueList revenueByType={revenueByType} transactions={transactions} summary={transactionSummary} financeSummary={financeSummary} payouts={payouts} payoutStatusFilter={payoutStatusFilter} setPayoutStatusFilter={setPayoutStatusFilter} payoutAlert={payoutAlert} onDismissPayoutAlert={() => setPayoutAlert(null)} daily={transactionDaily} hourly={transactionHourly} pagination={transactionPagination} filters={transactionFilters} setFilters={setTransactionFilters} onRefresh={() => loadData({ silent: true })} onCollect={markCommissionCollected} onSync={syncPayout} onTrigger={triggerPayout} onTriggerAll={triggerAllEligiblePayouts} />}
           </section>
         </div>
       </main>
@@ -737,7 +762,7 @@ function formatAdminBookingDate(booking) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function RevenueList({ revenueByType, transactions, summary, financeSummary, payouts = [], payoutStatusFilter, setPayoutStatusFilter, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect, onSync, onTrigger, onTriggerAll }) {
+function RevenueList({ revenueByType, transactions, summary, financeSummary, payouts = [], payoutStatusFilter, setPayoutStatusFilter, payoutAlert, onDismissPayoutAlert, daily = [], hourly = [], pagination, filters, setFilters, onRefresh, onCollect, onSync, onTrigger, onTriggerAll }) {
   const { language } = useLanguage();
   const entries = Object.entries(revenueByType);
   const updateFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value, page: key === 'page' ? value : 1 }));
@@ -789,6 +814,26 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
           </div>
         </div>
         <p className="mt-2 text-[11px] text-blue-600">Commission = 10% of total. Provider share = paid online − commission.</p>
+        {payoutAlert ? (
+          <div
+            className={`mt-3 rounded-xl border p-3 text-sm ${
+              payoutAlert.type === 'error'
+                ? 'border-red-300 bg-red-50 text-red-900'
+                : 'border-emerald-300 bg-emerald-50 text-emerald-900'
+            }`}
+            role="alert"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-bold">{payoutAlert.type === 'error' ? 'Payout failed' : 'Payout update'}</p>
+                <p className="mt-1 whitespace-pre-wrap">{payoutAlert.message}</p>
+              </div>
+              <button type="button" onClick={onDismissPayoutAlert} className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-700">
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
         {!payouts.length ? <p className="mt-3 text-sm text-blue-900">No payouts for this filter.</p> : (
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-left text-xs">
@@ -796,9 +841,8 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
                 <tr className="border-b border-blue-200 text-[11px] uppercase tracking-wide text-blue-900">
                   <th className="py-2 pr-3">Booking</th>
                   <th className="py-2 pr-3">Provider</th>
-                  <th className="py-2 pr-3 text-right">Total</th>
+                  <th className="py-2 pr-3">MoMo / name</th>
                   <th className="py-2 pr-3 text-right">Paid</th>
-                  <th className="py-2 pr-3 text-right">Commission</th>
                   <th className="py-2 pr-3 text-right">Share</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 text-right">Actions</th>
@@ -806,17 +850,24 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
               </thead>
               <tbody>
                 {payouts.map((tx) => {
+                  const txId = tx._id || tx.id || tx.transactionId;
+                  const bookingCode = tx.bookingCode || tx.bookingId?.bookingCode || '-';
+                  const businessName = tx.businessName || tx.businessId?.name || tx.sellerId?.name || '-';
+                  const payoutInfo = tx.payoutDetails || tx.businessId?.payoutDetails || {};
                   const canPay = tx.status === 'paid' && ['held', 'none', 'failed'].includes(tx.payoutStatus);
-                  const totalPrice = Number(tx.bookingId?.totalPrice || 0);
                   return (
-                  <tr key={tx._id || tx.transactionId} className="border-b border-blue-100 align-middle">
-                    <td className="py-2.5 pr-3 font-medium text-slate-900">{tx.bookingId?.bookingCode || '-'}</td>
-                    <td className="py-2.5 pr-3 text-slate-700">{tx.businessId?.name || tx.sellerId?.name || '-'}</td>
-                    <td className="py-2.5 pr-3 text-right tabular-nums">{totalPrice ? totalPrice.toLocaleString() : '—'}</td>
+                  <tr key={txId} className="border-b border-blue-100 align-middle">
+                    <td className="py-2.5 pr-3 font-medium text-slate-900">{bookingCode}</td>
+                    <td className="py-2.5 pr-3 text-slate-700">{businessName}</td>
+                    <td className="py-2.5 pr-3 text-slate-600">
+                      <div>{payoutInfo.msisdn || payoutInfo.accountNumber || tx.payoutAccount || '—'}</div>
+                      <div className="text-[10px] text-slate-500">{payoutInfo.verifiedAccountName || payoutInfo.accountName || tx.verifiedAccountName || '—'}</div>
+                    </td>
                     <td className="py-2.5 pr-3 text-right tabular-nums">{Number(tx.amount || 0).toLocaleString()}</td>
-                    <td className="py-2.5 pr-3 text-right tabular-nums text-amber-800">{Number(tx.platformAmount || tx.commissionAmount || 0).toLocaleString()}</td>
                     <td className="py-2.5 pr-3 text-right tabular-nums font-bold text-emerald-800">{Number(tx.providerAmount || tx.sellerEarnings || 0).toLocaleString()}</td>
-                    <td className="py-2.5 pr-3 capitalize text-slate-600">{tx.payoutStatus || '—'}</td>
+                    <td className="py-2.5 pr-3 capitalize text-slate-600">
+                      <span className={tx.payoutStatus === 'failed' ? 'font-semibold text-red-700' : ''}>{tx.payoutStatus || '—'}</span>
+                    </td>
                     <td className="py-2.5 text-right whitespace-nowrap">
                       {canPay ? (
                         <button type="button" onClick={() => onTrigger(tx)} className="mr-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white">Pay</button>
@@ -833,15 +884,14 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
       </div>
       <div className="md:col-span-2">
         {transactions.length === 0 ? <p className="rounded-xl border border-gray-200 p-4 text-gray-600">No revenue transactions for this filter.</p> : null}
-        <SimpleTable rows={transactions} columns={['Transaction', 'Booking', 'User', 'Seller', 'Seller account', 'Payment', 'Amount', 'Commission', 'Collection']} map={(tx) => [
+        <SimpleTable rows={transactions} columns={['Transaction', 'Booking', 'User', 'Seller', 'Seller account', 'Payment', 'Amount', 'Collection']} map={(tx) => [
           tx.transactionId,
-          tx.bookingId?.bookingCode || tx.bookingId?._id || '-',
+          tx.bookingId?.bookingCode || '-',
           tx.userId?.name || tx.userId?.email || '-',
           tx.businessId?.name || tx.sellerId?.name || tx.sellerId?.email || '-',
-          tx.businessId?.payoutDetails?.accountNumber || '-',
+          tx.businessId?.payoutDetails?.accountNumber || tx.businessId?.payoutDetails?.msisdn || '-',
           tx.paymentMethod,
           `${Number(tx.amount || 0).toLocaleString()} RWF`,
-          `${Number(tx.commissionAmount || tx.platformAmount || 0).toLocaleString()} RWF`,
           tx.commissionStatus === 'collected'
             ? 'Collected'
             : <button type="button" onClick={() => onCollect(tx)} className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">Mark collected</button>,
