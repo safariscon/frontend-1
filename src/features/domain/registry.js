@@ -44,7 +44,7 @@ export function normalizeCategorySlug(value) {
 }
 
 function slugCandidates(categoryOrSlug) {
-  if (!categoryOrSlug) return [];
+  if (categoryOrSlug == null) return [];
   if (typeof categoryOrSlug === 'string') return [normalizeCategorySlug(categoryOrSlug)].filter(Boolean);
   const nested = categoryOrSlug.category && typeof categoryOrSlug.category === 'object'
     ? categoryOrSlug.category
@@ -76,9 +76,9 @@ function inferTransportSubtype(categoryOrSlug) {
 }
 
 function readSlug(categoryOrSlug) {
-  if (!categoryOrSlug) return '';
+  if (categoryOrSlug == null) return '';
   const candidates = slugCandidates(categoryOrSlug);
-  const domainHint = typeof categoryOrSlug === 'object' ? categoryOrSlug.domain : '';
+  const domainHint = categoryOrSlug.domain || '';
   const known = candidates.find((slug) => {
     const mapped = SLUG_TO_DOMAIN[slug];
     if (!mapped) return false;
@@ -92,14 +92,15 @@ function readSlug(categoryOrSlug) {
 }
 
 export function resolveDomain(categoryOrSlug) {
-  if (!categoryOrSlug) return 'experiences';
+  if (categoryOrSlug == null) return 'experiences';
   const slug = readSlug(categoryOrSlug);
   if (SLUG_TO_DOMAIN[slug]) return SLUG_TO_DOMAIN[slug];
-  if (typeof categoryOrSlug === 'object' && categoryOrSlug.domain) return categoryOrSlug.domain;
+  if (categoryOrSlug.domain) return categoryOrSlug.domain;
   return 'experiences';
 }
 
 export function resolveSubtype(categoryOrSlug) {
+  if (categoryOrSlug == null) return '';
   return readSlug(categoryOrSlug);
 }
 
@@ -204,6 +205,25 @@ export function isRangeOccupancyCategory(categoryOrSlug) {
 }
 
 export function domainCopy(categoryOrSlug) {
+  if (categoryOrSlug == null) {
+    return {
+      kind: 'option',
+      domain: 'experiences',
+      subtype: '',
+      rangeMode: false,
+      optionNoun: 'option',
+      optionNounPlural: 'options',
+      unitNoun: 'unit',
+      unitNounPlural: 'units',
+      startLabel: 'Start',
+      endLabel: 'End',
+      startFromLabel: 'Available from',
+      lastEndLabel: 'Available until',
+      hoursStartLabel: 'Open time',
+      hoursEndLabel: 'Close time',
+      capacityLabel: 'Capacity',
+    };
+  }
   const domain = resolveDomain(categoryOrSlug);
   const subtype = resolveSubtype(categoryOrSlug);
   const rangeMode = isRangeOccupancyCategory(categoryOrSlug);

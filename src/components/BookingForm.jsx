@@ -254,8 +254,9 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
 
   const service = useMemo(() => getSelectedService(business), [business]);
   const bookingConfig = useMemo(() => getBookingConfig({ business, service, language }), [business, service, language]);
-  const domain = resolveDomain(liveCategory || business);
-  const copy = domainCopy(liveCategory || business);
+  const categorySource = business ?? liveCategory ?? null;
+  const domain = resolveDomain(categorySource);
+  const copy = domainCopy(categorySource);
   const listingAttrs = business?.listingAttributes || {};
   const bookingFieldSchema = useMemo(() => {
     if (liveSchemaLoaded) return liveCategory?.bookingFieldSchema || [];
