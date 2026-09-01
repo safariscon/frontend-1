@@ -10,7 +10,7 @@ export const OUTDATED_BOOKING_RULE = /30%|pay the 30%|pay the full listing price
 export const DEFAULT_MARKETPLACE_BOOKING_RULES = [
   'Provide accurate booking information.',
   'Pay the listing deposit in the app (Mobile Money or card). The remaining balance is due at arrival or checkout according to the provider payment policy.',
-  'The deposit goes to the SafarisCon wallet. SafarisCon keeps 10% commission. The provider share is paid after the cancel window ends.',
+  'Commission is 10% of the full booking price, taken from the customer online deposit.',
   'You may cancel until {hours} hours before the service. Deposit refunds follow this listing\'s cancellation policy ({refund}% refund / {penalty}% fee).',
   'After the deadline, Cancel is hidden and the booking stays valid. Show your booking code at the venue.',
 ];

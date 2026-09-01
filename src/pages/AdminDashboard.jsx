@@ -788,32 +788,40 @@ function RevenueList({ revenueByType, transactions, summary, financeSummary, pay
             </select>
           </div>
         </div>
-        <p className="mt-1 text-xs text-blue-700">Commission is 10% of the booking total, taken from the online payment. Provider share = customer paid − commission.</p>
+        <p className="mt-2 text-[11px] text-blue-600">Commission = 10% of total. Provider share = paid online − commission.</p>
         {!payouts.length ? <p className="mt-3 text-sm text-blue-900">No payouts for this filter.</p> : (
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-left text-xs">
-              <thead><tr className="border-b border-blue-200"><th className="py-2 pr-2">Booking</th><th className="py-2 pr-2">Provider</th><th className="py-2 pr-2">Total</th><th className="py-2 pr-2">Paid online</th><th className="py-2 pr-2">Commission</th><th className="py-2 pr-2">Provider share</th><th className="py-2 pr-2">Status</th><th className="py-2 pr-2">Refund</th><th className="py-2">Action</th></tr></thead>
+              <thead>
+                <tr className="border-b border-blue-200 text-[11px] uppercase tracking-wide text-blue-900">
+                  <th className="py-2 pr-3">Booking</th>
+                  <th className="py-2 pr-3">Provider</th>
+                  <th className="py-2 pr-3 text-right">Total</th>
+                  <th className="py-2 pr-3 text-right">Paid</th>
+                  <th className="py-2 pr-3 text-right">Commission</th>
+                  <th className="py-2 pr-3 text-right">Share</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 text-right">Actions</th>
+                </tr>
+              </thead>
               <tbody>
                 {payouts.map((tx) => {
                   const canPay = tx.status === 'paid' && ['held', 'none', 'failed'].includes(tx.payoutStatus);
                   const totalPrice = Number(tx.bookingId?.totalPrice || 0);
                   return (
-                  <tr key={tx._id || tx.transactionId} className="border-b border-blue-100">
-                    <td className="py-2 pr-2">{tx.bookingId?.bookingCode || tx.bookingId?._id || '-'}</td>
-                    <td className="py-2 pr-2">{tx.businessId?.name || tx.sellerId?.name || '-'}</td>
-                    <td className="py-2 pr-2">{totalPrice ? `${totalPrice.toLocaleString()} RWF` : '-'}</td>
-                    <td className="py-2 pr-2">{Number(tx.amount || 0).toLocaleString()} RWF</td>
-                    <td className="py-2 pr-2">{Number(tx.platformAmount || tx.commissionAmount || 0).toLocaleString()} RWF</td>
-                    <td className="py-2 pr-2 font-bold">{Number(tx.providerAmount || tx.sellerEarnings || 0).toLocaleString()} RWF</td>
-                    <td className="py-2 pr-2">{tx.payoutStatus || '-'}</td>
-                    <td className="py-2 pr-2">{tx.refundPayoutStatus || tx.refundPayoutReference || '-'}</td>
-                    <td className="py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {canPay ? (
-                          <button type="button" onClick={() => onTrigger(tx)} className="rounded-lg bg-emerald-600 px-3 py-1 font-bold text-white">Pay provider</button>
-                        ) : null}
-                        <button type="button" onClick={() => onSync(tx)} className="rounded-lg bg-primary px-3 py-1 font-bold text-white">Sync after OTP</button>
-                      </div>
+                  <tr key={tx._id || tx.transactionId} className="border-b border-blue-100 align-middle">
+                    <td className="py-2.5 pr-3 font-medium text-slate-900">{tx.bookingId?.bookingCode || '-'}</td>
+                    <td className="py-2.5 pr-3 text-slate-700">{tx.businessId?.name || tx.sellerId?.name || '-'}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{totalPrice ? totalPrice.toLocaleString() : '—'}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums">{Number(tx.amount || 0).toLocaleString()}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums text-amber-800">{Number(tx.platformAmount || tx.commissionAmount || 0).toLocaleString()}</td>
+                    <td className="py-2.5 pr-3 text-right tabular-nums font-bold text-emerald-800">{Number(tx.providerAmount || tx.sellerEarnings || 0).toLocaleString()}</td>
+                    <td className="py-2.5 pr-3 capitalize text-slate-600">{tx.payoutStatus || '—'}</td>
+                    <td className="py-2.5 text-right whitespace-nowrap">
+                      {canPay ? (
+                        <button type="button" onClick={() => onTrigger(tx)} className="mr-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white">Pay</button>
+                      ) : null}
+                      <button type="button" onClick={() => onSync(tx)} className="rounded-md bg-primary px-2 py-1 text-[11px] font-bold text-white">Sync</button>
                     </td>
                   </tr>
                   );

@@ -399,7 +399,7 @@ export function PricingStep({ draft, setDraft }) {
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-        The nightly price for each room is set on the Units step. Guests pay a <strong>50% deposit</strong> through SafarisCon (XentriPay). Platform commission is <strong>10%</strong> and is not set by you. The remaining balance is collected on arrival or checkout.
+        Guests pay a deposit through SafarisCon (minimum 20%). Platform commission is <strong>10% of the full booking price</strong>, taken from that deposit. The remaining balance is collected on arrival or checkout.
       </div>
       <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
         <input type="checkbox" className="mt-1" checked={draft.childrenStayFree} onChange={(event) => setDraft({ ...draft, childrenStayFree: event.target.checked })} />
