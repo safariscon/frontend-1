@@ -913,8 +913,9 @@ export const bookingApi = {
       body: payload,
     }),
   verifyBooking: (token, lookup) => apiRequest(`/api/hotel/booking-verification/${encodeURIComponent(lookup)}`, { token }),
-  bookService: (token, payload) =>
-    apiRequest("/api/bookings/request", {
+  bookService: (token, payload) => {
+    const isAccommodation = payload.domain === 'accommodation';
+    return apiRequest("/api/bookings/request", {
       method: "POST",
       token,
       body: {
@@ -925,8 +926,10 @@ export const bookingApi = {
         numberOfPeople: payload.numberOfPeople,
         guests: payload.numberOfPeople,
         totalConsumptionUnits: payload.totalConsumptionUnits,
-        checkIn: payload.startDate,
-        checkOut: payload.endDate,
+        ...(isAccommodation ? {
+          checkIn: payload.startDate,
+          checkOut: payload.endDate,
+        } : {}),
         bookingDate: payload.startDate,
         endBookingDate: payload.endBookingDate || payload.endDate,
         startTime: payload.startTime,
@@ -939,7 +942,8 @@ export const bookingApi = {
         bookingAttributes: payload.bookingAttributes || undefined,
         bookingDetails: payload.bookingDetails,
       },
-    }),
+    });
+  },
   getMyBookings: (token) => apiRequest("/api/bookings/my", { token }),
   payBooking: (token, bookingId, payload) =>
     apiRequest(`/api/bookings/${bookingId}/pay`, {

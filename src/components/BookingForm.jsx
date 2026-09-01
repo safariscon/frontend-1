@@ -182,8 +182,10 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             setCustomValues(customDefaults);
             setBookingAttributes({
               ...emptyBookingValues(resolveDomain(found)),
-              checkIn: urlStay.checkIn || '',
-              checkOut: urlStay.checkOut || '',
+              ...(resolveDomain(found) === 'accommodation' ? {
+                checkIn: urlStay.checkIn || '',
+                checkOut: urlStay.checkOut || '',
+              } : {}),
             });
             const supportsOptions = categorySupportsOptions(
               found.supportsOptions,
@@ -212,10 +214,13 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
             setLiveSchemaLoaded(false);
             categoriesApi.get(categoryKey).then((resp) => {
               setLiveCategory(resp.category || null);
+              const resolvedDomain = resolveDomain(resp.category || found);
               setBookingAttributes({
-                ...emptyBookingValues(resolveDomain(resp.category || found)),
-                checkIn: urlStay.checkIn || '',
-                checkOut: urlStay.checkOut || '',
+                ...emptyBookingValues(resolvedDomain),
+                ...(resolvedDomain === 'accommodation' ? {
+                  checkIn: urlStay.checkIn || '',
+                  checkOut: urlStay.checkOut || '',
+                } : {}),
               });
             }).catch(() => {
               setLiveCategory(null);
@@ -330,6 +335,19 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
   const returnDate = splitDateTimeValue(stayAttributes.returnDateTime).date;
   const preferredBookingDate = clampBookingDate(dateMin, dateMax);
 
+  const availabilityQuery = useMemo(() => {
+    if (domain === 'accommodation') {
+      return {
+        checkIn: stayAttributes.checkIn || urlStay.checkIn || undefined,
+        checkOut: stayAttributes.checkOut || urlStay.checkOut || undefined,
+      };
+    }
+    if (domain === 'transport' && pickupDate && returnDate && returnDate > pickupDate) {
+      return { checkIn: pickupDate, checkOut: returnDate };
+    }
+    return {};
+  }, [domain, stayAttributes.checkIn, stayAttributes.checkOut, pickupDate, returnDate, urlStay.checkIn, urlStay.checkOut]);
+
   useEffect(() => {
     if (!hotelId || !business) return undefined;
     const optionId = supportsOptions
@@ -341,10 +359,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       stayAvailabilityKeyRef.current = stayKey;
     }
     let cancelled = false;
-    publicApi.getServiceAvailability(hotelId, optionId, {
-      checkIn: stayAttributes.checkIn || pickupDate || urlStay.checkIn || undefined,
-      checkOut: stayAttributes.checkOut || returnDate || urlStay.checkOut || undefined,
-    }).then((response) => {
+    publicApi.getServiceAvailability(hotelId, optionId, availabilityQuery).then((response) => {
       if (cancelled) return;
       setPublicAvailability({
         ...(response.availability || {}),
@@ -358,7 +373,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       setAvailabilityReady(true);
     });
     return () => { cancelled = true; };
-  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id, selectedOfferRow?.availability, stayAttributes.checkIn, stayAttributes.checkOut, pickupDate, returnDate, urlStay.checkIn, urlStay.checkOut]);
+  }, [hotelId, business, supportsOptions, selectedOffer, selectedOfferRow?.optionId, selectedOfferRow?.id, selectedOfferRow?.availability, availabilityQuery]);
   const bookingDateValue = (
     values.bookingDate
     && values.bookingDate >= dateMin
@@ -542,6 +557,7 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
         ? (selectedOfferRow?.cells?.price || '')
         : basePrice;
       const response = await bookingApi.bookService(authData.token, {
+        domain,
         serviceId: service._id,
         optionId: supportsOptions
           ? (selectedOfferRow?.optionId || selectedOfferRow?.id || undefined)
@@ -721,7 +737,12 @@ export default function BookingForm({ hotelId, onClose, onSuccess }) {
       )}
 
       <div className="mb-6 grid grid-cols-3 gap-2">
-        {['Stay', 'Your details', 'Payment'].map((label, index) => (
+        {(copy.kind === 'rental'
+          ? ['Rental dates', 'Your details', 'Payment']
+          : copy.kind === 'stay'
+            ? ['Stay', 'Your details', 'Payment']
+            : ['Booking', 'Your details', 'Payment']
+        ).map((label, index) => (
           <div key={label} className={`rounded-xl px-3 py-2 text-center text-xs font-black uppercase tracking-wide ${step === index + 1 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}>
             {index + 1}. {label}
           </div>
