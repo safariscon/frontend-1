@@ -9,6 +9,7 @@ import { isSellerRole, serviceApprovalStatus, withoutDrafts } from '../lib/dashb
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
 import { t } from '../lib/translations';
+import BookingRulesEditor from '../components/admin/BookingRulesEditor';
 import { DEFAULT_MARKETPLACE_BOOKING_RULES, normalizeBookingRules } from '../lib/bookingRules';
 import BookingDetailCards from '../components/BookingDetailCards';
 
@@ -1203,10 +1204,6 @@ export function AnnouncementForm({ form, setForm, onSubmit }) {
 
 export function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange }) {
   const { language } = useLanguage();
-  const rulesText = (form.bookingRules || []).join('\n');
-  const loadDefaultRules = () => {
-    setForm((prev) => ({ ...prev, bookingRules: [...DEFAULT_MARKETPLACE_BOOKING_RULES] }));
-  };
   return (
     <form onSubmit={onSubmit} className="grid gap-5">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
@@ -1221,20 +1218,10 @@ export function MarketplaceSettingsForm({ form, setForm, onSubmit, onModeChange 
         </select>
       </label>
       <AdminInput label={t('admin.defaultCommission', language)} type="number" value={form.defaultCommissionPercentage} onChange={(value) => setForm((prev) => ({ ...prev, defaultCommissionPercentage: Number(value) }))} required />
-      <label className="block md:col-span-2">
-        <span className="text-sm font-semibold text-gray-700">{t('admin.globalRules', language)}</span>
-        <p className="mt-1 text-xs text-gray-500">{t('admin.globalRulesHelp', language)}</p>
-        <textarea
-          value={rulesText}
-          onChange={(event) => setForm((prev) => ({ ...prev, bookingRules: event.target.value.split('\n') }))}
-          rows={8}
-          placeholder={DEFAULT_MARKETPLACE_BOOKING_RULES.join('\n')}
-          className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 font-normal"
-        />
-        <button type="button" onClick={loadDefaultRules} className="mt-2 text-sm font-bold text-primary hover:underline">
-          {t('admin.loadDefaultRules', language)}
-        </button>
-      </label>
+      <BookingRulesEditor
+        bookingRules={form.bookingRules || []}
+        onChange={(bookingRules) => setForm((prev) => ({ ...prev, bookingRules }))}
+      />
       <p className="text-xs font-semibold text-blue-700">{t('admin.modeSavesNow', language)}</p>
       <button className="rounded-xl bg-primary px-5 py-3 font-semibold text-white md:w-fit">{t('admin.saveRules', language)}</button>
     </form>
