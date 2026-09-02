@@ -146,6 +146,11 @@ export default function DepositPaymentModal({ booking, customer, onClose, onConf
           </div>
 
           {statusNote && <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-semibold text-blue-800">{statusNote}</p>}
+          {toCollectionMethod(method) === 'momo' ? (
+            <p className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-slate-600">
+              {t('payment.exactAmountNote', language)}
+            </p>
+          ) : null}
           {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
 
           <button disabled={submitting} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">

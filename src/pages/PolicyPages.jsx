@@ -122,7 +122,7 @@ export function PaymentsPolicyPage({ embedded = false }) {
     <PolicyShell embedded={embedded} title={t('legal.paymentsPageTitle', language)} lead={t('legal.paymentsPageLead', language)}>
       <Section title={t('legal.payingTitle', language)}>
         <ul className="list-disc space-y-2 pl-5">
-          {[1, 2, 3, 4].map((n) => (
+          {[1, 2, 3, 4, 5].map((n) => (
             <li key={n}>{t(`legal.pay${n}`, language)}</li>
           ))}
         </ul>
