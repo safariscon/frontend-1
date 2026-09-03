@@ -540,6 +540,14 @@ export const authApi = {
       formData,
     });
   },
+  getAccountDeletionStatus: (token) =>
+    apiRequest("/api/auth/account/deletion-status", { token }),
+  deleteAccount: (token, confirm = "DELETE") =>
+    apiRequest("/api/auth/account", {
+      method: "DELETE",
+      token,
+      body: { confirm },
+    }),
   uploadDocuments: (token, files = []) => {
     const formData = new FormData();
     files.slice(0, 2).forEach((file) => formData.append("documents", file));

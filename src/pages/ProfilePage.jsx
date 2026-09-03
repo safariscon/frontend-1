@@ -10,7 +10,7 @@ import { t } from '../lib/translations';
 import { isUploadWithinLimit, MAX_UPLOAD_FILE_SIZE_MB } from '../lib/uploads';
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
   const token = getAuthData()?.token;
@@ -24,6 +24,9 @@ export default function ProfilePage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [deletionStatus, setDeletionStatus] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const fileInputRef = useRef(null);
   const [cropSrc, setCropSrc] = useState('');
   const [cropOpen, setCropOpen] = useState(false);
@@ -53,6 +56,19 @@ export default function ProfilePage() {
     setSyncedProfileUser(profileUserKey);
     setProfileForm({ name: user.name || '', phone: user.phone || '' });
   }
+
+  useEffect(() => {
+    if (!user || !token) return undefined;
+    let cancelled = false;
+    authApi.getAccountDeletionStatus(token)
+      .then((status) => {
+        if (!cancelled) setDeletionStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setDeletionStatus(null);
+      });
+    return () => { cancelled = true; };
+  }, [token, user]);
 
   useEffect(() => {
     if (!user || !isSellerRole(user.role) || !token) return undefined;
@@ -388,6 +404,102 @@ export default function ProfilePage() {
               </p>
             </section>
           )}
+
+          <section className="rounded-2xl border border-rose-200 bg-rose-50/40 p-5 shadow-sm">
+            <h2 className="text-lg font-black text-rose-900">Delete account</h2>
+            <p className="mt-1 text-sm text-rose-800/90">
+              Permanently remove your SafarisCon account. This cannot be undone.
+            </p>
+            {deletionStatus ? (
+              <div className="mt-3 rounded-xl border border-rose-200 bg-white p-3 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">{deletionStatus.message}</p>
+                {deletionStatus.blockers?.services > 0 ? (
+                  <p className="mt-2">Services still listed: {deletionStatus.blockers.services}</p>
+                ) : null}
+                {deletionStatus.blockers?.pendingBookings > 0 ? (
+                  <p className="mt-1">Pending bookings: {deletionStatus.blockers.pendingBookings}</p>
+                ) : null}
+                {deletionStatus.blockers?.paidBookings > 0 ? (
+                  <p className="mt-1">Paid / unlocked bookings: {deletionStatus.blockers.paidBookings}</p>
+                ) : null}
+                {deletionStatus.blockers?.unpaidBookings > 0 && deletionStatus.canDelete ? (
+                  <p className="mt-1 text-amber-800">
+                    Unpaid bookings that will be marked failed: {deletionStatus.blockers.unpaidBookings}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {deletionStatus?.redirect === 'seller_services' || deletionStatus?.code === 'PROVIDER_MUST_DELETE_SERVICES' ? (
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard/seller')}
+                className="mt-4 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white"
+              >
+                Go to my services
+              </button>
+            ) : null}
+
+            {user?.role === 'admin' ? (
+              <p className="mt-4 text-sm font-semibold text-slate-600">
+                Admin accounts cannot be self-deleted.
+              </p>
+            ) : (
+              <form
+                className="mt-4 grid gap-3"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  setError('');
+                  setMessage('');
+                  if (deleteConfirm.trim().toUpperCase() !== 'DELETE') {
+                    setError('Type DELETE to confirm.');
+                    return;
+                  }
+                  if (deletionStatus && !deletionStatus.canDelete) {
+                    if (deletionStatus.redirect === 'seller_services' || deletionStatus.code === 'PROVIDER_MUST_DELETE_SERVICES') {
+                      navigate('/dashboard/seller');
+                      return;
+                    }
+                    setError(deletionStatus.message || 'Account cannot be deleted yet.');
+                    return;
+                  }
+                  setDeletingAccount(true);
+                  try {
+                    await authApi.deleteAccount(token, 'DELETE');
+                    setMessage('Account deleted.');
+                    await logout();
+                    navigate('/login', { replace: true });
+                  } catch (requestError) {
+                    const details = requestError?.payload?.details || requestError?.details;
+                    if (details) setDeletionStatus(details);
+                    if (requestError?.payload?.code === 'PROVIDER_MUST_DELETE_SERVICES' || requestError?.code === 'PROVIDER_MUST_DELETE_SERVICES' || details?.redirect === 'seller_services') {
+                      navigate('/dashboard/seller');
+                    }
+                    setError(requestError.message || 'Could not delete account.');
+                  } finally {
+                    setDeletingAccount(false);
+                  }
+                }}
+              >
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Type DELETE to confirm</span>
+                  <input
+                    value={deleteConfirm}
+                    onChange={(event) => setDeleteConfirm(event.target.value)}
+                    className="mt-1 w-full rounded-xl border border-rose-300 px-4 py-3"
+                    placeholder="DELETE"
+                    autoComplete="off"
+                  />
+                </label>
+                <button
+                  disabled={deletingAccount || busy || (deletionStatus && !deletionStatus.canDelete && deletionStatus.role === 'admin')}
+                  className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {deletingAccount ? 'Deleting…' : 'Delete my account'}
+                </button>
+              </form>
+            )}
+          </section>
         </div>
       </main>
       {cropOpen && cropSrc ? (

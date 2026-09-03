@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { t } from '../../lib/i18n';
+import { t } from '../../lib/translations';
 import {
   BOOKING_RULES_PREVIEW_LISTING,
   CANCEL_RULE_TOKENS,
